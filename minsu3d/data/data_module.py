@@ -50,11 +50,11 @@ def sparse_collate_fn(batch):
     instance_num_point = []  # (total_nInst), int
     instance_offsets = [0]
     total_num_inst = 0
-    object_class = []
+    object_lng_class = []
+    object_lat_class = []
+    front_direction = []
     instance_cls = []  # (total_nInst), long
     batch_divide = []
-    object_obbs = []
-
     scan_ids = []
 
     for i, b in enumerate(batch):
@@ -65,15 +65,14 @@ def sparse_collate_fn(batch):
         vert_batch_ids.append(torch.full((b["locs_scaled"].shape[0],), fill_value=i, dtype=torch.int16))
         batch_divide.append(torch.tensor([b["locs_scaled"].shape[0]]).int())
         feats.append(torch.from_numpy(b["feats"]))
-
-        instance_ids_i = b["instance_ids"]
-        instance_ids_i[instance_ids_i != -1] += total_num_inst
-        total_num_inst += b["num_instance"].item()
-        instance_ids.append(torch.from_numpy(instance_ids_i))
+        instance_ids.append(torch.from_numpy(b[instance_ids]))
 
         sem_labels.append(torch.from_numpy(b["sem_labels"]))
-        object_class.append(torch.from_numpy(b["class"]))
+        instance_ids.append(torch.from_numpy(b["sem_labels"]))
 
+        object_lng_class.append(torch.from_numpy(b["lng_class"]))
+        object_lat_class.append(torch.from_numpy(b["lat_class"]))
+        front_direction.append(torch.tensor(b["obb"]["front"]))
         instance_info.append(torch.from_numpy(b["instance_info"]))
         instance_num_point.append(torch.from_numpy(b["instance_num_point"]))
         instance_offsets.append(instance_offsets[-1] + b["num_instance"].item())
@@ -92,7 +91,10 @@ def sparse_collate_fn(batch):
     data["instance_num_point"] = torch.cat(instance_num_point, dim=0)  # (total_nInst)
     data["instance_offsets"] = torch.tensor(instance_offsets, dtype=torch.int32)  # int (B+1)
     data["instance_semantic_cls"] = torch.tensor(instance_cls, dtype=torch.int32)  # long (total_nInst)
-    data["class"] = torch.tensor(object_class)
+    data["lng_class"] = torch.tensor(object_lng_class)
+    data["lat_class"] = torch.tensor(object_lat_class)
+    data["front_direction"] = torch.cat(front_direction, dim=0)
+
     #batch divide
     data["batch_divide"] = batch_divide
     # voxelize

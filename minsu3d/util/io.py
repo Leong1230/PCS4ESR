@@ -10,30 +10,29 @@ from minsu3d.evaluation.gravity_aligned_obb import gravity_aligned_mobb
 from minsu3d.evaluation.visualiztion import get_directions, o3d_render
 
 
-def save_prediction(save_path, all_pred_insts, mapping_ids):
+def save_prediction(save_path, all_pred_obbs, class_names):
     inst_pred_path = os.path.join(save_path, "instance")
-    inst_pred_masks_path = os.path.join(inst_pred_path, "predicted_masks")
-    os.makedirs(inst_pred_masks_path, exist_ok=True)
+    inst_pred_directions_path = os.path.join(inst_pred_path, "predicted_directions")
+    obb_output = {}
+    os.makedirs(inst_pred_directions_path, exist_ok=True)
     scan_instance_count = {}
-    mapping_ids = list(mapping_ids)
-    for preds in tqdm(all_pred_insts, desc="==> Saving predictions ..."):
-        tmp_info = []
-        scan_id = preds[0]["scan_id"]
-        for pred in preds:
-            if scan_id not in scan_instance_count:
+    for pred in tqdm(all_pred_obbs, desc="==> Saving predictions ..."):
+        scan_id = pred["scan_id"]
+        obb_output["scan_id"].append(pred)
+    for scan_id, pred_list in obb_output:
+        torch.save({"pred_obbs":pred_list}, os.path.join(inst_pred_directions_path, f'{scan_id}.pth'))
 
-                scan_instance_count[scan_id] = 0
-            mapped_label_id = mapping_ids[pred['label_id'] - 1]
-            tmp_info.append(
-                f"predicted_masks/{scan_id}_{scan_instance_count[scan_id]:03d}.txt {mapped_label_id} {pred['conf']:.4f}\n")
-            np.savetxt(
-                os.path.join(inst_pred_masks_path, f"{scan_id}_{scan_instance_count[scan_id]:03d}.txt"),
-                rle_decode(pred["pred_mask"]), fmt="%d")
-            scan_instance_count[scan_id] += 1
-        with open(os.path.join(inst_pred_path, f"{scan_id}.txt"), "w") as f:
-            for mask_info in tmp_info:
-                f.write(mask_info)
-
+def save_gt(save_path, all_gt_obbs, class_names):
+    inst_pred_path = os.path.join(save_path, "instance")
+    inst_pred_directions_path = os.path.join(inst_pred_path, "gt_directions")
+    obb_output = {}
+    os.makedirs(inst_pred_directions_path, exist_ok=True)
+    scan_instance_count = {}
+    for gt in tqdm(all_gt_obbs, desc="==> Saving ground truths ..."):
+        scan_id = gt["scan_id"]
+        obb_output["scan_id"].append(gt)
+    for scan_id, pred_list in obb_output:
+        torch.save({"gt_obbs":pred_list}, os.path.join(inst_pred_directions_path, f'{scan_id}.pth'))
 
 def write_pointcloud(filename,xyz_points,rgb_points=None):
 

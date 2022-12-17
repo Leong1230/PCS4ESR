@@ -3,11 +3,13 @@ import torch
 import time
 import torch.nn as nn
 import numpy as np
+import math
 import torchmetrics
 import pytorch_lightning as pl
 from minsu3d.evaluation.obb_prediction import GeneralDatasetEvaluator
 from minsu3d.common_ops.functions import hais_ops, common_ops
 from minsu3d.optimizer import init_optimizer, cosine_lr_decay
+from minsu3d.util import save_prediction, save_gt
 from minsu3d.loss import MaskScoringLoss, ScoreLoss
 from minsu3d.loss.utils import get_segmented_scores
 from minsu3d.model.module import Backbone
@@ -50,7 +52,8 @@ class ObbPred(pl.LightningModule):
         # self.fc0 = nn.Linear(n_sizes, 2048)
         self.fc1 = nn.Linear(n_sizes, 512)
         self.fc2 = nn.Linear(512, 128)
-        self.fc3 = nn.Linear(128, (data.lat_class*data.lng_class))
+        self.fc_lat = nn.Linear(128, (data.lat_class))
+        self.fc_lng = nn.Linear(128, (data.lng_class))
         self.accuracy = torchmetrics.Accuracy()
         self.log_softmax = nn.functional.log_softmax
         self.nll_loss = nn.functional.nll_loss
@@ -154,14 +157,16 @@ class ObbPred(pl.LightningModule):
         # x = self.relu(self.fc0(x)).clone()
         x = self.relu(self.fc1(x)).clone()
         x = self.relu(self.fc2(x)).clone()
-        x = self.log_softmax(self.fc3(x))
-        output_dict["direction_socres"] = x        
+        x_lng = self.log_softmax(self.fc_lng(x))
+        x_lat = self.log_softmax(self.fc_lat(x))
+        output_dict["direction_lng_scores"] = x_lng    
+        output_dict["direction_lat_scores"] = x_lat        
         return output_dict
 
     def _loss(self, data_dict, output_dict):
-        output_dict = self.forward(data_dict)
-        loss = output_dict["direction_scores"]
-        return loss
+        lng_loss = self.nll_loss(output_dict["direction_lng_scores"], data_dict["lng_class"])
+        lat_loss = self.nll_loss(output_dict["direction_lat_scores"], data_dict["lat_class"])
+        return lng_loss + lat_loss / 2
 
     def training_step(self, data_dict, idx):
         output_dict = self.forward(data_dict)
@@ -169,10 +174,14 @@ class ObbPred(pl.LightningModule):
         self.log("train/loss", loss, prog_bar=True, on_step=False, on_epoch=True,
                  sync_dist=True, batch_size=self.hparams.data.batch_size)
         # training metrics
-        preds = torch.argmax(y, dim=1)
-        acc = self.accuracy(preds, data_dict["class"])
+        lng_preds = torch.argmax(output_dict["direction_lng_scores"], dim=1)
+        lat_preds = torch.argmax(output_dict["direction_lat_scores"], dim=1)
+        lng_acc = self.accuracy(lng_preds, data_dict["lng_class"])
+        lat_acc = self.accuracy(lat_preds, data_dict["lat_class"])
         self.log('train_loss', loss, on_step=True, on_epoch=True, logger=True, batch_size=self.hparams.data.batch_size)
-        self.log('train_acc', acc, on_step=True, on_epoch=True, logger=True, batch_size=self.hparams.data.batch_size)    
+        self.log('train_lng_acc', lng_acc, on_step=True, on_epoch=True, logger=True, batch_size=self.hparams.data.batch_size)   
+        self.log('train_lat_acc', lat_acc, on_step=True, on_epoch=True, logger=True, batch_size=self.hparams.data.batch_size)    
+ 
         return loss
 
     # def test_step(self, data_dict, idx):
@@ -196,98 +205,95 @@ class ObbPred(pl.LightningModule):
                  on_epoch=True, sync_dist=True, batch_size=1)
 
         # log semantic prediction accuracy
-        direction_predictions = torch.argmax(output_dict["direction_scores"])
+        lng_direction_predictions = torch.argmax(output_dict["direction_lng_scores"])
+        lat_direction_predictions = torch.argmax(output_dict["direction_lat_scores"])
 
-        if self.current_epoch > self.hparams.model.prepare_epochs:
-            pred_obb = self._get_pred_obb(data_dict["scan_ids"][0],
-                                          output_dict["sem_labels"],
-                                          output_dict["direction_scores"].cpu(),
-                                          len(self.hparams.data.ignore_classes))
-            gt_obb = self._get_gt_obb(data_dict["scan_ids"][0],
-                                      output_dict["sem_labels"],
-                                      data_dict["class"],
-                                      len(self.hparams.data.ignore_classes))
-            return pred_obb, gt_obb
+        # if self.current_epoch > self.hparams.model.prepare_epochs:
+        pred_obb = self._get_pred_obb(data_dict["scan_ids"][0],
+                                        data_dict["sem_labels"],
+                                        output_dict["direction_lng_scores"].cpu(),
+                                        output_dict["direction_lat_scores"].cpu(),
+                                        len(self.hparams.data.ignore_classes))
+        gt_obb = self._get_gt_obb(data_dict["scan_ids"][0],
+                                    data_dict["sem_labels"],
+                                    data_dict["front_direction"],
+                                    len(self.hparams.data.ignore_classes))
+        return pred_obb, gt_obb
 
     def validation_epoch_end(self, outputs):
+        # evaluate instance predictions
+        # if self.current_epoch > self.hparams.model.prepare_epochs:
+        all_pred_obbs = []
+        all_gt_obbs = []
+        for pred_obb, gt_obb in outputs:
+            all_pred_obbs.append(pred_obb)
+            all_gt_obbs.append(gt_obb)
+        obb_direction_evaluator = GeneralDatasetEvaluator(self.hparams.data.class_names, self.hparams.data.ignore_label)
+        obb_direction_eval_result = obb_direction_evaluator.evaluate(all_pred_obbs, all_gt_obbs, print_result=True)
+        self.log("val_eval/AC_10", obb_direction_eval_result["all_ac_10"], prog_bar=True, on_step=False,
+                    on_epoch=True, sync_dist=True, batch_size=1)
+        self.log("val_eval/AC_20", obb_direction_eval_result["all_ac_20"], prog_bar=True, on_step=False,
+                    on_epoch=True, sync_dist=True, batch_size=1)
+        self.log("val_eval/Rerr", obb_direction_eval_result["all_err"], prog_bar=True, on_step=False,
+                    on_epoch=True, sync_dist=True, batch_size=1)
+
+    def test_step(self, data_dict, idx):
+        # prepare input and forward
+        start_time = time.time()
+        output_dict = self.forward(data_dict)
+        front_loss = self._loss(data_dict, output_dict)
+        end_time = time.time() - start_time
+        # log losses
+        self.log("val/loss", front_loss, prog_bar=True, on_step=False,
+                 on_epoch=True, sync_dist=True, batch_size=1)
+
+        # log semantic prediction accuracy
+        lng_direction_predictions = torch.argmax(output_dict["direction_lng_scores"])
+        lat_direction_predictions = torch.argmax(output_dict["direction_lat_scores"])
+
+        # if self.current_epoch > self.hparams.model.prepare_epochs:
+        pred_obb = self._get_pred_obb(data_dict["scan_ids"][0],
+                                        data_dict["sem_labels"],
+                                        output_dict["direction_lng_scores"].cpu(),
+                                        output_dict["direction_lat_scores"].cpu(),
+                                        len(self.hparams.data.ignore_classes))
+        gt_obb = self._get_gt_obb(data_dict["scan_ids"][0],
+                                    data_dict["sem_labels"],
+                                    data_dict["front_direction"],
+                                    len(self.hparams.data.ignore_classes))
+        return pred_obb, gt_obb, end_time
+
+    def test_epoch_end(self, results):
         # evaluate instance predictions
         if self.current_epoch > self.hparams.model.prepare_epochs:
             all_pred_obbs = []
             all_gt_obbs = []
-            for pred_obb, gt_obb in outputs:
+            for pred_obb, gt_obb, end_time in results:
                 all_pred_obbs.append(pred_obb)
                 all_gt_obbs.append(gt_obb)
-            obb_direction_evaluator = GeneralDatasetEvaluator(self.hparams.data.class_names, self.hparams.data.ignore_label)
-            obb_direction_eval_result = obb_direction_evaluator.evaluate(all_pred_obbs, all_gt_obbs, print_result=False)
-            self.log("val_eval/AP", obb_direction_eval_result["all_ap"], sync_dist=True)
+                inference_time += end_time
+            self.print(f"Average inference time: {round(inference_time / len(results), 3)}s per object.")
+            if self.hparams.inference.save_predictions:
+                save_prediction(self.hparams.inference.output_dir, all_pred_obbs, self.hparams.data.class_names)
+                self.custom_logger.info(f"\nPredictions saved at {os.path.join(self.hparams.inference.output_dir, 'instance')}\n")
+                save_gt(self.hparams.inference.output_dir, all_pred_obbs, self.hparams.data.class_names)
+                self.custom_logger.info(f"\nGround truths saved at {os.path.join(self.hparams.inference.output_dir, 'instance')}\n")
 
-    # def test_step(self, data_dict, idx):
-    #     # prepare input and forward
-    #     start_time = time.time()
-    #     output_dict = self._feed(data_dict)
-    #     end_time = time.time() - start_time
-
-    #     sem_labels_cpu = data_dict["sem_labels"].cpu()
-    #     semantic_predictions = output_dict["semantic_scores"].max(1)[1].cpu().numpy()
-    #     semantic_accuracy = evaluate_semantic_accuracy(semantic_predictions,
-    #                                                    sem_labels_cpu.numpy(),
-    #                                                    ignore_label=self.hparams.data.ignore_label)
-    #     semantic_mean_iou = evaluate_semantic_miou(semantic_predictions, sem_labels_cpu.numpy(),
-    #                                                ignore_label=self.hparams.data.ignore_label)
-
-    #     if self.current_epoch > self.hparams.model.prepare_epochs:
-    #         pred_instances = self._get_pred_instances(data_dict["scan_ids"][0],
-    #                                                   data_dict["locs"].cpu().numpy(),
-    #                                                   output_dict["proposal_scores"][0].cpu(),
-    #                                                   output_dict["proposal_scores"][1].cpu(),
-    #                                                   output_dict["proposal_scores"][2].size(0) - 1,
-    #                                                   output_dict["semantic_scores"].cpu(),
-    #                                                   len(self.hparams.data.ignore_classes))
-    #         gt_instances = get_gt_instances(sem_labels_cpu, data_dict["instance_ids"].cpu(),
-    #                                         self.hparams.data.ignore_classes)
-    #         gt_instances_bbox = get_gt_bbox(data_dict["locs"].cpu().numpy(),
-    #                                         data_dict["instance_ids"].cpu().numpy(),
-    #                                         data_dict["sem_labels"].cpu().numpy(), self.hparams.data.ignore_label,
-    #                                         self.hparams.data.ignore_classes)
-    #         return semantic_accuracy, semantic_mean_iou, pred_instances, gt_instances, gt_instances_bbox, end_time
-
-    # def training_epoch_end(self, training_step_outputs):
-    #     cosine_lr_decay(self.trainer.optimizers[0], self.hparams.optimizer.lr, self.current_epoch,
-    #                     self.hparams.lr_decay.decay_start_epoch, self.hparams.lr_decay.decay_stop_epoch, 1e-6)
-
-    # def test_epoch_end(self, results):
-    #     # evaluate instance predictions
-    #     if self.current_epoch > self.hparams.model.prepare_epochs:
-    #         all_pred_insts = []
-    #         all_gt_insts = []
-    #         all_gt_insts_bbox = []
-    #         all_sem_acc = []
-    #         all_sem_miou = []
-    #         inference_time = 0
-    #         for semantic_accuracy, semantic_mean_iou, pred_instances, gt_instances, gt_instances_bbox, end_time in results:
-    #             all_sem_acc.append(semantic_accuracy)
-    #             all_sem_miou.append(semantic_mean_iou)
-    #             all_gt_insts_bbox.append(gt_instances_bbox)
-    #             all_pred_insts.append(pred_instances)
-    #             all_gt_insts.append(gt_instances)
-    #             inference_time += end_time
-    #         self.print(f"Average inference time: {round(inference_time / len(results), 3)}s per scan.")
-    #         if self.hparams.inference.save_predictions:
-    #             save_prediction(self.hparams.inference.output_dir, all_pred_insts, self.hparams.data.mapping_classes_ids)
-    #             self.custom_logger.info(f"\nPredictions saved at {os.path.join(self.hparams.inference.output_dir, 'instance')}\n")
-
-    #         if self.hparams.inference.evaluate:
-    #             inst_seg_evaluator = GeneralDatasetEvaluator(self.hparams.data.class_names,
-    #                                                          self.hparams.data.ignore_label)
-    #             self.custom_logger.info("Evaluating instance segmentation ...")
-    #             inst_seg_eval_result = inst_seg_evaluator.evaluate(all_pred_insts, all_gt_insts, print_result=True)
-    #             obj_detect_eval_result = evaluate_bbox_acc(all_pred_insts, all_gt_insts_bbox,
-    #                                                        self.hparams.data.class_names, print_result=True)
-
-    #             sem_miou_avg = np.mean(np.array(all_sem_miou))
-    #             sem_acc_avg = np.mean(np.array(all_sem_acc))
-    #             self.custom_logger.info(f"Semantic Accuracy: {sem_acc_avg}")
-    #             self.custom_logger.info(f"Semantic mean IoU: {sem_miou_avg}")
+            if self.hparams.inference.evaluate:
+                obb_direction_evaluator = GeneralDatasetEvaluator(self.hparams.data.class_names, self.hparams.data.ignore_label)
+                obb_direction_eval_result = obb_direction_evaluator.evaluate(all_pred_obbs, all_gt_obbs, print_result=True)
+                self.log("val_eval/AC_10", obb_direction_eval_result["all_ac_10"], prog_bar=True, on_step=False,
+                            on_epoch=True, sync_dist=True, batch_size=1)
+                self.log("val_eval/AC_20", obb_direction_eval_result["all_ac_20"], prog_bar=True, on_step=False,
+                            on_epoch=True, sync_dist=True, batch_size=1)
+                self.log("val_eval/Rerr", obb_direction_eval_result["all_err"], prog_bar=True, on_step=False,
+                            on_epoch=True, sync_dist=True, batch_size=1)
+                all_ac_10 = obb_direction_eval_result["all_ac_10"]
+                all_ac_20 = obb_direction_eval_result["all_ac_20"]
+                all_err = obb_direction_eval_result["all_err"]
+                self.custom_logger.info(f"AC_10: {all_ac_10}")
+                self.custom_logger.info(f"AC_20: {all_ac_20}")
+                self.custom_logger.info(f"Rerr: {all_err}")
 
 
 
@@ -295,22 +301,44 @@ class ObbPred(pl.LightningModule):
         optimizer = torch.optim.Adam(self.parameters(), lr=self.hparams.optimizer.lr)
         return optimizer
 
-    def _get_pred_obb(self, scan_id, sem_labels, direction_scores,
+    def _get_front_direction_from_class(self, direction_lng_class, direction_lat_class):
+        lat_class = direction_lat_class
+        lng_class = direction_lng_class
+        lat = ((lat_class+0.5) * math.pi) / self.hparams.data.lat_class - math.pi/2
+        lng = ((lng_class+0.5) * 2 * math.pi) / self.hparams.data.lng_class - math.pi
+        x = np.float32(1)
+        y = math.tan(lng) * x
+        z = math.tan(lat) * math.sqrt(x*x+y*y)
+        direction  = np.array([x, y, z])
+        direction = direction/np.linalg.norm(direction)
+        return direction
+
+    def _get_pred_obb(self, scan_id, sem_labels, direction_lng_scores, direction_lat_scores,
                             num_ignored_classes):
         obb = {}
-        direction_pred = torch.argmax(direction_scores)
-        direction_score = torch.max(direction_scores) 
-        obb["sem_label"] = np.argmax(np.bincount(sem_labels)) - num_ignored_classes + 1
+        direction_lng_pred = (torch.argmax(direction_lng_scores)).detach().cpu().numpy()
+        direction_lat_pred = (torch.argmax(direction_lat_scores)).detach().cpu().numpy()
+        direction_lng_score = torch.max(direction_lng_scores) 
+        direction_lat_score = torch.max(direction_lat_scores) 
+        # obb["sem_label"] = np.argmax(np.bincount(sem_labels.detach().cpu().numpy())) - num_ignored_classes + 1
+        semantic_label = sem_labels.detach().cpu().numpy()
+        instance_id = instance_id.detach().cpu().numpy()
+        obb["sem_label"] = np.argmax(np.bincount(semantic_label))
+        obb["instance_id"] = np.argmax(np.bincount(instance_id))
         obb["scan_id"] = scan_id
-        obb["conf"] = direction_score
-        obb["direction_pred"] = direction_pred
+        # obb["conf"] = direction_score
+        obb["direction_pred"] = self._get_front_direction_from_class(direction_lng_pred, direction_lat_pred)
+        
         return obb
 
-    def _get_gt_obb(self, scan_id, sem_labels, class,
-                            num_ignored_classes):
+    def _get_gt_obb(self, scan_id, sem_labels, front, num_ignored_classes):
         obb = {}
-        direction_gt = class.numpy()
-        obb["sem_label"] = np.argmax(np.bincount(sem_labels)) - num_ignored_classes + 1
+        front_gt = front.detach().cpu().numpy()
+        # obb["sem_label"] = np.argmax(np.bincount(sem_labels.detach().cpu().numpy())) - num_ignored_classes + 1
+        semantic_label = sem_labels.detach().cpu().numpy()
+        instance_id = instance_id.detach().cpu().numpy()
+        obb["sem_label"] = np.argmax(np.bincount(semantic_label))
+        obb["instance_id"] = np.argmax(np.bincount(instance_id))
         obb["scan_id"] = scan_id
-        obb["direction_gt"] = direction_gt
+        obb["direction_gt"] = front_gt
         return obb

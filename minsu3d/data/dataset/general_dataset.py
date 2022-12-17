@@ -1,5 +1,7 @@
 import os
 from tqdm import tqdm
+import statistics
+from statistics import mode
 import numpy as np
 import math
 import h5py
@@ -14,6 +16,7 @@ class GeneralDataset(Dataset):
         self.cfg = cfg
         self.split = split
         self.dataset_root_path = cfg.data.dataset_path
+        self.part_ids = cfg.data.valid_part_ids
         self.file_suffix = cfg.data.file_suffix
         self.full_scale = cfg.data.full_scale
         self.scale = cfg.data.scale
@@ -43,7 +46,8 @@ class GeneralDataset(Dataset):
                 #     object["class"] = np.array([1])
                 # else:
                 #     object["class"] = np.array([0])
-                self.objects.append(object)
+                if mode(object["sem_labels"]) not in self.cfg.data.ignore_classes:
+                    self.objects.append(object)
 
     def __len__(self):
         return len(self.objects)
@@ -62,7 +66,7 @@ class GeneralDataset(Dataset):
         lng_class.astype(np.int)
         if lng_class == self.cfg.data.lng_class:
             lng_class -= 1
-        return lng_class*self.cfg.data.lat_class + lat_class
+        return lng_class, lat_class
 
     def _get_augmentation_matrix(self):
         m = np.eye(3)
@@ -131,7 +135,11 @@ class GeneralDataset(Dataset):
         colors = object["rgb"]  # (N, 3)
         normals = object["normal"]
         obbs = object["obb"]
-        classes = np.array([self._get_front_direction_class(object)]).astype(np.int)
+        # lng_class, lat_class = np.array([self._get_front_direction_class(object)]).astype(np.int)
+        lng_class, lat_class = self._get_front_direction_class(object)
+        lng_class = np.array([lng_class]).astype(np.int)
+        lat_class = np.array([lat_class]).astype(np.int)
+
         if self.cfg.model.model.use_multiview:
             multiviews = self.multiview_hdf5_file[scene_id]
         instance_ids = object["instance_ids"]
@@ -204,6 +212,7 @@ class GeneralDataset(Dataset):
         data["instance_info"] = instance_info  # (N, 12)
         data["instance_num_point"] = np.array(instance_num_point, dtype=np.int32)  # (num_instance,)
         data["instance_semantic_cls"] = instance_semantic_cls
-        data["class"] = classes
+        data["lng_class"] = lng_class
+        data["lat_class"] = lat_class
         data["obb"] = obbs
         return data

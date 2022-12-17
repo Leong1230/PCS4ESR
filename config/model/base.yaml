@@ -1,6 +1,6 @@
 # Managed by Hydra
 
-ckpt_path: /home/zhenli/data/training/HAIS-MultiScanObj-epoch=55.ckpt
+ckpt_path: /home/zhenli/data/output/Multiscan/ObbPred/split_lng_lat_1/training/ObbPred-Multiscan-epoch=14.ckpt
 
 
 log:
@@ -32,7 +32,7 @@ checkpoint_monitor:
   mode: max
   save_last: False
   save_top_k: -1
-  every_n_epochs: 1
+  every_n_epochs: 2
 
 
 # https://pytorch-lightning.readthedocs.io/en/stable/common/optimization.html

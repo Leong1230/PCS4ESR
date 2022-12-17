@@ -61,7 +61,6 @@ def main(cfg):
     weights = {k: v for k, v in weights.items() if k in model_dict}
     model_dict.update(weights)
     model.load_state_dict(model_dict)
-    # print("model's state_dict: ")
     # for param_tensor in model.state_dict():
     #     print(param_tensor, "\t", model.state_dict()[param_tensor].size())
     

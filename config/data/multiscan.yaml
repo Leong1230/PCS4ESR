@@ -8,19 +8,19 @@ dataset_path: ${data.dataset_root_path}/multiscan_objects
 
 metadata:
   metadata_path: ${data.dataset_path}/metadata
-  train_list: ${data.metadata.metadata_path}/obbpred_train_sample.txt
-  val_list: ${data.metadata.metadata_path}/obbpred_val_sample.txt
-  test_list: ${data.metadata.metadata_path}/obbpred_test_sample.txt
+  train_list: ${data.metadata.metadata_path}/obbpred_train.txt
+  val_list: ${data.metadata.metadata_path}/obbpred_val.txt
+  test_list: ${data.metadata.metadata_path}/obbpred_test.txt
   # combine_file: ${data.metadata.metadata_path}/scannetv2-labels.combined.tsv
   # multiview_file: ${data.dataset_path}/enet_feats_maxpool.hdf5
 
-classes: 8
-ignore_classes: [0, 1]         
-class_names: ['cabinet', 'bed', 'chair', 'sofa', 'table', 'door', 'window', 'bookshelf', 'picture',
-              'counter', 'desk', 'curtain', 'refrigerator', 'shower curtain', 'toilet', 'sink',
-              'bathtub', 'otherfurniture']
+classes: 20
+ignore_classes: [-1, 0, 1, 2, 4, 8, 10, 11, 12, 14, 15, 16, 17]
+class_names: ['floor', 'ceiling', 'wall', 'door', 'table', 'chair', 'cabinet', 'window', 'sofa', 'microwave', 'pillow',
+              'tv_monitor', 'curtain', 'trash_can', 'suitcase', 'sink', 'backpack', 'bed', 'refrigerator', 'toilet']
+valid_part_ids: [2, 2, 3, 4, 5]
 
-mapping_classes_ids: [3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 14, 16, 24, 28, 33, 34, 36, 39]
+mapping_classes_ids: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20]
 
 point_num_avg: [-1., -1., 3917., 12056., 2303.,
                 8331., 3948., 3166., 5629., 11719.,
