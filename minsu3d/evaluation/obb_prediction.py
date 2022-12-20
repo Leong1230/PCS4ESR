@@ -132,17 +132,21 @@ class GeneralDatasetEvaluator(object):
         # results: class x iou
         ac_10 = np.empty((len(dist_threshes), len(self.eval_class_labels)))
         ac_20 = np.empty((len(dist_threshes), len(self.eval_class_labels)))
+        ac_5 = np.empty((len(dist_threshes), len(self.eval_class_labels)))
         error = np.empty((len(dist_threshes), len(self.eval_class_labels)))
         ac_10.fill(np.nan)
         ac_20.fill(np.nan)
+        ac_5.fill(np.nan)
         error.fill(np.nan)
         for di, (min_region_size, distance_thresh,
                  distance_conf) in enumerate(zip(min_region_sizes, dist_threshes, dist_confs)):
             for li, label_name in enumerate(self.eval_class_labels):
                 tp_10 = 0
                 tp_20 = 0
+                tp_5 = 0
                 fp_10 = 0
                 fp_20 = 0
+                fp_5 = 0
                 angles = 0
                 for m in matches:
                     if matches[m]['sem_label']==li:
@@ -150,6 +154,10 @@ class GeneralDatasetEvaluator(object):
                         gt_obb_direction = matches[m]['gt']
                         angle = np.arccos(np.dot(pred_obb_direction, gt_obb_direction))
                         angles += angle
+                        if angle < 5/180 * 3.14:
+                            tp_5 += 1
+                        else:
+                            fp_5 += 1
                         if angle < 10/180 * 3.14:
                             tp_10 += 1
                         else:
@@ -161,24 +169,28 @@ class GeneralDatasetEvaluator(object):
                 if (tp_10+fp_10)!=0:
                     ac_10_current = np.float(tp_10)/np.float(fp_10+tp_10)
                     ac_20_current = np.float(tp_20)/np.float(tp_20+fp_20)
+                    ac_5_current = np.float(tp_5)/np.float(tp_5+fp_5)
                     error_current = np.float(angles)/np.float(tp_10+fp_10)
                     ac_10[di, li] = ac_10_current
                     ac_20[di, li] = ac_20_current
+                    ac_5[di, li] = ac_5_current
                     error[di, li] = error_current
-        return ac_10, ac_20, error
+        return ac_10, ac_20, ac_5, error
 
-    def compute_averages(self, acs_10, acs_20, errs):
+    def compute_averages(self, acs_10, acs_20, acs_5, errs):
         avg_dict = {}
         d_inf = 0
         # avg_dict['all_ap']     = np.nanmean(aps[ d_inf,:,:  ])
         avg_dict['all_ac_10'] = np.nanmean(acs_10[d_inf, :])
         avg_dict['all_ac_20'] = np.nanmean(acs_20[d_inf, :])
+        avg_dict['all_ac_5'] = np.nanmean(acs_5[d_inf, :])
         avg_dict['all_err'] = np.nanmean(errs[d_inf, :])
         avg_dict['classes'] = {}
         for (li, label_name) in enumerate(self.eval_class_labels):
             avg_dict['classes'][label_name] = {}
             avg_dict['classes'][label_name]['ac_10'] = acs_10[d_inf, li]
             avg_dict['classes'][label_name]['ac_20'] = acs_20[d_inf, li]
+            avg_dict['classes'][label_name]['ac_5'] = acs_5[d_inf, li]
             avg_dict['classes'][label_name]['err'] = errs[d_inf, li]
         return avg_dict
 
@@ -203,8 +215,8 @@ class GeneralDatasetEvaluator(object):
             matches[matches_key]['pred'] = pred_list[i]["direction_pred"]
             matches[matches_key]['gt'] = gt_list[i]["direction_gt"]
         
-        ac_10_scores, ac_20_scores, err_scores = self.evaluate_matches(matches)
-        avgs = self.compute_averages(ac_10_scores, ac_20_scores, err_scores)
+        ac_10_scores, ac_20_scores, ac_5_scores, err_scores = self.evaluate_matches(matches)
+        avgs = self.compute_averages(ac_10_scores, ac_20_scores, ac_5_scores, err_scores)
         if print_result:
             self.print_results(avgs)
         return avgs
@@ -218,6 +230,7 @@ class GeneralDatasetEvaluator(object):
         print('#' * lineLen)
         line = ''
         line += '{:<15}'.format('what') + sep + col1
+        line += '{:>8}'.format('AC_5') + sep
         line += '{:>8}'.format('AC_10') + sep
         line += '{:>8}'.format('AC_20') + sep
         line += '{:>8}'.format('Rerr') + sep
@@ -226,15 +239,18 @@ class GeneralDatasetEvaluator(object):
         print('#' * lineLen)
 
         for (li, label_name) in enumerate(self.eval_class_labels):
+            ac_5_avg = avgs['classes'][label_name]['ac_5']
             ac_10_avg = avgs['classes'][label_name]['ac_10']
             ac_20_avg = avgs['classes'][label_name]['ac_20']
             err_avg = avgs['classes'][label_name]['err']
             line = '{:<15}'.format(label_name) + sep + col1
+            line += sep + '{:>8.3f}'.format(ac_5_avg) + sep
             line += sep + '{:>8.3f}'.format(ac_10_avg) + sep
             line += sep + '{:>8.3f}'.format(ac_20_avg) + sep
             line += sep + '{:>8.3f}'.format(err_avg) + sep
             print(line)
 
+        all_ac_5_avg = avgs['all_ac_5']
         all_ac_10_avg = avgs['all_ac_10']
         all_ac_20_avg = avgs['all_ac_20']
         all_err_avg = avgs['all_err']
@@ -242,6 +258,7 @@ class GeneralDatasetEvaluator(object):
 
         print('-' * lineLen)
         line = '{:<15}'.format('average') + sep + col1
+        line += '{:>8.3f}'.format(all_ac_5_avg) + sep
         line += '{:>8.3f}'.format(all_ac_10_avg) + sep
         line += '{:>8.3f}'.format(all_ac_20_avg) + sep
         line += '{:>8.3f}'.format(all_err_avg) + sep

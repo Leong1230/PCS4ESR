@@ -1,6 +1,7 @@
 from pyexpat import features
 import torch
 import time
+import os
 import torch.nn as nn
 import numpy as np
 import math
@@ -211,13 +212,13 @@ class ObbPred(pl.LightningModule):
         # if self.current_epoch > self.hparams.model.prepare_epochs:
         pred_obb = self._get_pred_obb(data_dict["scan_ids"][0],
                                         data_dict["sem_labels"],
+                                        data_dict["instance_ids"],
                                         output_dict["direction_lng_scores"].cpu(),
-                                        output_dict["direction_lat_scores"].cpu(),
-                                        len(self.hparams.data.ignore_classes))
+                                        output_dict["direction_lat_scores"].cpu())
         gt_obb = self._get_gt_obb(data_dict["scan_ids"][0],
                                     data_dict["sem_labels"],
-                                    data_dict["front_direction"],
-                                    len(self.hparams.data.ignore_classes))
+                                    data_dict["instance_ids"],
+                                    data_dict["front_direction"])
         return pred_obb, gt_obb
 
     def validation_epoch_end(self, outputs):
@@ -230,6 +231,8 @@ class ObbPred(pl.LightningModule):
             all_gt_obbs.append(gt_obb)
         obb_direction_evaluator = GeneralDatasetEvaluator(self.hparams.data.class_names, self.hparams.data.ignore_label)
         obb_direction_eval_result = obb_direction_evaluator.evaluate(all_pred_obbs, all_gt_obbs, print_result=True)
+        self.log("val_eval/AC_5", obb_direction_eval_result["all_ac_5"], prog_bar=True, on_step=False,
+                    on_epoch=True, sync_dist=True, batch_size=1)
         self.log("val_eval/AC_10", obb_direction_eval_result["all_ac_10"], prog_bar=True, on_step=False,
                     on_epoch=True, sync_dist=True, batch_size=1)
         self.log("val_eval/AC_20", obb_direction_eval_result["all_ac_20"], prog_bar=True, on_step=False,
@@ -244,7 +247,7 @@ class ObbPred(pl.LightningModule):
         front_loss = self._loss(data_dict, output_dict)
         end_time = time.time() - start_time
         # log losses
-        self.log("val/loss", front_loss, prog_bar=True, on_step=False,
+        self.log("test/loss", front_loss, prog_bar=True, on_step=False,
                  on_epoch=True, sync_dist=True, batch_size=1)
 
         # log semantic prediction accuracy
@@ -254,13 +257,18 @@ class ObbPred(pl.LightningModule):
         # if self.current_epoch > self.hparams.model.prepare_epochs:
         pred_obb = self._get_pred_obb(data_dict["scan_ids"][0],
                                         data_dict["sem_labels"],
+                                        data_dict["instance_ids"],
                                         output_dict["direction_lng_scores"].cpu(),
-                                        output_dict["direction_lat_scores"].cpu(),
-                                        len(self.hparams.data.ignore_classes))
+                                        output_dict["direction_lat_scores"].cpu())
+        # gt_obb = self._get_gt_obb(data_dict["scan_ids"][0],
+        #                             data_dict["sem_labels"],
+        #                             data_dict["instance_ids"],
+        #                             data_dict["lng_class"],
+        #                             data_dict["lat_class"])
         gt_obb = self._get_gt_obb(data_dict["scan_ids"][0],
                                     data_dict["sem_labels"],
-                                    data_dict["front_direction"],
-                                    len(self.hparams.data.ignore_classes))
+                                    data_dict["instance_ids"],
+                                    data_dict["front_direction"])
         return pred_obb, gt_obb, end_time
 
     def test_epoch_end(self, results):
@@ -268,6 +276,7 @@ class ObbPred(pl.LightningModule):
         if self.current_epoch > self.hparams.model.prepare_epochs:
             all_pred_obbs = []
             all_gt_obbs = []
+            inference_time = 0
             for pred_obb, gt_obb, end_time in results:
                 all_pred_obbs.append(pred_obb)
                 all_gt_obbs.append(gt_obb)
@@ -282,19 +291,14 @@ class ObbPred(pl.LightningModule):
             if self.hparams.inference.evaluate:
                 obb_direction_evaluator = GeneralDatasetEvaluator(self.hparams.data.class_names, self.hparams.data.ignore_label)
                 obb_direction_eval_result = obb_direction_evaluator.evaluate(all_pred_obbs, all_gt_obbs, print_result=True)
-                self.log("val_eval/AC_10", obb_direction_eval_result["all_ac_10"], prog_bar=True, on_step=False,
+                self.log("test_eval/AC_5", obb_direction_eval_result["all_ac_5"], prog_bar=True, on_step=False,
                             on_epoch=True, sync_dist=True, batch_size=1)
-                self.log("val_eval/AC_20", obb_direction_eval_result["all_ac_20"], prog_bar=True, on_step=False,
+                self.log("test_eval/AC_10", obb_direction_eval_result["all_ac_10"], prog_bar=True, on_step=False,
                             on_epoch=True, sync_dist=True, batch_size=1)
-                self.log("val_eval/Rerr", obb_direction_eval_result["all_err"], prog_bar=True, on_step=False,
+                self.log("test_eval/AC_20", obb_direction_eval_result["all_ac_20"], prog_bar=True, on_step=False,
                             on_epoch=True, sync_dist=True, batch_size=1)
-                all_ac_10 = obb_direction_eval_result["all_ac_10"]
-                all_ac_20 = obb_direction_eval_result["all_ac_20"]
-                all_err = obb_direction_eval_result["all_err"]
-                self.custom_logger.info(f"AC_10: {all_ac_10}")
-                self.custom_logger.info(f"AC_20: {all_ac_20}")
-                self.custom_logger.info(f"Rerr: {all_err}")
-
+                self.log("test_eval/Rerr", obb_direction_eval_result["all_err"], prog_bar=True, on_step=False,
+                            on_epoch=True, sync_dist=True, batch_size=1)
 
 
     def configure_optimizers(self):
@@ -304,17 +308,26 @@ class ObbPred(pl.LightningModule):
     def _get_front_direction_from_class(self, direction_lng_class, direction_lat_class):
         lat_class = direction_lat_class
         lng_class = direction_lng_class
-        lat = ((lat_class+0.5) * math.pi) / self.hparams.data.lat_class - math.pi/2
-        lng = ((lng_class+0.5) * 2 * math.pi) / self.hparams.data.lng_class - math.pi
-        x = np.float32(1)
-        y = math.tan(lng) * x
+        lat = ((lat_class) * math.pi) / self.hparams.data.lat_class - math.pi/2
+        lng = ((lng_class) * 2 * math.pi) / self.hparams.data.lng_class - math.pi
+        if (lng_class > self.hparams.data.lng_class / 4) and (lng_class < self.hparams.data.lng_class*3/4): 
+            x = np.float32(1)
+            y = math.tan(lng) * x
+        elif lng_class == self.hparams.data.lng_class / 4:
+            x =  np.float32(0)
+            y = np.float32(-1)
+        elif lng_class == self.hparams.data.lng_class*3 / 4:
+            x =  np.float32(0)
+            y = np.float32(1)
+        else:
+            x = np.float32(-1)
+            y = math.tan(lng) * x
         z = math.tan(lat) * math.sqrt(x*x+y*y)
         direction  = np.array([x, y, z])
         direction = direction/np.linalg.norm(direction)
         return direction
 
-    def _get_pred_obb(self, scan_id, sem_labels, direction_lng_scores, direction_lat_scores,
-                            num_ignored_classes):
+    def _get_pred_obb(self, scan_id, sem_labels, instance_id, direction_lng_scores, direction_lat_scores):
         obb = {}
         direction_lng_pred = (torch.argmax(direction_lng_scores)).detach().cpu().numpy()
         direction_lat_pred = (torch.argmax(direction_lat_scores)).detach().cpu().numpy()
@@ -331,14 +344,29 @@ class ObbPred(pl.LightningModule):
         
         return obb
 
-    def _get_gt_obb(self, scan_id, sem_labels, front, num_ignored_classes):
+    # def _get_gt_obb(self, scan_id, sem_labels, instance_id,  direction_lng_gt, direction_lat_gt):
+    #     obb = {}
+    #     direction_lng_gt = direction_lng_gt.detach().cpu().numpy()
+    #     direction_lat_gt = direction_lat_gt.detach().cpu().numpy()
+    #     # obb["sem_label"] = np.argmax(np.bincount(sem_labels.detach().cpu().numpy())) - num_ignored_classes + 1
+    #     semantic_label = sem_labels.detach().cpu().numpy()
+    #     instance_id = instance_id.detach().cpu().numpy()
+    #     obb["sem_label"] = np.argmax(np.bincount(semantic_label))
+    #     obb["instance_id"] = np.argmax(np.bincount(instance_id))
+    #     obb["scan_id"] = scan_id
+    #     obb["direction_gt"] = self._get_front_direction_from_class(direction_lng_gt, direction_lat_gt)
+        
+    #     return obb
+
+    def _get_gt_obb(self, scan_id, sem_labels, instance_id, front):
         obb = {}
-        front_gt = front.detach().cpu().numpy()
+        front = front.detach().cpu().numpy()
         # obb["sem_label"] = np.argmax(np.bincount(sem_labels.detach().cpu().numpy())) - num_ignored_classes + 1
         semantic_label = sem_labels.detach().cpu().numpy()
         instance_id = instance_id.detach().cpu().numpy()
         obb["sem_label"] = np.argmax(np.bincount(semantic_label))
         obb["instance_id"] = np.argmax(np.bincount(instance_id))
         obb["scan_id"] = scan_id
-        obb["direction_gt"] = front_gt
+        obb["direction_gt"] = front
+        
         return obb

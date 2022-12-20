@@ -1,7 +1,7 @@
 # Managed by Hydra
 
+# ckpt_path: /home/zhenli/data/training/HAIS-MultiScanObj-epoch=55.ckpt
 ckpt_path: /home/zhenli/data/output/Multiscan/ObbPred/split_lng_lat_1/training/ObbPred-Multiscan-epoch=14.ckpt
-
 
 log:
   module: WandbLogger  # WandbLogger or TensorBoardLogger
@@ -32,7 +32,7 @@ checkpoint_monitor:
   mode: max
   save_last: False
   save_top_k: -1
-  every_n_epochs: 2
+  every_n_epochs: 1
 
 
 # https://pytorch-lightning.readthedocs.io/en/stable/common/optimization.html
@@ -48,7 +48,7 @@ lr_decay:
 
 inference:
   TEST_NMS_THRESH: 1 #Not doing nms will significantly lower the score of pointgroup. Hence, the TEST_NMS_THRESH of pointgroup is set independently in pointgrou.yaml
-  split: val
+  split: test
   evaluate: True
   save_predictions: False
   output_dir: prediction

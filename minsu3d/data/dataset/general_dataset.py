@@ -58,14 +58,14 @@ class GeneralDataset(Dataset):
         z = object["obb"]["front"][2]
         lat = math.atan2(z, math.sqrt(x*x+y*y))
         lng = math.atan2(y, x)
-        lat_class = np.floor(self.cfg.data.lat_class*(lat+math.pi/2)/(math.pi))
+        lat_class = np.round(self.cfg.data.lat_class*(lat+math.pi/2)/(math.pi))
         lat_class.astype(np.int)
         if lat_class == self.cfg.data.lat_class:
-            lat_class -= 1
-        lng_class = np.floor(self.cfg.data.lng_class*(lng+math.pi)/(2*math.pi))
+            lat_class = 0
+        lng_class = np.round(self.cfg.data.lng_class*(lng+math.pi)/(2*math.pi))
         lng_class.astype(np.int)
         if lng_class == self.cfg.data.lng_class:
-            lng_class -= 1
+            lng_class = 0
         return lng_class, lat_class
 
     def _get_augmentation_matrix(self):

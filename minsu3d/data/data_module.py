@@ -65,7 +65,7 @@ def sparse_collate_fn(batch):
         vert_batch_ids.append(torch.full((b["locs_scaled"].shape[0],), fill_value=i, dtype=torch.int16))
         batch_divide.append(torch.tensor([b["locs_scaled"].shape[0]]).int())
         feats.append(torch.from_numpy(b["feats"]))
-        instance_ids.append(torch.from_numpy(b[instance_ids]))
+        instance_ids.append(torch.from_numpy(b["instance_ids"]))
 
         sem_labels.append(torch.from_numpy(b["sem_labels"]))
         instance_ids.append(torch.from_numpy(b["sem_labels"]))
