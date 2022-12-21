@@ -40,6 +40,7 @@ class GeneralDataset(Dataset):
             scene = torch.load(scene_path)
             for object in scene["objects"]:
                 object["xyz"] -= object["xyz"].mean(axis=0)
+                mean = object["xyz"].mean(axis=0)
                 object["rgb"] = object["rgb"].astype(np.float32) / 127.5 - 1
                 object["scene_id"] = scene_name
                 # if object["obb"]["up"][2] >= 0:
@@ -205,6 +206,7 @@ class GeneralDataset(Dataset):
 
         data["locs"] = points  # (N, 3)
         data["locs_scaled"] = scaled_points  # (N, 3)
+        data["colors"] = colors
         data["feats"] = feats  # (N, 3)
         data["sem_labels"] = sem_labels  # (N,)
         data["instance_ids"] = instance_ids  # (N,) 0~total_nInst, -1

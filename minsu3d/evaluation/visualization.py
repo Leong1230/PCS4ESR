@@ -2,9 +2,92 @@ from ast import IsNot
 import os
 import open3d as o3d
 import numpy as np
+import copy
 import random
 import matplotlib.pyplot as plt
 from matplotlib import colors
+from minsu3d.evaluation.gravity_aligned_obb import gravity_aligned_mobb
+
+
+def draw_prediction(data_dict, pred_direction, label2name, good_prediction):
+    xyz = data_dict["locs"]
+    rgb = data_dict["colors"]
+    semantic_label = data_dict["sem_labels"].detach().cpu().numpy()
+    sem_label = np.argmax(np.bincount(semantic_label))
+    for (li, label_name) in enumerate(label2name):
+        if li==sem_label:
+            name = label_name
+    xyz = xyz.detach().cpu().numpy()
+    rgb = rgb.detach().cpu().numpy()
+    front = pred_direction
+    output_dir = "visualization_results"
+    if good_prediction:
+        split = "Ac5-"
+    else:
+        split = "Ac30+"
+
+    #get the original pcd and bounding box
+    pcd = o3d.geometry.PointCloud()
+    pcd.points = o3d.utility.Vector3dVector(xyz)
+    pcd.colors = o3d.utility.Vector3dVector(rgb)
+    pcd_r = copy.deepcopy(pcd)
+    random_R = pcd.get_rotation_matrix_from_xyz((0, 0, np.pi/6))
+    pcd.rotate(random_R, center=(0, 0, 0))
+    # obb = gravity_aligned_mobb(pcd=pcd, gravity=np.array((0.0, 1.0, 0.0)), align_axis=np.array((0.0, 0.0, -1.0)))
+    obb = pcd.get_oriented_bounding_box()
+    obb.color = colors.to_rgb('red')
+    corner = pcd.get_max_bound()
+    coordinate = o3d.geometry.TriangleMesh.create_coordinate_frame(size=0.3, origin=corner)
+    coordinate.rotate(random_R, center=(0, 0, 0))
+    vis = o3d.visualization.Visualizer()
+    vis.create_window(window_name=name, visible=True)
+    vis.add_geometry(pcd)
+    vis.add_geometry(obb)
+    vis.add_geometry(coordinate)
+    opt = vis.get_render_option()
+    # view_ctrl = vis.get_view_control()
+    # view_ctrl.set_lookat([1, 0, 0])
+    # view_ctrl.set_front([1, 0, 0])
+    # view_ctrl.set_up([0, 0, 1])
+    # view_ctrl.set_front([front[0], front[1], 0])
+    # view_ctrl.set_up([0, 0, 1])
+    opt.show_coordinate_frame = True
+    vis.capture_screen_image(os.path.join(output_dir, split, name+".png"), do_render=True)
+    # pcd_set = {}
+    # obb_set = {}
+    # pcd_set[0] = gt_pcd
+    # obb_set[0] = gt_obb
+    # o3d_render(pcd_set, obb_set, output="gtOBB.png", win_width=640, win_height=480, with_diretions=True)
+    # gt_bbox.append((sem_label, gt_obb))
+    # o3d.visualization.draw_geometries([pcd])
+
+    #get the r pcd and bounding box
+    angle = np.arccos(np.dot(pred_direction, (1, 0, 0)))
+    R = pcd.get_rotation_matrix_from_xyz((0, 0, angle))
+    front_arrow = get_arrow(vec=front)
+    front_arrow.paint_uniform_color(colors.to_rgb('red'))
+    front_arrow.rotate(R, center=(0, 0, 0))
+    pcd_r.rotate(R, center=(0, 0, 0))
+    corner_r = pcd_r.get_max_bound()
+    coordinate_r = o3d.geometry.TriangleMesh.create_coordinate_frame(size=0.3, origin=corner_r)
+    vis_r = o3d.visualization.Visualizer()
+    vis_r.create_window(window_name=name, visible=True)
+    vis_r.add_geometry(pcd_r)
+    pred_aabb = pcd_r.get_axis_aligned_bounding_box()
+    pred_obb = o3d.geometry.OrientedBoundingBox.create_from_axis_aligned_bounding_box(pred_aabb)
+    pred_obb.color = colors.to_rgb('red')
+    vis_r.add_geometry(pred_obb)
+    vis_r.add_geometry(front_arrow)
+    vis_r.add_geometry(coordinate_r)
+    opt_r = vis_r.get_render_option()
+    # view_ctrl_r = vis_r.get_view_control()
+    # view_ctrl_r.set_lookat([1, 0, 0])
+    # view_ctrl_r.set_front([front[0], front[1], 0])
+    # view_ctrl_r.set_lookat([0, 0, 1])
+    opt_r.show_coordinate_frame = True
+    vis_r.capture_screen_image(os.path.join(output_dir, split, name+"_r.png"), do_render=True)
+
+
 
 def vector_magnitude(vec):
     """
@@ -45,7 +128,7 @@ def calculate_zy_rotation_for_arrow(vec):
                    [-np.sin(beta),0,np.cos(beta)]])
     return(Rz, Ry)
 
-def create_arrow(scale=10):
+def create_arrow(scale=5):
     """
     Create an arrow in for Open3D
     """

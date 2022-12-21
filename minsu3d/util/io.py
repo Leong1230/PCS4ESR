@@ -7,7 +7,7 @@ from tqdm import tqdm
 from minsu3d.evaluation.semantic_segmentation import *
 from minsu3d.evaluation.instance_segmentation import rle_decode, rle_encode
 from minsu3d.evaluation.gravity_aligned_obb import gravity_aligned_mobb
-from minsu3d.evaluation.visualiztion import get_directions, o3d_render
+from minsu3d.evaluation.visualization import get_directions, o3d_render
 
 
 def save_prediction(save_path, all_pred_obbs, class_names):

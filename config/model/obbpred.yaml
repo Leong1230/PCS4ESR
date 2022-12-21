@@ -23,7 +23,7 @@ lr_decay:
 model:
   module: ObbPred
   pretrained_module: ObbPred
-  experiment_name: final_2
+  experiment_name: final_continue_epoch9_1
 
   m: 16 # 16 or 32
   blocks: [1, 2, 3, 4, 5, 6, 7]

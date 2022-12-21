@@ -8,8 +8,8 @@ import struct
 import torch
 import random
 from pytorch3d.ops import box3d_overlap
-from .visualiztion import custom_draw_geometry_with_camera_trajectory
-from .visualiztion import o3d_render, get_vertices, get_directions
+from .visualization import custom_draw_geometry_with_camera_trajectory
+from .visualization import o3d_render, get_vertices, get_directions
 from .gravity_aligned_obb import gravity_aligned_mobb
 
 def voc_ap(rec, prec, use_07_metric=False):

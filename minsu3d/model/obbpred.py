@@ -15,6 +15,7 @@ from minsu3d.loss import MaskScoringLoss, ScoreLoss
 from minsu3d.loss.utils import get_segmented_scores
 from minsu3d.model.module import Backbone
 from minsu3d.evaluation.semantic_segmentation import *
+from minsu3d.evaluation.visualization import *
 from minsu3d.model.general_model import GeneralModel, clusters_voxelization, get_batch_offsets
 
 
@@ -269,6 +270,11 @@ class ObbPred(pl.LightningModule):
                                     data_dict["sem_labels"],
                                     data_dict["instance_ids"],
                                     data_dict["front_direction"])
+        angle = np.arccos(np.dot(pred_obb["direction_pred"], gt_obb["direction_gt"]))
+        if angle < 5/180 * 3.14:
+            draw_prediction(data_dict, pred_obb["direction_pred"], self.hparams.data.class_names, True)
+        if angle > 30/180 * 3.14:
+            draw_prediction(data_dict, pred_obb["direction_pred"], self.hparams.data.class_names, False)
         return pred_obb, gt_obb, end_time
 
     def test_epoch_end(self, results):

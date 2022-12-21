@@ -42,6 +42,7 @@ def sparse_collate_fn(batch):
     data = {}
     locs = []
     locs_scaled = []
+    colors = []
     vert_batch_ids = []
     feats = []
     sem_labels = []
@@ -62,6 +63,7 @@ def sparse_collate_fn(batch):
         locs.append(torch.from_numpy(b["locs"]))
 
         locs_scaled.append(torch.from_numpy(b["locs_scaled"]).int())
+        colors.append(torch.from_numpy(b["colors"]))
         vert_batch_ids.append(torch.full((b["locs_scaled"].shape[0],), fill_value=i, dtype=torch.int16))
         batch_divide.append(torch.tensor([b["locs_scaled"].shape[0]]).int())
         feats.append(torch.from_numpy(b["feats"]))
@@ -82,6 +84,8 @@ def sparse_collate_fn(batch):
     tmp_locs_scaled = torch.cat(locs_scaled, dim=0)  # long (N, 1 + 3), the batch item idx is put in locs[:, 0]
     data['scan_ids'] = scan_ids
     data["locs"] = torch.cat(locs, dim=0)  # float (N, 3)
+    data["colors"] = torch.cat(colors, dim=0)  # float (N, 3)
+
     data["vert_batch_ids"] = torch.cat(vert_batch_ids, dim=0)
     data["feats"] = torch.cat(feats, dim=0)
 
