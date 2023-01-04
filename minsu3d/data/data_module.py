@@ -41,6 +41,7 @@ class DataModule(pl.LightningDataModule):
 def sparse_collate_fn(batch):
     data = {}
     locs = []
+    rotated_locs = []
     locs_scaled = []
     colors = []
     vert_batch_ids = []
@@ -53,7 +54,9 @@ def sparse_collate_fn(batch):
     total_num_inst = 0
     object_lng_class = []
     object_lat_class = []
+    R = []
     front_direction = []
+    up_direction = []
     instance_cls = []  # (total_nInst), long
     batch_divide = []
     scan_ids = []
@@ -61,7 +64,7 @@ def sparse_collate_fn(batch):
     for i, b in enumerate(batch):
         scan_ids.append(b["scan_id"])
         locs.append(torch.from_numpy(b["locs"]))
-
+        rotated_locs.append(torch.from_numpy(b["rotated_locs"]))
         locs_scaled.append(torch.from_numpy(b["locs_scaled"]).int())
         colors.append(torch.from_numpy(b["colors"]))
         vert_batch_ids.append(torch.full((b["locs_scaled"].shape[0],), fill_value=i, dtype=torch.int16))
@@ -75,6 +78,8 @@ def sparse_collate_fn(batch):
         object_lng_class.append(torch.from_numpy(b["lng_class"]))
         object_lat_class.append(torch.from_numpy(b["lat_class"]))
         front_direction.append(torch.tensor(b["obb"]["front"]))
+        up_direction.append(torch.tensor(b["obb"]["up"]))
+        R.append(torch.tensor(b["R"]))
         instance_info.append(torch.from_numpy(b["instance_info"]))
         instance_num_point.append(torch.from_numpy(b["instance_num_point"]))
         instance_offsets.append(instance_offsets[-1] + b["num_instance"].item())
@@ -84,6 +89,7 @@ def sparse_collate_fn(batch):
     tmp_locs_scaled = torch.cat(locs_scaled, dim=0)  # long (N, 1 + 3), the batch item idx is put in locs[:, 0]
     data['scan_ids'] = scan_ids
     data["locs"] = torch.cat(locs, dim=0)  # float (N, 3)
+    data["rotated_locs"] = torch.cat(rotated_locs, dim=0)  # float (N, 3)
     data["colors"] = torch.cat(colors, dim=0)  # float (N, 3)
 
     data["vert_batch_ids"] = torch.cat(vert_batch_ids, dim=0)
@@ -97,7 +103,9 @@ def sparse_collate_fn(batch):
     data["instance_semantic_cls"] = torch.tensor(instance_cls, dtype=torch.int32)  # long (total_nInst)
     data["lng_class"] = torch.tensor(object_lng_class)
     data["lat_class"] = torch.tensor(object_lat_class)
-    data["front_direction"] = torch.cat(front_direction, dim=0)
+    data["front_direction"] = torch.stack(front_direction)
+    data["up_direction"] = torch.stack(up_direction)
+    data["R"] = torch.stack(R)
 
     #batch divide
     data["batch_divide"] = batch_divide

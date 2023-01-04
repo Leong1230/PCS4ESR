@@ -1,7 +1,8 @@
 # Managed by Hydra
 
 # ckpt_path: /home/zhenli/data/training/HAIS-MultiScanObj-epoch=55.ckpt
-ckpt_path: /home/zhenli/data/output/Multiscan/ObbPred/split_lng_lat_1/training/ObbPred-Multiscan-epoch=14.ckpt
+ckpt_path:
+# ckpt_path: /home/zhenli/data/output/Multiscan/NOCS/test_4/training/NOCS-Multiscan-epoch=13.ckpt
 # ckpt_path: /home/zhenli/data/output/Multiscan/ObbPred/final_from_HAIS_1/training/ObbPred-Multiscan-epoch=4.ckpt
 
 log:
@@ -39,7 +40,7 @@ checkpoint_monitor:
 # https://pytorch-lightning.readthedocs.io/en/stable/common/optimization.html
 optimizer:
     name: Adam # Adam, AdamW or SGD
-    lr: 0.0015
+    lr: 0.001
 
 
 lr_decay:
@@ -52,4 +53,5 @@ inference:
   split: test
   evaluate: True
   save_predictions: False
+  show_visualization: True
   output_dir: prediction

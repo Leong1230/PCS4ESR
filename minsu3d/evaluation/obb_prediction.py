@@ -104,12 +104,6 @@ class GeneralDatasetEvaluator(object):
 
     def __init__(self, class_labels, ignored_label, iou_type=None, use_label=True):
         self.valid_class_labels = class_labels
-        # self.valid_class_ids = np.arange(len(class_labels)) + 1
-        # self.id2label = {}
-        # self.label2id = {}
-        # for i in range(len(self.valid_class_ids)):
-        #     self.label2id[self.valid_class_labels[i]] = self.valid_class_ids[i]
-        #     self.id2label[self.valid_class_ids[i]] = self.valid_class_labels[i]
 
         self.ious = np.append(np.arange(0.5, 0.95, 0.05), 0.25)
         self.min_region_sizes = np.array([100])
@@ -150,9 +144,13 @@ class GeneralDatasetEvaluator(object):
                 angles = 0
                 for m in matches:
                     if matches[m]['sem_label']==li:
-                        pred_obb_direction = matches[m]['pred']
-                        gt_obb_direction = matches[m]['gt']
-                        angle = np.arccos(np.dot(pred_obb_direction, gt_obb_direction))
+                        pred_obb_front = matches[m]['pred_front']
+                        gt_obb_front = matches[m]['gt_front']
+                        front_angle = np.arccos(np.dot(pred_obb_front, gt_obb_front))
+                        pred_obb_up = matches[m]['pred_up']
+                        gt_obb_up = matches[m]['gt_up']
+                        up_angle = np.arccos(np.dot(pred_obb_up, gt_obb_up))
+                        angle = front_angle + up_angle
                         angles += angle
                         if angle < 5/180 * 3.14:
                             tp_5 += 1
@@ -212,8 +210,10 @@ class GeneralDatasetEvaluator(object):
             matches_key = f'obb_{i}'
             matches[matches_key] = {}
             matches[matches_key]['sem_label'] = pred_list[i]["sem_label"]
-            matches[matches_key]['pred'] = pred_list[i]["direction_pred"]
-            matches[matches_key]['gt'] = gt_list[i]["direction_gt"]
+            matches[matches_key]['pred_front'] = pred_list[i]["front"]
+            matches[matches_key]['gt_front'] = gt_list[i]["front"]
+            matches[matches_key]['pred_up'] = pred_list[i]["up"]
+            matches[matches_key]['gt_up'] = gt_list[i]["up"]
         
         ac_10_scores, ac_20_scores, ac_5_scores, err_scores = self.evaluate_matches(matches)
         avgs = self.compute_averages(ac_10_scores, ac_20_scores, ac_5_scores, err_scores)

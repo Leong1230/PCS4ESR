@@ -36,11 +36,11 @@ class GeneralDataset(Dataset):
         self.objects = []
 
         for scene_name in tqdm(self.scene_names, desc=f"Loading {self.split} data from disk"):
-            scene_path = os.path.join(self.dataset_root_path, self.split, scene_name + self.file_suffix)
+            scene_path = os.path.join(self.dataset_root_path, "train", scene_name + self.file_suffix)
             scene = torch.load(scene_path)
             for object in scene["objects"]:
-                object["xyz"] -= object["xyz"].mean(axis=0)
-                mean = object["xyz"].mean(axis=0)
+                # object["xyz"] -= object["xyz"].mean(axis=0)
+                object["xyz"] -= object["obb"]["centroid"]
                 object["rgb"] = object["rgb"].astype(np.float32) / 127.5 - 1
                 object["scene_id"] = scene_name
                 # if object["obb"]["up"][2] >= 0:
@@ -68,6 +68,15 @@ class GeneralDataset(Dataset):
         if lng_class == self.cfg.data.lng_class:
             lng_class = 0
         return lng_class, lat_class
+
+    def _get_rotation_matrix(self, object):
+        front = object["obb"]["front"]
+        up = object["obb"]["up"]
+        side = np.cross(up, front)
+        rotated_axis = np.vstack((front, side, up))
+        axis = np.vstack(([1, 0, 0], [0, 1, 0], [0, 0, 1]))
+        R = np.matmul(np.linalg.inv(axis), rotated_axis)
+        return R
 
     def _get_augmentation_matrix(self):
         m = np.eye(3)
@@ -141,6 +150,13 @@ class GeneralDataset(Dataset):
         lng_class = np.array([lng_class]).astype(np.int)
         lat_class = np.array([lat_class]).astype(np.int)
 
+
+        # get rotation matrix
+        R = self._get_rotation_matrix(object) 
+
+        # get rotated canonical coordinate
+        rotated_points = np.matmul(points, np.linalg.inv(R))
+
         if self.cfg.model.model.use_multiview:
             multiviews = self.multiview_hdf5_file[scene_id]
         instance_ids = object["instance_ids"]
@@ -205,6 +221,7 @@ class GeneralDataset(Dataset):
             feats = np.concatenate((feats, multiviews), axis=1)
 
         data["locs"] = points  # (N, 3)
+        data["rotated_locs"] = rotated_points # (N, 3)
         data["locs_scaled"] = scaled_points  # (N, 3)
         data["colors"] = colors
         data["feats"] = feats  # (N, 3)
@@ -216,5 +233,6 @@ class GeneralDataset(Dataset):
         data["instance_semantic_cls"] = instance_semantic_cls
         data["lng_class"] = lng_class
         data["lat_class"] = lat_class
+        data["R"] = R # (, 3)
         data["obb"] = obbs
         return data

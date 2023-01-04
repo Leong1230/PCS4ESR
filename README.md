@@ -1,19 +1,46 @@
-# MINSU3D
-MINSU3D：**Min**kowskiEngine-powered **S**cene **U**nderstanding in **3D** contains reimplementation of state-of-the-art 3D scene understanding methods on point clouds powered by [MinkowskiEngine](https://github.com/NVIDIA/MinkowskiEngine).  
+# MIN3dCaPose
+MINSU3D：**Min**kowskiEngine-powered **Ca**nonical **3D** **Pose** estimation contains a new voxel based object level classification method on point clouds powered by [MinkowskiEngine](https://github.com/NVIDIA/MinkowskiEngine) and reimplementation of a **N**ormalized **O**bject **C**oordinate **Space** based method by[GAPartNet](https://arxiv.org/pdf/2211.05272.pdf)
 
-We support the following instance segmentation methods:
-- [PointGroup](https://github.com/dvlab-research/PointGroup)
-- [HAIS](https://github.com/hustvl/HAIS)
-- [SoftGroup](https://github.com/thangvubk/SoftGroup)
+We trained the two model on newly released [Multiscan](https://github.com/smartscenes/multiscan) dataset
 
-We also provide bounding boxes predictions based on instance segmentation for 3D object detection.
+The main contribution is predicting the canonical 3d pose(front and up direction) of an object given its point cloud
+
+The basic code architecture of W&B logger and Hydra part is from[MINSU3D](https://github.com/3dlg-hcvc/minsu3d)
+
+## ObjectClassifier model introduction
+- ObjectClassifier is an efficient framework(MinkowskiEngine based) for point cloud object level pose estimation. It voxelizes the per point features from UNet to obtain object-level features. It also discretizes the front/up directions into different latitude and longitude classes and then computes the directions given the predicted class. Therefore, the canonical pose estimation can be simplied as a classifiction problem and 3 layer MLP is used. 
+<img src="https://github.com/3dlg-hcvc/minsu3d-internal/blob/main/visualize/example/bbox_instance.png" width="400"/>
+The classification details in a sphere:
+<img src="https://github.com/3dlg-hcvc/minsu3d-internal/blob/main/visualize/example/bbox_instance.png" width="400"/>
+
+## Normalized Object Coordinate Space regression introduction
+- The Normalized Object Coordinate Space is the reimplementation of the **N**ormalized **P**art **C**oordinate **Space** model. We modified some model details and loss function to fit the [Multiscan](https://github.com/smartscenes/multiscan) dataset and the features from UNet in [MinkowskiEngine](https://github.com/NVIDIA/MinkowskiEngine)
+
+### The Evalutaion metrics
+* AC_(angle): the accuracy, the threshold is that the angle between prediction and ground truth direction is within [angle] degree 
+* Rerr: average angle between prediction and ground truth direction, in Radian system 
+
+### Our best results on test set
+| What         | AC_5  | AC_10 | AC_20 | Rerr  |
+| ------------ | ----- | ----- | ----- | ----- |
+| door         | 0.244 | 0.244 | 0.268 | 1.365 |
+| chair        | 0.214 | 0.243 | 0.314 | 1.287 |
+| cabinet      | 0.232 | 0.261 | 0.304 | 1.527 |
+| window       | 0.118 | 0.118 | 0.118 | 1.816 |
+| microwave    | 0.000 | 0.000 | 0.167 | 1.864 |
+| trash_can    | 0.750 | 0.750 | 0.750 | 0.589 |
+| refrigerator | 0.400 | 0.400 | 0.400 | 1.302 |
+| toilet       | 0.677 | 0.788 | 0.788 | 0.384 |
+| average      | 0.328 | 0.349 | 0.387 | 1.267 |
+The dataset is the newly released [Multiscan](https://github.com/smartscenes/multiscan) dataset using our ObjectClassifier model. Our model is only trained on the 8 object categoried with articulated parts. 
+
+The results using the NOCS model are lower than results in our model.
 
 ## Features
-- Highly-modularized design enables researchers to easily add different models and datasets.
-- Multi-GPU and distributed training support through [PytorchLightning](https://github.com/Lightning-AI/lightning).
-- Better logging with [W&B](https://github.com/wandb/wandb), periodic evaluation during training.
-- Easy experiment configuration and management with [Hydra](https://github.com/facebookresearch/hydra).
-- Unified and optimized C++ and CUDA extensions.
+- Design a new object level classfier method based on latitude class and longitude class, the model architecture is as followed.
+- Preprocess the [Multiscan](https://github.com/smartscenes/multiscan) to get the objects with annotated canonical poses
+- Highly-modularized design enables researchers switch between the NOCS model and our ObjectClassifier model easily. 
+- Better logging with [W&B](https://github.com/wandb/wandb), periodic evaluation during training, and Easy experiment configuration  with [Hydra](https://github.com/facebookresearch/hydra).
 
 ## Setup
 
@@ -26,14 +53,17 @@ We recommend the use of [miniconda](https://docs.conda.io/en/latest/miniconda.ht
 
 ```shell
 # create and activate the conda environment
-conda create -n minsu3d python=3.8
-conda activate minsu3d
+conda create -n min3dcapose python=3.8
+conda activate min3dcapose
 
 # install PyTorch 1.8.2
 conda install pytorch cudatoolkit=11.1 -c pytorch-lts -c nvidia
 
 # install Python libraries
 pip install -e .
+
+# Python libraries installation verfication
+python -c "import min3dcapose"
 
 # install OpenBLAS and SparseHash via conda
 conda install openblas-devel -c anaconda
@@ -77,21 +107,30 @@ python setup.py develop
 
 ## Data Preparation
 
-### ScanNet v2 dataset
-1. Download the [ScanNet v2](http://www.scan-net.org/) dataset. To acquire the access to the dataset, please refer to their [instructions](https://github.com/ScanNet/ScanNet#scannet-data). You will get a `download-scannet.py` script after your request is approved:
-
+### Multiscan dataset
+1. Download the [Multiscan](https://github.com/smartscenes/multiscan) dataset and repo. To acquire the access to the dataset, please refer to their instructions. The download dataset would follow this [file system structure](https://3dlg-hcvc.github.io/multiscan/read-the-docs/dataset/index.html#file-system-structure) You will get a [download script](https://docs.google.com/forms/d/e/1FAIpQLSfksFtks9YHMeQQWjZjfNbNU4bhRx0knyJ_S-OdJ-vdi2pjBw/viewform) if your request is approved:
+2. Substitute the `MULTISCAN/dataset/preprocess/gen_instsegm_dataset.py` file in the downloaded [Multiscan](https://github.com/smartscenes/multiscan)repo with the [gen_instsegm_dataset.py](https://github.com/smartscenes/multiscan), set the environment following the [Instructions](https://3dlg-hcvc.github.io/multiscan/read-the-docs/server/index.html#installation)
+3. Preprocess the data, it converts the objects with annotated pose to `.pth` data, and split dataset as the default way by[Multiscan](https://github.com/smartscenes/multiscan)
 ```shell
-# about 10.7GB in total
-python download-scannet.py -o data/scannet --type _vh_clean_2.ply
-python download-scannet.py -o data/scannet --type _vh_clean.aggregation.json
-python download-scannet.py -o data/scannet --type _vh_clean_2.0.010000.segs.json
+# about 406.3GB in total of Multiscan raw dataset
+python gen_instsegm_dataset.py
+# the processed data is about 5.9GB in total
+```
+### Create own `.pth` dataset
+Each `.pth` file should named by the scans, which contains all the objects in that scan. The objects dictionary should have the following keys:
+```shell
+"xyz": 
+"rgb": 
+"normal": 
+"obb": 
+      "front":
+      "up":
+"instance_ids":
+"sem_labels":
 ```
 
-2. Preprocess the data, it converts original meshes and annotations to `.pth` data:
-```shell
-cd data/scannet
-python prepare_all_data.py data=scannet +raw_scan_path={PATH_TO_SCANNET_V2}/scans
-```
+### Download Multiscan objects directly
+Download splitted Multiscan objects with metadata by [Multiscan_objects]()
 
 ## Training, Inference and Evaluation
 Note: Configuration files are managed by [Hydra](https://hydra.cc/), you can easily add or override any configuration attributes by passing them as arguments.
@@ -101,9 +140,6 @@ wandb login
 
 # train a model from scratch
 python train.py model={model_name} data={dataset_name}
-
-# train a model from scratch with 2 GPUs
-python train.py model={model_name} data={dataset_name} model.trainer.devices=2
 
 # train a model from a checkpoint
 python train.py model={model_name} data={dataset_name} model.ckpt_path={checkpoint_path}
@@ -115,56 +151,61 @@ python test.py model={model_name} data={dataset_name} model.ckpt_path={pretraine
 python eval.py model={model_name} data={dataset_name} model.model.experiment_name={experiment_name}
 
 # examples:
-# python train.py model=pointgroup data=scannet model.trainer.max_epochs=480
-# python test.py model=pointgroup data=scannet model.ckpt_path=PointGroup_best.ckpt
-# python eval.py model=hais data=scannet model.model.experiment_name=run_1
+# python train.py model=nocs data=multiscan model.trainer.max_epochs=120
+# python test.py model=object_classifier data=multiscan model.ckpt_path=Object_Classifier_best.ckpt
+# python eval.py model=nocs data=multiscan model.model.experiment_name=run_1
 ```
 
 ## Pretrained Models
 
-We provide pretrained models for ScanNet v2. The pretrained model, corresponding config file, and performance on ScanNet v2 val set are given below.  Note that all MINSU3D models are trained from scratch. After downloading a pretrained model, run `test.py` to do inference as described in the above section.
-
-### ScanNet v2 val set
-| Model      | Code | mean AP | AP 50% | AP 25% | Bbox AP 50% | Bbox AP 25% | Download |
-|:-----------|:--------|:--------|:-------|:-------|:------------|:------------|:---------|
-| MINSU3D PointGroup | [config](https://github.com/3dlg-hcvc/minsu3d-internal/blob/main/config/model/pointgroup.yaml) \| [model](https://github.com/3dlg-hcvc/minsu3d-internal/blob/main/minsu3d/model/pointgroup.py) | 36.1 | 57.8 | 71.4 | 50.4 | 61.2 | [link](https://aspis.cmpt.sfu.ca/projects/minsu3d/pretrained_models/PointGroup_best.ckpt)|
-| [Official PointGroup](https://github.com/dvlab-research/PointGroup) | - | 35.2 | 57.1 | 71.4 | - | - | - |
-| MINSU3D HAIS | [config](https://github.com/3dlg-hcvc/minsu3d-internal/blob/main/config/model/hais.yaml) \| [model](https://github.com/3dlg-hcvc/minsu3d-internal/blob/main/minsu3d/model/hais.py)  | 42.1 | 62.0 | 73.8 | 52.8 | 62.6 | [link](https://aspis.cmpt.sfu.ca/projects/minsu3d/pretrained_models/HAIS_best.ckpt) |
-| [Official HAIS (retrained)](https://github.com/hustvl/HAIS)  | - | 42.2 | 61.0 | 72.9 | - | - | - |
-| [Official HAIS](https://github.com/hustvl/HAIS)  | - | 44.1 | 64.4 | 75.7 | - | - | - |
-| MINSU3D SoftGroup | [config](https://github.com/3dlg-hcvc/minsu3d-internal/blob/main/config/model/softgroup.yaml) \| [model](https://github.com/3dlg-hcvc/minsu3d-internal/blob/main/minsu3d/model/softgroup.py)  | 42.2 | 65.5 | 78.0 | 56.0 | 69.5 | [link](https://aspis.cmpt.sfu.ca/projects/minsu3d/pretrained_models/SoftGroup_best.ckpt) |
-| [Official SoftGroup](https://github.com/thangvubk/SoftGroup<sup>1</sup>) | - | 46.0 | 67.6 | 78.9 | 59.4 | 71.6 | - |
-
-<sup>1</sup> The official pretrained SoftGroup model was trained with HAIS checkpoint as pretrained backbone.
-
-<sup>2</sup> The MINSU3D HAIS model's scores are 2-3 lower than the official pretrained HAIS's. To investigate, we retrained the official HAIS model using their code, the best scores we can get are 42.2 / 61.0 / 72.9 for mean AP / AP 50% / AP 25%, which match our MINSU3D HAIS model's scores.
+We provide pretrained models for Multiscan. The pretrained model and corresponding config file are given below.  Note that all NOCS models are trained from scratch. While the ObjectClassifier model is trained from the pretrained [HAIS]() model which is trained on Multiscan dataset. It uses the hyper-parameters in Backbone UNet to accelerate training process. After downloading a pretrained model, run `test.py` to do inference as described in the above section.
 
 ## Visualization
-We provide scripts to visualize the predicted segmentations and bounding boxes. To use the visualization scripts, place the mesh (ply) file from the Scannet dataset as follows.
-
+We provide scripts to visualize the predicted and ground truth canonical 3d pose of an object. When testing and inferencing, use the following option to show visualizations
 ```
-minsu3d-internal
-├── data
-│   ├── scannet
-│   │   ├── scans
-│   │   │   ├── [scene_id]
-|   |   |   |   ├── [scene_id]_vh_clean_2.ply
+model.show_visualization: True
 ```
 
-To visualize the predictions, use `visualize/scannet/generate_ply.py` to generate ply files with vertices colored according to the semantic or instance.
+the default visualization results will be saved in the following file structure
+
+``` shell
+min3dcapose
+├── visualization_results
+# results whose average angles error is below 5 degree
+│   ├── Ac5- 
+# input object
+│   │   ├── [object_name].png 
+# object in predicted canonical pose
+│   │   ├── [object_name]_r.png 
+# results whose average angles error is over 30 degree
+│   ├── Ac30- 
+│   │   ├── [object_name].png 
+│   │   ├── [object_name]_r.png
+```
+
+Some results visualizations are as followed
 ```shell
-cd visualize/scannet
-python generate_prediction_ply.py --predict_dir {path to the predictions} --split {test/val/train} --bbox --mode {semantic/instance} --output_dir {output directory of ply files}
-
-# example:
-# python generate_prediction_ply.py --predict_dir ../../output/ScanNet/PointGroup/test/predictions/instance --split val --bbox --mode semantic --output_dir output_ply
+# the red arrow is the predicted front direction
+# left one: the original object with default OBB by `pcd.get_oriented_bounding_box()` in Open3d, the pose is randomly rotated
+# right one: object rotated to predicted canonicalized pose, the OBB is align to canonicalized axis
 ```
 
-The `--mode` option allows you to specify the color mode.  
-In the 'semantic' mode, objects with the same semantic prediction will have the same color.  
-In the 'instance' mode, each independent object instance will have an unique color, allowing the user to check how well the model performs on instance segmentation.  
+The good predictions when angle<5 degree:
+| object name | uncanonicalized pose                                         | predicted canonical pose |
+| ----------- | ------------------------------------------------------------ | ------------------------ |
+| toilet      | <img src="/home/zhenli/.config/Typora/typora-user-images/image-20221221122823883.png" width="400"/> |                          |
+|             |                                                              |                          |
+|             |                                                              |                          |
+|             |                                                              |                          |
 
-The `--bbox` option allows you to generate ply file that uses bounding box to specify the position of objects.
+The bad predictions when angle>30 degree:
+| object name | uncanonicalized pose                                         | predicted canonical pose |
+| ----------- | ------------------------------------------------------------ | ------------------------ |
+| toilet      | <img src="/home/zhenli/.config/Typora/typora-user-images/image-20221221122823883.png" width="400"/> |                          |
+|             |                                                              |                          |
+|             |                                                              |                          |
+|             |                                                              |                          |
+
 
 | Semantic Segmentation(color)              | Instance Segmentation(color)           |
 |:-----------------------------------:|:-------------------------------:|
@@ -181,16 +222,16 @@ If you find that many bounding boxes are overlapping, you can choose to do non m
 We report the time it takes to train on Scannet v2 training set of 1201 scans with the following setup.
 
 **Test environment**
-- CPU: Intel Core i9-9900K @ 3.60GHz × 16
-- RAM: 64GB
-- GPU: NVIDIA GeForce RTX 2080 Ti 11GB
+- CPU: Intel Core i7-12700 @ 2.10-4.90GHz × 12
+- RAM: 32GB
+- GPU: NVIDIA GeForce RTX 3090 Ti 24GB
 - System: Ubuntu 20.04.2 LTS
 
 **Training time in total (without validation)**
-| Model      | Epochs | Batch Size | MINSU3D | Official Version |
+| Model      | Epochs | Batch Size | Time |
 |:-----------|:--------|:--------|:--------|:-------|
-| [PointGroup](https://github.com/dvlab-research/PointGroup) | 450 | 4 | 55hr | 51hr |
-| [HAIS](https://github.com/hustvl/HAIS)| 450 | 4 | 68hr | 60hr |
+| ObjectClassifier | 450 | 4 | 55hr | 51hr |
+| | 450 | 4 | 68hr | 60hr |
 | [SoftGroup](https://github.com/thangvubk/SoftGroup) | 256 | 4 | 45hr | 30hr |
 
 **Training time per scene (avg)**
@@ -207,16 +248,62 @@ We report the time it takes to train on Scannet v2 training set of 1201 scans wi
 | [HAIS](https://github.com/hustvl/HAIS)| 160ms | 165ms |
 | [SoftGroup](https://github.com/thangvubk/SoftGroup) | 165ms | 204ms |
 
-## Customization
-MINSU3D allows for easy additions of custom datasets and models. All code under `minsu3d/data/dataset` and `minsu3d/model` are automatically registered and managed by [Hydra](https://github.com/facebookresearch/hydra) using configuration files under `config/data` and `config/model`, respectively. 
+## Limitations
+- It's hard to predict the canonical pose of some objects categories due to annotation limitations. For instance, the front direction of some windows is defined as pointing into room. Therefore, the front direction is hard to predict without background.
+- The results of the reimplementation of NOCS model still need to be impoved.
 
-### Implement your own dataset
-1. Add a new dataset config file (.yaml) at `config/data/{your_dataset}.yaml`.
-2. Add a new dataset processing code at `minsu3d/data/dataset/{your_dataset}.py`, it should inherit the `GeneralDataset()` class from `minsu3d/data/dataset/general_dataset.py`.
-
-### Implement your own model
-1. Add a new model config file (.yaml) at `config/model/{your_model}.yaml`.
-2. Add a new model code at `minsu3d/model/{your_model}.py`, it should inherit the `GeneralModel()` class from `minsu3d/model/general_model.py`.
 
 ## Acknowledgement
-This repo is built upon the [MinkowskiEngine](https://github.com/NVIDIA/MinkowskiEngine), [PointGroup](https://github.com/dvlab-research/PointGroup), [HAIS](https://github.com/hustvl/HAIS), and [SoftGroup](https://github.com/thangvubk/SoftGroup).  We train our models on [ScanNet](https://github.com/ScanNet/ScanNet). If you use this repo and the pretrained models, please cite the original papers.
+This repo is built upon the [MinkowskiEngine](https://github.com/NVIDIA/MinkowskiEngine) and [Minsu3d](https://github.com/3dlg-hcvc/minsu3d).  We train our models on [Multiscan](https://github.com/ScanNet/ScanNet). If you use this repo and the pretrained models, please cite the original papers.
+
+## Reference
+```
+@inproceedings{mao2022multiscan,
+    author = {Mao, Yongsen and Zhang, Yiming and Jiang, Hanxiao and Chang, Angel X, Savva, Manolis},
+    title = {MultiScan: Scalable RGBD scanning for 3D environments with articulated objects},
+    booktitle = {Advances in Neural Information Processing Systems},
+    year = {2022}
+}
+
+@article{Zhou2018,
+    author    = {Qian-Yi Zhou and Jaesik Park and Vladlen Koltun},
+    title     = {{Open3D}: {A} Modern Library for {3D} Data Processing},
+    journal   = {arXiv:1801.09847},
+    year      = {2018},
+}
+
+@article{ravi2020pytorch3d,
+    author = {Nikhila Ravi and Jeremy Reizenstein and David Novotny and Taylor Gordon
+                  and Wan-Yen Lo and Justin Johnson and Georgia Gkioxari},
+    title = {Accelerating 3D Deep Learning with PyTorch3D},
+    journal = {arXiv:2007.08501},
+    year = {2020},
+}
+
+@inproceedings{choy20194d,
+  title={4D Spatio-Temporal ConvNets: Minkowski Convolutional Neural Networks},
+  author={Choy, Christopher and Gwak, JunYoung and Savarese, Silvio},
+  booktitle={Proceedings of the IEEE Conference on Computer Vision and Pattern Recognition},
+  pages={3075--3084},
+  year={2019}
+}
+
+@misc{https://doi.org/10.48550/arxiv.2211.05272,
+  doi = {10.48550/ARXIV.2211.05272},
+  
+  url = {https://arxiv.org/abs/2211.05272},
+  
+  author = {Geng, Haoran and Xu, Helin and Zhao, Chengyang and Xu, Chao and Yi, Li and Huang, Siyuan and Wang, He},
+  
+  keywords = {Computer Vision and Pattern Recognition (cs.CV), FOS: Computer and information sciences, FOS: Computer and information sciences},
+  
+  title = {GAPartNet: Cross-Category Domain-Generalizable Object Perception and Manipulation via Generalizable and Actionable Parts},
+  
+  publisher = {arXiv},
+  
+  year = {2022},
+  
+  copyright = {arXiv.org perpetual, non-exclusive license}
+}
+
+```

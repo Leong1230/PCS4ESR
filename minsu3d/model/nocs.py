@@ -7,6 +7,8 @@ import numpy as np
 import math
 import torchmetrics
 import pytorch_lightning as pl
+import pyransac3d as pyrsc
+from pytorch3d.ops import corresponding_points_alignment
 from minsu3d.evaluation.obb_prediction import GeneralDatasetEvaluator
 from minsu3d.common_ops.functions import hais_ops, common_ops
 from minsu3d.optimizer import init_optimizer, cosine_lr_decay
@@ -19,7 +21,7 @@ from minsu3d.evaluation.visualization import *
 from minsu3d.model.general_model import GeneralModel, clusters_voxelization, get_batch_offsets
 
 
-class ObbPred(pl.LightningModule):
+class NOCS(pl.LightningModule):
     def __init__(self, model, data, optimizer, lr_decay, inference=None):
         super().__init__()
         self.save_hyperparameters()
@@ -40,68 +42,18 @@ class ObbPred(pl.LightningModule):
 
         # log hyperparameters
         
-        self.conv1 = nn.Conv3d(16, 32, 2, 1, 2)
-        self.conv2 = nn.Conv3d(32, 32, 2, 2, 2)
-        self.conv3 = nn.Conv3d(4, 2, 3, 3, 3)
-        self.conv4 = nn.Conv3d(2, 1, 3, 3, 3)
 
-        self.relu = nn.functional.relu6
-
-        self.pool1 = torch.nn.MaxPool3d(2)
-        self.pool2 = torch.nn.MaxPool3d(2)
+        self.sigmoid = nn.functional.sigmoid
+        self.fc1 = nn.Linear(16, 9)
+        self.fc2 = nn.Linear(9, 3)
+        self.mse_loss = nn.functional.mse_loss
         
-        n_sizes = self._get_conv_output()
-        # self.fc0 = nn.Linear(n_sizes, 2048)
-        self.fc1 = nn.Linear(n_sizes, 512)
-        self.fc_lat = nn.Linear(512, (data.lat_class))
-        self.fc_lng = nn.Linear(512, (data.lng_class))
-        self.accuracy = torchmetrics.Accuracy()
-        self.log_softmax = nn.functional.log_softmax
-        self.nll_loss = nn.functional.nll_loss
-
-
-    # returns the size of the output tensor going into Linear layer from the conv block.
-    def _get_conv_output(self):
-        batch_size = self.hparams.data.batch_size
-        input = torch.autograd.Variable(torch.rand(batch_size, self.hparams.model.feature_size, self.voxel_size, self.voxel_size, self.voxel_size))
-        # output_feat = self._forward_features(input) 
-        # n_size = output_feat.data.view(batch_size, -1).size(1)
-        n_size = input.data.view(batch_size, -1).size(1)
-        return n_size
-        
-    #returns the voxelized feature from point-wise feature
-    def _voxelize(self, features, xyz_i):
-        density = torch.zeros([self.voxel_size, self.voxel_size, self.voxel_size], dtype=torch.float).cuda()
-        downsample_feat = torch.zeros([self.hparams.model.feature_size, self.voxel_size, self.voxel_size, self.voxel_size], dtype=torch.float).cuda()
-        xyz_x = xyz_i[:,0]
-        xyz_y = xyz_i[:,1]
-        xyz_z = xyz_i[:,2]
-        x_min = xyz_x.min()
-        y_min = xyz_y.min()
-        z_min = xyz_z.min()
-        x_max = xyz_x.max()
-        y_max = xyz_y.max()
-        z_max = xyz_z.max()
-        id = 0
-        for x, y, z in xyz_i:
-            x_grid = ((self.voxel_size-1)*(x-x_min)/(x_max-x_min)).to(torch.int)
-            y_grid = ((self.voxel_size-1)*(y-y_min)/(y_max-y_min)).to(torch.int)
-            z_grid = ((self.voxel_size-1)*(z-z_min)/(z_max-z_min)).to(torch.int)
-            density[x_grid][y_grid][z_grid] = density[x_grid][y_grid][z_grid] + 1
-            downsample_feat[:,x_grid,y_grid,z_grid] = features[id]
-            id = id + 1
-        for x in range(self.voxel_size):
-            for y in range(self.voxel_size):
-                for z in range(self.voxel_size):
-                    if density[x][y][z] != 0:
-                        downsample_feat[:,x,y,z] = downsample_feat[:,x,y,z].clone()/density[x,y,z]
-        else:
-            return downsample_feat
-    # # returns the feature tensor from the conv block
-    # def _forward_features(self, x):
-    #     x = self.relu(self.conv1(x)).clone()
-    #     x = self.pool1(self.relu(self.conv2(x))).clone()
-    #     return x
+    #returns the inlier index by RANSAC algorithm
+    def _RANSAC(self, xyz):
+        xyz = xyz.detach().cpu().numpy()
+        cuboid = pyrsc.Cuboid()
+        best_eq, best_inliers = cuboid.fit(xyz, thresh=0.004, maxIteration=5000)
+        return best_inliers
 
     def _forward_voxelize(self, data_dict):
         #output data
@@ -152,75 +104,141 @@ class ObbPred(pl.LightningModule):
     # will be used during inference
     def forward(self, data_dict):
         output_dict = {}
-        x = self._forward_voxelize(data_dict)
-        # x = self._forward_features(x)
-        x = x.view(x.size(0), -1)
-        # x = self.relu(self.fc0(x)).clone()
-        x = self.relu(self.fc1(x)).clone()
-        # x = self.relu(self.fc2(x)).clone()
-        x_lng = self.log_softmax(self.fc_lng(x))
-        x_lat = self.log_softmax(self.fc_lat(x))
-        output_dict["direction_lng_scores"] = x_lng    
-        output_dict["direction_lat_scores"] = x_lat        
+        #get per-point features
+        if self.hparams.model.use_coord:
+            data_dict["feats"] = torch.cat((data_dict["feats"], data_dict["locs"]), dim=1)
+        data_dict["voxel_feats"] = common_ops.voxelization(data_dict["feats"].to(torch.float32), data_dict["p2v_map"].to(torch.int)) # (M, C), float, cuda
+        backbone_output_dict = self.backbone(data_dict["voxel_feats"], data_dict["voxel_locs"], data_dict["v2p_map"])
+        # features = backbone_output_dict["point_features"][:, 0:self.hparams.model.feature_size]
+        # x = self.sigmoid(self.fc1(features)).clone()
+        coord = backbone_output_dict["canonical_coordinate"]
+        # divide different batches
+        pred_R = torch.zeros([len(data_dict["batch_divide"]), 3, 3], dtype=torch.float).cuda()
+        gt_R = data_dict["R"].to(torch.float32)
+        coord_gt_R = []
+        pred_T = []
+        pred_stacked_R = []
+        coord_divide_start = 0
+        for i in range(len(data_dict["batch_divide"])):
+            coord_divide_end = coord_divide_start + data_dict["batch_divide"][i].item()
+            current_xyz = data_dict["locs"][coord_divide_start:coord_divide_end]
+            # gt_xyz = data_dict["rotated_locs"][coord_divide_start:coord_divide_end]
+            # current_rgb = data_dict["colors"][coord_divide_start:coord_divide_end]
+            current_coord = coord[coord_divide_start:coord_divide_end]
+            inlier_index = self._RANSAC(current_coord)
+            current_xyz = (current_xyz.clone())[None, :].to(dtype=torch.float)
+            current_nocs_xyz = (current_coord.clone())[None, :].to(dtype=torch.float)
+            R, T, S = corresponding_points_alignment(current_nocs_xyz, current_xyz, estimate_scale=False, allow_reflection=True)    
+
+
+            # xyz = current_xyz[0]
+            # pred_xyz = current_nocs_xyz[0]
+            # rgb = current_rgb
+            # gt_xyz = gt_xyz
+
+            # xyz = xyz.detach().cpu().numpy()
+            # pred_xyz = pred_xyz.detach().cpu().numpy()
+            # gt_xyz = gt_xyz.detach().cpu().numpy()
+            # rgb = rgb.detach().cpu().numpy()
+            # output_dir = "visualization_results"
+            # split = "test"
+
+            # #draw xyz
+            # pcd = o3d.geometry.PointCloud()
+            # pcd.points = o3d.utility.Vector3dVector(xyz)
+            # pcd.colors = o3d.utility.Vector3dVector(rgb)
+            # vis = o3d.visualization.Visualizer()
+            # vis.create_window(visible=True)
+            # vis.add_geometry(pcd)
+            # opt = vis.get_render_option()
+            # opt.show_coordinate_frame = True
+            # vis.capture_screen_image(os.path.join(output_dir, split, "xyz.png"), do_render=True)
+
+            # #draw gt xyz
+            # gt_pcd = o3d.geometry.PointCloud()
+            # gt_pcd.points = o3d.utility.Vector3dVector(gt_xyz)
+            # gt_pcd.colors = o3d.utility.Vector3dVector(rgb)
+            # gt_vis = o3d.visualization.Visualizer()
+            # gt_vis.create_window(visible=True)
+            # gt_vis.add_geometry(gt_pcd)
+            # opt = gt_vis.get_render_option()
+            # opt.show_coordinate_frame = True
+            # gt_vis.capture_screen_image(os.path.join(output_dir, split, "gt_xyz.png"), do_render=True)
+
+            # #draw pred xyz
+            # pred_pcd = o3d.geometry.PointCloud()
+            # pred_pcd.points = o3d.utility.Vector3dVector(pred_xyz)
+            # pred_pcd.colors = o3d.utility.Vector3dVector(rgb)
+            # pred_vis = o3d.visualization.Visualizer()
+            # pred_vis.create_window(visible=True)
+            # pred_vis.add_geometry(pred_pcd)
+            # opt = pred_vis.get_render_option()
+            # opt.show_coordinate_frame = True
+            # pred_vis.capture_screen_image(os.path.join(output_dir, split, "pred_xyz.png"), do_render=True)
+
+            coord_divide_start = coord_divide_end
+            # current_coord_gt_R = torch.mm(current_nocs_xyz[0, :, :], R[0, :, :]) + T[0, :]
+            pred_R[i] = R[0, :, :]
+            # pred_T.append(T)
+            # pred_stacked_R.append(R)
+            # coord_gt_R.append(current_coord_gt_R)
+        output_dict["pred_R"] = pred_R
+        output_dict["coord"] = coord
+        # output_dict["coord_gt_R"] = torch.cat(coord_gt_R, dim=0)
+        # output_dict["pred_T"] = torch.cat(pred_T, dim=0)
+        # output_dict["pred_stacked_R"] = torch.cat(pred_stacked_R, dim=0)
         return output_dict
 
+
+    def _rotation_loss(self, data_dict, output_dict):
+        gt_R = data_dict["R"].view(-1, 9).to(torch.float32)
+        pred_R = output_dict["pred_R"].view(-1, 9).to(torch.float32)
+        return self.mse_loss(gt_R, pred_R)
+
+    def _regression_loss(self, data_dict, output_dict):
+        gt_xyz = data_dict["rotated_locs"].to(torch.float32)
+        pred_xyz = output_dict["coord"].to(torch.float32)
+        # T = output_dict["pred_T"].to(torch.float32)
+        # R = output_dict["pred_stacked_R"].to(torch.float32)
+        # return self.mse_loss(gt_xyz, torch.mm(pred_xyz, R) + T)
+        return self.mse_loss(gt_xyz, pred_xyz)
+    
+    # def _translation_loss(self, data_dict, output_dict):
+    #     T = torch.abs(output_dict["pred_T"].to(torch.float32))
+    #     return T.mean() 
+
     def _loss(self, data_dict, output_dict):
-        lng_loss = self.nll_loss(output_dict["direction_lng_scores"], data_dict["lng_class"])
-        lat_loss = self.nll_loss(output_dict["direction_lat_scores"], data_dict["lat_class"])
-        return (lng_loss + lat_loss) / 2
+        rotation_loss = self._rotation_loss(data_dict, output_dict)
+        # translation_loss = self._translation_loss(data_dict, output_dict)
+        regression_loss = self._regression_loss(data_dict, output_dict)
+        total_loss = self.hparams.model.regression_loss_ratio * regression_loss + (1 -self.hparams.model.regression_loss_ratio) * rotation_loss
+        return total_loss
 
     def training_step(self, data_dict, idx):
         output_dict = self.forward(data_dict)
         loss = self._loss(data_dict, output_dict)
         self.log("train/loss", loss, prog_bar=True, on_step=False, on_epoch=True,
                  sync_dist=True, batch_size=self.hparams.data.batch_size)
-        # training metrics
-        lng_preds = torch.argmax(output_dict["direction_lng_scores"], dim=1)
-        lat_preds = torch.argmax(output_dict["direction_lat_scores"], dim=1)
-        lng_acc = self.accuracy(lng_preds, data_dict["lng_class"])
-        lat_acc = self.accuracy(lat_preds, data_dict["lat_class"])
-        self.log('train_loss', loss, on_step=True, on_epoch=True, logger=True, batch_size=self.hparams.data.batch_size)
-        self.log('train_lng_acc', lng_acc, on_step=True, on_epoch=True, logger=True, batch_size=self.hparams.data.batch_size)   
-        self.log('train_lat_acc', lat_acc, on_step=True, on_epoch=True, logger=True, batch_size=self.hparams.data.batch_size)    
- 
         return loss
-
-    # def test_step(self, data_dict, idx):
-    #     y = self.forward(data_dict)
-    #     loss = self.nll_loss(y, data_dict["class"])
-        
-    #     # validation metrics
-    #     preds = torch.argmax(y, dim=1)
-    #     acc = self.accuracy(preds, data_dict["class"])
-    #     self.log('test_loss', loss, on_step=True, on_epoch=True, logger=True, batch_size=self.hparams.data.batch_size, prog_bar=True)
-    #     self.log('test_acc', acc,  on_step=True, on_epoch=True, logger=True, batch_size=self.hparams.data.batch_size, prog_bar=True)
-    #     return loss
 
     def validation_step(self, data_dict, idx):
         # prepare input and forward
         output_dict = self.forward(data_dict)
-        front_loss = self._loss(data_dict, output_dict)
+        loss = self._loss(data_dict, output_dict)
 
         # log losses
-        self.log("val/loss", front_loss, prog_bar=True, on_step=False,
+        self.log("val/loss", loss, prog_bar=True, on_step=False,
                  on_epoch=True, sync_dist=True, batch_size=1)
 
-        # log semantic prediction accuracy
-        lng_direction_predictions = torch.argmax(output_dict["direction_lng_scores"])
-        lat_direction_predictions = torch.argmax(output_dict["direction_lat_scores"])
-
         # if self.current_epoch > self.hparams.model.prepare_epochs:
-        pred_obb = self._get_pred_obb(data_dict["scan_ids"][0],
+        pred_obb = self._get_obb(data_dict["scan_ids"][0],
                                         data_dict["sem_labels"],
                                         data_dict["instance_ids"],
-                                        output_dict["direction_lng_scores"].cpu(),
-                                        output_dict["direction_lat_scores"].cpu(),
-                                        data_dict["up_direction"][0])
-        gt_obb = self._get_gt_obb(data_dict["scan_ids"][0],
+                                        output_dict["pred_R"][0].cpu(),)
+        gt_obb = self._get_obb(data_dict["scan_ids"][0],
                                     data_dict["sem_labels"],
                                     data_dict["instance_ids"],
-                                    data_dict["front_direction"][0],
-                                    data_dict["up_direction"][0])
+                                    data_dict["R"][0].cpu())
         return pred_obb, gt_obb
 
     def validation_epoch_end(self, outputs):
@@ -243,32 +261,26 @@ class ObbPred(pl.LightningModule):
                     on_epoch=True, sync_dist=True, batch_size=1)
 
     def test_step(self, data_dict, idx):
-        # prepare input and forward
         start_time = time.time()
+        # prepare input and forward
         output_dict = self.forward(data_dict)
-        front_loss = self._loss(data_dict, output_dict)
+        loss = self._loss(data_dict, output_dict)
         end_time = time.time() - start_time
+
         # log losses
-        self.log("test/loss", front_loss, prog_bar=True, on_step=False,
+        self.log("test/loss", loss, prog_bar=True, on_step=False,
                  on_epoch=True, sync_dist=True, batch_size=1)
 
-        # log semantic prediction accuracy
-        lng_direction_predictions = torch.argmax(output_dict["direction_lng_scores"])
-        lat_direction_predictions = torch.argmax(output_dict["direction_lat_scores"])
-
         # if self.current_epoch > self.hparams.model.prepare_epochs:
-        pred_obb = self._get_pred_obb(data_dict["scan_ids"][0],
+        pred_obb = self._get_obb(data_dict["scan_ids"][0],
                                         data_dict["sem_labels"],
                                         data_dict["instance_ids"],
-                                        output_dict["direction_lng_scores"].cpu(),
-                                        output_dict["direction_lat_scores"].cpu(),
-                                        data_dict["up_direction"][0])
-        gt_obb = self._get_gt_obb(data_dict["scan_ids"][0],
+                                        output_dict["pred_R"][0].cpu(),)
+        gt_obb = self._get_obb(data_dict["scan_ids"][0],
                                     data_dict["sem_labels"],
                                     data_dict["instance_ids"],
-                                    data_dict["front_direction"][0],
-                                    data_dict["up_direction"][0])
-        # angle = np.arccos(np.dot(pred_obb["direction_pred"], gt_obb["direction_gt"]))
+                                    data_dict["R"][0].cpu())
+        # angle = np.arccos(np.dot(pred_obb["front"], gt_obb["up"]))
         # if angle < 5/180 * 3.14:
         #     draw_prediction(data_dict, pred_obb["direction_pred"], self.hparams.data.class_names, True)
         # if angle > 30/180 * 3.14:
@@ -309,72 +321,17 @@ class ObbPred(pl.LightningModule):
         optimizer = torch.optim.Adam(self.parameters(), lr=self.hparams.optimizer.lr)
         return optimizer
 
-    def _get_front_direction_from_class(self, direction_lng_class, direction_lat_class):
-        lat_class = direction_lat_class
-        lng_class = direction_lng_class
-        lat = ((lat_class) * math.pi) / self.hparams.data.lat_class - math.pi/2
-        lng = ((lng_class) * 2 * math.pi) / self.hparams.data.lng_class - math.pi
-        if (lng_class > self.hparams.data.lng_class / 4) and (lng_class < self.hparams.data.lng_class*3/4): 
-            x = np.float32(1)
-            y = math.tan(lng) * x
-        elif lng_class == self.hparams.data.lng_class / 4:
-            x =  np.float32(0)
-            y = np.float32(-1)
-        elif lng_class == self.hparams.data.lng_class*3 / 4:
-            x =  np.float32(0)
-            y = np.float32(1)
-        else:
-            x = np.float32(-1)
-            y = math.tan(lng) * x
-        z = math.tan(lat) * math.sqrt(x*x+y*y)
-        direction  = np.array([x, y, z])
-        direction = direction/np.linalg.norm(direction)
-        return direction
 
-    def _get_pred_obb(self, scan_id, sem_labels, instance_id, direction_lng_scores, direction_lat_scores, up):
+    def _get_obb(self, scan_id, sem_labels, instance_id, R):
         obb = {}
-        direction_lng_pred = (torch.argmax(direction_lng_scores)).detach().cpu().numpy()
-        direction_lat_pred = (torch.argmax(direction_lat_scores)).detach().cpu().numpy()
-        direction_lng_score = torch.max(direction_lng_scores) 
-        direction_lat_score = torch.max(direction_lat_scores) 
-        up = up.detach().cpu().numpy()
-        # obb["sem_label"] = np.argmax(np.bincount(sem_labels.detach().cpu().numpy())) - num_ignored_classes + 1
         semantic_label = sem_labels.detach().cpu().numpy()
         instance_id = instance_id.detach().cpu().numpy()
+        R = R.detach().cpu().numpy()
         obb["sem_label"] = np.argmax(np.bincount(semantic_label))
         obb["instance_id"] = np.argmax(np.bincount(instance_id))
         obb["scan_id"] = scan_id
-        # obb["conf"] = direction_score
-        obb["front"] = self._get_front_direction_from_class(direction_lng_pred, direction_lat_pred)
-        obb["up"] = up
-        
-        return obb
-
-    # def _get_gt_obb(self, scan_id, sem_labels, instance_id,  direction_lng_gt, direction_lat_gt):
-    #     obb = {}
-    #     direction_lng_gt = direction_lng_gt.detach().cpu().numpy()
-    #     direction_lat_gt = direction_lat_gt.detach().cpu().numpy()
-    #     # obb["sem_label"] = np.argmax(np.bincount(sem_labels.detach().cpu().numpy())) - num_ignored_classes + 1
-    #     semantic_label = sem_labels.detach().cpu().numpy()
-    #     instance_id = instance_id.detach().cpu().numpy()
-    #     obb["sem_label"] = np.argmax(np.bincount(semantic_label))
-    #     obb["instance_id"] = np.argmax(np.bincount(instance_id))
-    #     obb["scan_id"] = scan_id
-    #     obb["direction_gt"] = self._get_front_direction_from_class(direction_lng_gt, direction_lat_gt)
-        
-    #     return obb
-
-    def _get_gt_obb(self, scan_id, sem_labels, instance_id, front, up):
-        obb = {}
-        front = front.detach().cpu().numpy()
-        up = up.detach().cpu().numpy()
-        # obb["sem_label"] = np.argmax(np.bincount(sem_labels.detach().cpu().numpy())) - num_ignored_classes + 1
-        semantic_label = sem_labels.detach().cpu().numpy()
-        instance_id = instance_id.detach().cpu().numpy()
-        obb["sem_label"] = np.argmax(np.bincount(semantic_label))
-        obb["instance_id"] = np.argmax(np.bincount(instance_id))
-        obb["scan_id"] = scan_id
-        obb["front"] = front
-        obb["up"] = up
-        
+        axis = np.vstack(([1, 0, 0], [0, 1, 0], [0, 0, 1]))
+        rotated_axis = np.matmul(axis , R)
+        obb["front"] = rotated_axis[0]
+        obb["up"] = rotated_axis[2]
         return obb
