@@ -9,9 +9,9 @@ The basic code architecture of W&B logger and Hydra part and the Backbone model 
 
 ## ObjectClassifier model introduction
 - ObjectClassifier is an efficient framework(MinkowskiEngine based) for point cloud object level pose estimation. It voxelizes the per point features from UNet to obtain object-level features. It also discretizes the front/up directions into different latitude and longitude classes and then computes the directions given the predicted class. Therefore, the canonical pose estimation can be simplied as a classifiction problem and 3 layer MLP is used. 
-<img src="/https://github.com/Kaola-2115/MIN3dCaPose/ObjectClassifier.png" width="400"/>
+<img src="https://github.com/Kaola-2115/MIN3dCaPose/blob/main/ObjectClassifier.png" width="400"/>
 The classification details in a sphere:
-<img src="/https://github.com/Kaola-2115/MIN3dCaPose/Lng_Lat_class.png" width="400"/>
+<img src="https://github.com/Kaola-2115/MIN3dCaPose/blob/main/Lng_Lat_class.png" width="400"/>
 
 ## Normalized Object Coordinate Space regression introduction
 - The Normalized Object Coordinate Space is the reimplementation of the **N**ormalized **P**art **C**oordinate **Space** model. We modified some model details and loss function to fit the [Multiscan](https://github.com/smartscenes/multiscan) dataset and the features from UNet in [MinkowskiEngine](https://github.com/NVIDIA/MinkowskiEngine)
@@ -164,8 +164,8 @@ We provide pretrained models for Multiscan. The pretrained model and correspondi
 ### Multiscan test set
 | Model            | Code | AC_5  | AC_10 | AC_20 | Rerr  | Download |
 | ---------------- | ---- | ----- | ----- | ----- | ----- | ---------|
-| ObjectClassifier | [config](/https://github.com/Kaola-2115/MIN3dCaPose/config/model/object_classifier.yaml)| [model](/https://github.com/Kaola-2115/MIN3dCaPose/min3dcapose/model/object_classifier.py) | 0.318 | 0.337 | 0.348 | 1.337 | [link](https://drive.google.com/file/d/19xEFrk1auE7ZhkRy6fqE3FfdMnGiYaig/view?usp=sharing) |
-| NOCS  | [config](/https://github.com/Kaola-2115/MIN3dCaPose/config/model/object_classifier.yaml)| [model](/https://github.com/Kaola-2115/MIN3dCaPose/min3dcapose/model/object_classifier.py) |       |       |       |       | [link]()|
+| ObjectClassifier | [config](https://github.com/Kaola-2115/MIN3dCaPose/blob/main/config/model/object_classifier.yaml)| [model](https://github.com/Kaola-2115/MIN3dCaPose/blob/main/min3dcapose/model/object_classifier.py) | 0.318 | 0.337 | 0.348 | 1.337 | [link](https://drive.google.com/file/d/19xEFrk1auE7ZhkRy6fqE3FfdMnGiYaig/view?usp=sharing) |
+| NOCS  | [config](https://github.com/Kaola-2115/MIN3dCaPose/blob/main/config/model/object_classifier.yaml)| [model](https://github.com/Kaola-2115/MIN3dCaPose/blob/main/min3dcapose/model/object_classifier.py) |       |       |       |       | [link]()|
 ## Visualization
 We provide scripts to visualize the predicted and ground truth canonical 3d pose of an object. When testing and inferencing, use the following option to show visualizations
 ```
@@ -199,18 +199,18 @@ Some results visualizations are as followed
 The good predictions when angle<5 degree:
 | object name | uncanonicalized pose | predicted canonical pose |
 | ----------- | ---------------------| ------------------------ |
-| toilet | <img src="/https://github.com/Kaola-2115/MIN3dCaPose/visualization_results/Ac5-/toilet.png" width="400"/> |<img src="/https://github.com/Kaola-2115/MIN3dCaPose/visualization_results/Ac5-/toilet_r.png" width="400"/> |
-| chair      | <img src="/https://github.com/Kaola-2115/MIN3dCaPose/visualization_results/Ac5-/chair.png" width="400"/> | <img src="/https://github.com/Kaola-2115/MIN3dCaPose/visualization_results/Ac5-/chair_r.png" width="400"/> |
-| cabinet | <img src="/https://github.com/Kaola-2115/MIN3dCaPose/visualization_results/Ac5-/cabinet.png" width="400"/> |  <img src="/https://github.com/Kaola-2115/MIN3dCaPose/visualization_results/Ac5-/cabinet_r.png" width="400"/> |
-| door |  <img src="/https://github.com/Kaola-2115/MIN3dCaPose/visualization_results/Ac5-/door.png" width="400"/> | <img src="/https://github.com/Kaola-2115/MIN3dCaPose/visualization_results/Ac5-/door_r.png" width="400"/> |
+| toilet | <img src="https://github.com/Kaola-2115/MIN3dCaPose/blob/main/visualization_results/Ac5-/toilet.png" width="400"/> |<img src="https://github.com/Kaola-2115/MIN3dCaPose/blob/main/visualization_results/Ac5-/toilet_r.png" width="400"/> |
+| chair      | <img src="https://github.com/Kaola-2115/MIN3dCaPose/blob/main/visualization_results/Ac5-/chair.png" width="400"/> | <img src="https://github.com/Kaola-2115/MIN3dCaPose/blob/main/visualization_results/Ac5-/chair_r.png" width="400"/> |
+| cabinet | <img src="https://github.com/Kaola-2115/MIN3dCaPose/blob/main/visualization_results/Ac5-/cabinet.png" width="400"/> |  <img src="https://github.com/Kaola-2115/MIN3dCaPose/blob/main/visualization_results/Ac5-/cabinet_r.png" width="400"/> |
+| door |  <img src="https://github.com/Kaola-2115/MIN3dCaPose/blob/main/visualization_results/Ac5-/door.png" width="400"/> | <img src="https://github.com/Kaola-2115/MIN3dCaPose/blob/main/visualization_results/Ac5-/door_r.png" width="400"/> |
 
 The bad predictions when angle>30 degree:
 | object name | uncanonicalized pose | predicted canonical pose |
 | ----------- | -------------------- | ------------------------ |
-| toilet | <img src="/https://github.com/Kaola-2115/MIN3dCaPose/visualization_results/Ac30+/toilet.png" width="400"/> |<img src="/https://github.com/Kaola-2115/MIN3dCaPose/visualization_results/Ac30+/toilet_r.png" width="400"/> |
-| chair      | <img src="/https://github.com/Kaola-2115/MIN3dCaPose/visualization_results/Ac30+/chair.png" width="400"/> | <img src="/https://github.com/Kaola-2115/MIN3dCaPose/visualization_results/Ac30+/chair_r.png" width="400"/> |
-| cabinet | <img src="/https://github.com/Kaola-2115/MIN3dCaPose/visualization_results/Ac30+/cabinet.png" width="400"/> |  <img src="/https://github.com/Kaola-2115/MIN3dCaPose/visualization_results/Ac30+/cabinet_r.png" width="400"/> |
-| door |  <img src="/https://github.com/Kaola-2115/MIN3dCaPose/visualization_results/Ac30+/door.png" width="400"/> | <img src="/https://github.com/Kaola-2115/MIN3dCaPose/visualization_results/Ac30+/door_r.png" width="400"/> |
+| toilet | <img src="https://github.com/Kaola-2115/MIN3dCaPose/blob/main/visualization_results/Ac30+/toilet.png" width="400"/> |<img src="https://github.com/Kaola-2115/MIN3dCaPose/blob/main/visualization_results/Ac30+/toilet_r.png" width="400"/> |
+| chair      | <img src="https://github.com/Kaola-2115/MIN3dCaPose/blob/main/visualization_results/Ac30+/chair.png" width="400"/> | <img src="https://github.com/Kaola-2115/MIN3dCaPose/blob/main/visualization_results/Ac30+/chair_r.png" width="400"/> |
+| cabinet | <img src="https://github.com/Kaola-2115/MIN3dCaPose/blob/main/visualization_results/Ac30+/cabinet.png" width="400"/> |  <img src="https://github.com/Kaola-2115/MIN3dCaPose/blob/main/visualization_results/Ac30+/cabinet_r.png" width="400"/> |
+| door |  <img src="https://github.com/Kaola-2115/MIN3dCaPose/blob/main/visualization_results/Ac30+/door.png" width="400"/> | <img src="https://github.com/Kaola-2115/MIN3dCaPose/blob/main/visualization_results/Ac30+/door_r.png" width="400"/> |
 
 ## Performance
 
