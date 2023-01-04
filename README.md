@@ -199,22 +199,22 @@ Some results visualizations are as followed
 The good predictions when angle<5 degree:
 | object name | uncanonicalized pose | predicted canonical pose |
 | ----------- | ---------------------| ------------------------ |
-| toilet | <img src="https://github.com/Kaola-2115/MIN3dCaPose/blob/main/visualization_results/Ac5-/toilet.png" width="400"/> |<img src="https://github.com/Kaola-2115/MIN3dCaPose/blob/main/visualization_results/Ac5-/toilet_r.png" width="400"/> |
-| chair      | <img src="https://github.com/Kaola-2115/MIN3dCaPose/blob/main/visualization_results/Ac5-/chair.png" width="400"/> | <img src="https://github.com/Kaola-2115/MIN3dCaPose/blob/main/visualization_results/Ac5-/chair_r.png" width="400"/> |
-| cabinet | <img src="https://github.com/Kaola-2115/MIN3dCaPose/blob/main/visualization_results/Ac5-/cabinet.png" width="400"/> |  <img src="https://github.com/Kaola-2115/MIN3dCaPose/blob/main/visualization_results/Ac5-/cabinet_r.png" width="400"/> |
-| door |  <img src="https://github.com/Kaola-2115/MIN3dCaPose/blob/main/visualization_results/Ac5-/door.png" width="400"/> | <img src="https://github.com/Kaola-2115/MIN3dCaPose/blob/main/visualization_results/Ac5-/door_r.png" width="400"/> |
+|   toilet    | <img src="https://github.com/Kaola-2115/MIN3dCaPose/blob/main/visualization_results/Ac5-/toilet.png" width="400"/> |<img src="https://github.com/Kaola-2115/MIN3dCaPose/blob/main/visualization_results/Ac5-/toilet_r.png" width="400"/> |
+|    chair    | <img src="https://github.com/Kaola-2115/MIN3dCaPose/blob/main/visualization_results/Ac5-/chair.png" width="400"/> | <img src="https://github.com/Kaola-2115/MIN3dCaPose/blob/main/visualization_results/Ac5-/chair_r.png" width="400"/> |
+|   cabinet   | <img src="https://github.com/Kaola-2115/MIN3dCaPose/blob/main/visualization_results/Ac5-/cabinet.png" width="400"/> |  <img src="https://github.com/Kaola-2115/MIN3dCaPose/blob/main/visualization_results/Ac5-/cabinet_r.png" width="400"/> |
+|    door     |  <img src="https://github.com/Kaola-2115/MIN3dCaPose/blob/main/visualization_results/Ac5-/door.png" width="400"/> | <img src="https://github.com/Kaola-2115/MIN3dCaPose/blob/main/visualization_results/Ac5-/door_r.png" width="400"/> |
 
 The bad predictions when angle>30 degree:
 | object name | uncanonicalized pose | predicted canonical pose |
 | ----------- | -------------------- | ------------------------ |
-| toilet | <img src="https://github.com/Kaola-2115/MIN3dCaPose/blob/main/visualization_results/Ac30+/toilet.png" width="400"/> |<img src="https://github.com/Kaola-2115/MIN3dCaPose/blob/main/visualization_results/Ac30+/toilet_r.png" width="400"/> |
-| chair      | <img src="https://github.com/Kaola-2115/MIN3dCaPose/blob/main/visualization_results/Ac30+/chair.png" width="400"/> | <img src="https://github.com/Kaola-2115/MIN3dCaPose/blob/main/visualization_results/Ac30+/chair_r.png" width="400"/> |
-| cabinet | <img src="https://github.com/Kaola-2115/MIN3dCaPose/blob/main/visualization_results/Ac30+/cabinet.png" width="400"/> |  <img src="https://github.com/Kaola-2115/MIN3dCaPose/blob/main/visualization_results/Ac30+/cabinet_r.png" width="400"/> |
-| door |  <img src="https://github.com/Kaola-2115/MIN3dCaPose/blob/main/visualization_results/Ac30+/door.png" width="400"/> | <img src="https://github.com/Kaola-2115/MIN3dCaPose/blob/main/visualization_results/Ac30+/door_r.png" width="400"/> |
+|   toilet    | <img src="https://github.com/Kaola-2115/MIN3dCaPose/blob/main/visualization_results/Ac30+/toilet.png" width="400"/> |<img src="https://github.com/Kaola-2115/MIN3dCaPose/blob/main/visualization_results/Ac30+/toilet_r.png" width="400"/> |
+|    chair    | <img src="https://github.com/Kaola-2115/MIN3dCaPose/blob/main/visualization_results/Ac30+/chair.png" width="400"/> | <img src="https://github.com/Kaola-2115/MIN3dCaPose/blob/main/visualization_results/Ac30+/chair_r.png" width="400"/> |
+|   cabinet   | <img src="https://github.com/Kaola-2115/MIN3dCaPose/blob/main/visualization_results/Ac30+/cabinet.png" width="400"/> |  <img src="https://github.com/Kaola-2115/MIN3dCaPose/blob/main/visualization_results/Ac30+/cabinet_r.png" width="400"/> |
+|    door     | <img src="https://github.com/Kaola-2115/MIN3dCaPose/blob/main/visualization_results/Ac30+/door.png" width="400"/> | <img src="https://github.com/Kaola-2115/MIN3dCaPose/blob/main/visualization_results/Ac30+/door_r.png" width="400"/> |
 
 ## Performance
 
-We report the time it takes to train on Scannet v2 training set of 1201 scans with the following setup.
+We report the time it takes to train on Multiscan data of 134 scans
 
 **Test environment**
 - CPU: Intel Core i7-12700 @ 2.10-4.90GHz × 12
@@ -223,14 +223,14 @@ We report the time it takes to train on Scannet v2 training set of 1201 scans wi
 - System: Ubuntu 20.04.2 LTS
 
 **Training time in total (without validation)**
-| Model | Epochs | Batch Size | Time |
-|:-----------------|:--------|:--------|:--------|:-------|
-| ObjectClassifier | 15 | 5 | 12hr |
+|      Model      | Epochs | Batch Size | Time |
+|-----------------|--------|------- ----|------|
+| ObjectClassifier | 15 | 8 | 12hr |
 
-**Inference time per scene (avg)**
+**Inference time per object (avg)**
 | Model | Time |
-|:------|:-----|
-| ObjectClassifier | 12hr |
+| ------| -----|
+| ObjectClassifier | 1.004s |
 
 ## Limitations
 - It's hard to predict the canonical pose of some objects categories due to annotation limitations. For instance, the front direction of some windows is defined as pointing into room. Therefore, the front direction is hard to predict without background.
