@@ -164,8 +164,8 @@ We provide pretrained models for Multiscan. The pretrained model and correspondi
 ### Multiscan test set
 | Model            | Code | AC_5  | AC_10 | AC_20 | Rerr  | Download |
 | ---------------- | ---- | ----- | ----- | ----- | ----- | ---------|
-| ObjectClassifier | [config](https://github.com/Kaola-2115/MIN3dCaPose/blob/main/config/model/object_classifier.yaml)\[model](https://github.com/Kaola-2115/MIN3dCaPose/blob/main/min3dcapose/model/object_classifier.py) | 0.318 | 0.337 | 0.348 | 1.337 | [link](https://drive.google.com/file/d/19xEFrk1auE7ZhkRy6fqE3FfdMnGiYaig/view?usp=sharing) |
-| NOCS  | [config](https://github.com/Kaola-2115/MIN3dCaPose/blob/main/config/model/object_classifier.yaml)\[model](https://github.com/Kaola-2115/MIN3dCaPose/blob/main/min3dcapose/model/object_classifier.py) |       |       |       |       | [link]()|
+| ObjectClassifier | [config](https://github.com/Kaola-2115/MIN3dCaPose/blob/main/config/model/object_classifier.yaml) [model](https://github.com/Kaola-2115/MIN3dCaPose/blob/main/min3dcapose/model/object_classifier.py) | 0.318 | 0.337 | 0.348 | 1.337 | [link](https://drive.google.com/file/d/19xEFrk1auE7ZhkRy6fqE3FfdMnGiYaig/view?usp=sharing) |
+| NOCS  | [config](https://github.com/Kaola-2115/MIN3dCaPose/blob/main/config/model/object_classifier.yaml) [model](https://github.com/Kaola-2115/MIN3dCaPose/blob/main/min3dcapose/model/object_classifier.py) |       |       |       |       | [link]()|
 ## Visualization
 We provide scripts to visualize the predicted and ground truth canonical 3d pose of an object. When testing and inferencing, use the following option to show visualizations
 ```
