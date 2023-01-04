@@ -5,7 +5,7 @@ We trained the two model on newly released [Multiscan](https://github.com/smarts
 
 The main contribution is predicting the canonical 3d pose(front and up direction) of an object given its point cloud
 
-The basic code architecture of W&B logger and Hydra part and the Backbone model is from[MINSU3D](https://github.com/3dlg-hcvc/minsu3d)
+The basic code architecture of W&B logger,  Hydra part and the Backbone model are from[MINSU3D](https://github.com/3dlg-hcvc/minsu3d)
 
 ## ObjectClassifier model introduction
 - ObjectClassifier is an efficient framework(MinkowskiEngine based) for point cloud object level pose estimation. It voxelizes the per point features from UNet to obtain object-level features. It also discretizes the front/up directions into different latitude and longitude classes and then computes the directions given the predicted class. Therefore, the canonical pose estimation can be simplied as a classifiction problem and 3 layer MLP is used. 
