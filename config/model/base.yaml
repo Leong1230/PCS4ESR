@@ -1,16 +1,13 @@
 # Managed by Hydra
 
-# ckpt_path: /home/zhenli/data/training/HAIS-MultiScanObj-epoch=55.ckpt
-ckpt_path:
-# ckpt_path: /home/zhenli/data/output/Multiscan/NOCS/test_4/training/NOCS-Multiscan-epoch=13.ckpt
-# ckpt_path: /home/zhenli/data/output/Multiscan/ObbPred/final_from_HAIS_1/training/ObbPred-Multiscan-epoch=4.ckpt
+ckpt_path: /home/zhenli/Downloads/ObjectClassifier-Multiscan-best.ckpt
 
 log:
   module: WandbLogger  # WandbLogger or TensorBoardLogger
   # https://pytorch-lightning.readthedocs.io/en/stable/extensions/generated/pytorch_lightning.loggers.WandbLogger.html
   WandbLogger:
     project: General
-    name: run_7
+    name: run_1
   # https://pytorch-lightning.readthedocs.io/en/stable/api/pytorch_lightning.loggers.tensorboard.html
   TensorBoardLogger:
     name: General
@@ -53,5 +50,5 @@ inference:
   split: test
   evaluate: True
   save_predictions: False
-  show_visualization: True
+  show_visualization: False
   output_dir: prediction

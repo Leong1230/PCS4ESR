@@ -1,17 +1,17 @@
 # MIN3dCaPose
-MINSU3D：**Min**kowskiEngine-powered **Ca**nonical **3D** **Pose** estimation contains a new voxel based object level classification method on point clouds powered by [MinkowskiEngine](https://github.com/NVIDIA/MinkowskiEngine) and reimplementation of a **N**ormalized **O**bject **C**oordinate **Space** based method by[GAPartNet](https://arxiv.org/pdf/2211.05272.pdf)
+MIN3dCaPose：**Min**kowskiEngine-powered **Ca**nonical **3D** **Pose** estimation contains a new voxel based object level classification method on point clouds powered by [MinkowskiEngine](https://github.com/NVIDIA/MinkowskiEngine) and reimplementation of a **N**ormalized **O**bject **C**oordinate **Space** based method by[GAPartNet](https://arxiv.org/pdf/2211.05272.pdf)
 
 We trained the two model on newly released [Multiscan](https://github.com/smartscenes/multiscan) dataset
 
 The main contribution is predicting the canonical 3d pose(front and up direction) of an object given its point cloud
 
-The basic code architecture of W&B logger and Hydra part is from[MINSU3D](https://github.com/3dlg-hcvc/minsu3d)
+The basic code architecture of W&B logger and Hydra part and the Backbone model is from[MINSU3D](https://github.com/3dlg-hcvc/minsu3d)
 
 ## ObjectClassifier model introduction
 - ObjectClassifier is an efficient framework(MinkowskiEngine based) for point cloud object level pose estimation. It voxelizes the per point features from UNet to obtain object-level features. It also discretizes the front/up directions into different latitude and longitude classes and then computes the directions given the predicted class. Therefore, the canonical pose estimation can be simplied as a classifiction problem and 3 layer MLP is used. 
-<img src="https://github.com/3dlg-hcvc/minsu3d-internal/blob/main/visualize/example/bbox_instance.png" width="400"/>
+<img src="/https://github.com/Kaola-2115/MIN3dCaPose/ObjectClassifier.png" width="400"/>
 The classification details in a sphere:
-<img src="https://github.com/3dlg-hcvc/minsu3d-internal/blob/main/visualize/example/bbox_instance.png" width="400"/>
+<img src="/https://github.com/Kaola-2115/MIN3dCaPose/Lng_Lat_class.png" width="400"/>
 
 ## Normalized Object Coordinate Space regression introduction
 - The Normalized Object Coordinate Space is the reimplementation of the **N**ormalized **P**art **C**oordinate **Space** model. We modified some model details and loss function to fit the [Multiscan](https://github.com/smartscenes/multiscan) dataset and the features from UNet in [MinkowskiEngine](https://github.com/NVIDIA/MinkowskiEngine)
@@ -32,6 +32,7 @@ The classification details in a sphere:
 | refrigerator | 0.400 | 0.400 | 0.400 | 1.302 |
 | toilet       | 0.677 | 0.788 | 0.788 | 0.384 |
 | average      | 0.328 | 0.349 | 0.387 | 1.267 |
+
 The dataset is the newly released [Multiscan](https://github.com/smartscenes/multiscan) dataset using our ObjectClassifier model. Our model is only trained on the 8 object categoried with articulated parts. 
 
 The results using the NOCS model are lower than results in our model.
@@ -109,7 +110,7 @@ python setup.py develop
 
 ### Multiscan dataset
 1. Download the [Multiscan](https://github.com/smartscenes/multiscan) dataset and repo. To acquire the access to the dataset, please refer to their instructions. The download dataset would follow this [file system structure](https://3dlg-hcvc.github.io/multiscan/read-the-docs/dataset/index.html#file-system-structure) You will get a [download script](https://docs.google.com/forms/d/e/1FAIpQLSfksFtks9YHMeQQWjZjfNbNU4bhRx0knyJ_S-OdJ-vdi2pjBw/viewform) if your request is approved:
-2. Substitute the `MULTISCAN/dataset/preprocess/gen_instsegm_dataset.py` file in the downloaded [Multiscan](https://github.com/smartscenes/multiscan)repo with the [gen_instsegm_dataset.py](https://github.com/smartscenes/multiscan), set the environment following the [Instructions](https://3dlg-hcvc.github.io/multiscan/read-the-docs/server/index.html#installation)
+2. Substitute the `MULTISCAN/dataset/preprocess/gen_instsegm_dataset.py` file in the downloaded [Multiscan](https://github.com/smartscenes/multiscan)repo with the [gen_instsegm_dataset.py](https://github.com/Kaola-2115/MIN3dCaPose/gen_instsegm_dataset.py), set the environment following the [Instructions](https://3dlg-hcvc.github.io/multiscan/read-the-docs/server/index.html#installation)
 3. Preprocess the data, it converts the objects with annotated pose to `.pth` data, and split dataset as the default way by[Multiscan](https://github.com/smartscenes/multiscan)
 ```shell
 # about 406.3GB in total of Multiscan raw dataset
@@ -130,7 +131,7 @@ Each `.pth` file should named by the scans, which contains all the objects in th
 ```
 
 ### Download Multiscan objects directly
-Download splitted Multiscan objects with metadata by [Multiscan_objects]()
+Download splitted Multiscan objects with metadata by [Multiscan_objects](https://drive.google.com/drive/folders/1bUMcDMOlSGqrfK00rHvrD6cydQM2oFmQ?usp=sharing)
 
 ## Training, Inference and Evaluation
 Note: Configuration files are managed by [Hydra](https://hydra.cc/), you can easily add or override any configuration attributes by passing them as arguments.
@@ -158,8 +159,13 @@ python eval.py model={model_name} data={dataset_name} model.model.experiment_nam
 
 ## Pretrained Models
 
-We provide pretrained models for Multiscan. The pretrained model and corresponding config file are given below.  Note that all NOCS models are trained from scratch. While the ObjectClassifier model is trained from the pretrained [HAIS]() model which is trained on Multiscan dataset. It uses the hyper-parameters in Backbone UNet to accelerate training process. After downloading a pretrained model, run `test.py` to do inference as described in the above section.
+We provide pretrained models for Multiscan. The pretrained model and corresponding config file are given below.  Note that all NOCS models are trained from scratch. While the ObjectClassifier model is trained from the pretrained [HAIS-MultiScanObj-epoch=55.ckpt](https://drive.google.com/file/d/1WJCvEMicwUziwB96bqFEgSL2n0GSZ1qG/view?usp=sharing) model which is trained on Multiscan dataset. It uses the hyper-parameters in Backbone UNet to accelerate training process. After downloading a pretrained model, run `test.py` to do inference as described in the above section.
 
+### Multiscan test set
+| Model            | Code | AC_5  | AC_10 | AC_20 | Rerr  | Download |
+| ---------------- | ---- | ----- | ----- | ----- | ----- | ---------|
+| ObjectClassifier | [config](/https://github.com/Kaola-2115/MIN3dCaPose/config/model/object_classifier.yaml)| [model](/https://github.com/Kaola-2115/MIN3dCaPose/min3dcapose/model/object_classifier.py) | 0.318 | 0.337 | 0.348 | 1.337 | [link](https://drive.google.com/file/d/19xEFrk1auE7ZhkRy6fqE3FfdMnGiYaig/view?usp=sharing) |
+| NOCS  | [config](/https://github.com/Kaola-2115/MIN3dCaPose/config/model/object_classifier.yaml)| [model](/https://github.com/Kaola-2115/MIN3dCaPose/min3dcapose/model/object_classifier.py) |       |       |       |       | [link]()|
 ## Visualization
 We provide scripts to visualize the predicted and ground truth canonical 3d pose of an object. When testing and inferencing, use the following option to show visualizations
 ```
@@ -191,31 +197,20 @@ Some results visualizations are as followed
 ```
 
 The good predictions when angle<5 degree:
-| object name | uncanonicalized pose                                         | predicted canonical pose |
-| ----------- | ------------------------------------------------------------ | ------------------------ |
-| toilet      | <img src="/home/zhenli/.config/Typora/typora-user-images/image-20221221122823883.png" width="400"/> |                          |
-|             |                                                              |                          |
-|             |                                                              |                          |
-|             |                                                              |                          |
+| object name | uncanonicalized pose | predicted canonical pose |
+| ----------- | ---------------------| ------------------------ |
+| toilet | <img src="/https://github.com/Kaola-2115/MIN3dCaPose/visualization_results/Ac5-/toilet.png" width="400"/> |<img src="/https://github.com/Kaola-2115/MIN3dCaPose/visualization_results/Ac5-/toilet_r.png" width="400"/> |
+| chair      | <img src="/https://github.com/Kaola-2115/MIN3dCaPose/visualization_results/Ac5-/chair.png" width="400"/> | <img src="/https://github.com/Kaola-2115/MIN3dCaPose/visualization_results/Ac5-/chair_r.png" width="400"/> |
+| cabinet | <img src="/https://github.com/Kaola-2115/MIN3dCaPose/visualization_results/Ac5-/cabinet.png" width="400"/> |  <img src="/https://github.com/Kaola-2115/MIN3dCaPose/visualization_results/Ac5-/cabinet_r.png" width="400"/> |
+| door |  <img src="/https://github.com/Kaola-2115/MIN3dCaPose/visualization_results/Ac5-/door.png" width="400"/> | <img src="/https://github.com/Kaola-2115/MIN3dCaPose/visualization_results/Ac5-/door_r.png" width="400"/> |
 
 The bad predictions when angle>30 degree:
-| object name | uncanonicalized pose                                         | predicted canonical pose |
-| ----------- | ------------------------------------------------------------ | ------------------------ |
-| toilet      | <img src="/home/zhenli/.config/Typora/typora-user-images/image-20221221122823883.png" width="400"/> |                          |
-|             |                                                              |                          |
-|             |                                                              |                          |
-|             |                                                              |                          |
-
-
-| Semantic Segmentation(color)              | Instance Segmentation(color)           |
-|:-----------------------------------:|:-------------------------------:|
-| <img src="https://github.com/3dlg-hcvc/minsu3d-internal/blob/main/visualize/example/color_semantic.png" width="400"/> | <img src="https://github.com/3dlg-hcvc/minsu3d-internal/blob/main/visualize/example/color_instance.png" width="400"/> |
-
-| Semantic Segmentation(bbox)              | Instance Segmentation(bbox)           |
-|:-----------------------------------:|:-------------------------------:|
-| <img src="https://github.com/3dlg-hcvc/minsu3d-internal/blob/main/visualize/example/bbox_semantic.png" width="400"/> | <img src="https://github.com/3dlg-hcvc/minsu3d-internal/blob/main/visualize/example/bbox_instance.png" width="400"/> |
-
-If you find that many bounding boxes are overlapping, you can choose to do non maximum suppression during the inference phase. This can be achieved by adjusting `TEST_NMS_THRESH` in the config file
+| object name | uncanonicalized pose | predicted canonical pose |
+| ----------- | -------------------- | ------------------------ |
+| toilet | <img src="/https://github.com/Kaola-2115/MIN3dCaPose/visualization_results/Ac30+/toilet.png" width="400"/> |<img src="/https://github.com/Kaola-2115/MIN3dCaPose/visualization_results/Ac30+/toilet_r.png" width="400"/> |
+| chair      | <img src="/https://github.com/Kaola-2115/MIN3dCaPose/visualization_results/Ac30+/chair.png" width="400"/> | <img src="/https://github.com/Kaola-2115/MIN3dCaPose/visualization_results/Ac30+/chair_r.png" width="400"/> |
+| cabinet | <img src="/https://github.com/Kaola-2115/MIN3dCaPose/visualization_results/Ac30+/cabinet.png" width="400"/> |  <img src="/https://github.com/Kaola-2115/MIN3dCaPose/visualization_results/Ac30+/cabinet_r.png" width="400"/> |
+| door |  <img src="/https://github.com/Kaola-2115/MIN3dCaPose/visualization_results/Ac30+/door.png" width="400"/> | <img src="/https://github.com/Kaola-2115/MIN3dCaPose/visualization_results/Ac30+/door_r.png" width="400"/> |
 
 ## Performance
 
@@ -228,25 +223,14 @@ We report the time it takes to train on Scannet v2 training set of 1201 scans wi
 - System: Ubuntu 20.04.2 LTS
 
 **Training time in total (without validation)**
-| Model      | Epochs | Batch Size | Time |
-|:-----------|:--------|:--------|:--------|:-------|
-| ObjectClassifier | 450 | 4 | 55hr | 51hr |
-| | 450 | 4 | 68hr | 60hr |
-| [SoftGroup](https://github.com/thangvubk/SoftGroup) | 256 | 4 | 45hr | 30hr |
-
-**Training time per scene (avg)**
-| Model      | MINSU3D | Official Version |
-|:-----------|:--------|:-------|
-| [PointGroup](https://github.com/dvlab-research/PointGroup) | 420ms | 383ms |
-| [HAIS](https://github.com/hustvl/HAIS)| 475ms | 432ms |
-| [SoftGroup](https://github.com/thangvubk/SoftGroup) | 511ms | 357ms |
+| Model | Epochs | Batch Size | Time |
+|:-----------------|:--------|:--------|:--------|:-------|
+| ObjectClassifier | 15 | 5 | 12hr |
 
 **Inference time per scene (avg)**
-| Model      | MINSU3D | Official Version |
-|:-----------|:--------|:-------|
-| [PointGroup](https://github.com/dvlab-research/PointGroup) | 179ms | 176ms |
-| [HAIS](https://github.com/hustvl/HAIS)| 160ms | 165ms |
-| [SoftGroup](https://github.com/thangvubk/SoftGroup) | 165ms | 204ms |
+| Model | Time |
+|:------|:-----|
+| ObjectClassifier | 12hr |
 
 ## Limitations
 - It's hard to predict the canonical pose of some objects categories due to annotation limitations. For instance, the front direction of some windows is defined as pointing into room. Therefore, the front direction is hard to predict without background.
@@ -290,19 +274,12 @@ This repo is built upon the [MinkowskiEngine](https://github.com/NVIDIA/Minkowsk
 
 @misc{https://doi.org/10.48550/arxiv.2211.05272,
   doi = {10.48550/ARXIV.2211.05272},
-  
   url = {https://arxiv.org/abs/2211.05272},
-  
   author = {Geng, Haoran and Xu, Helin and Zhao, Chengyang and Xu, Chao and Yi, Li and Huang, Siyuan and Wang, He},
-  
   keywords = {Computer Vision and Pattern Recognition (cs.CV), FOS: Computer and information sciences, FOS: Computer and information sciences},
-  
   title = {GAPartNet: Cross-Category Domain-Generalizable Object Perception and Manipulation via Generalizable and Actionable Parts},
-  
   publisher = {arXiv},
-  
   year = {2022},
-  
   copyright = {arXiv.org perpetual, non-exclusive license}
 }
 

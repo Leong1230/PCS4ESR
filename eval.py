@@ -2,9 +2,8 @@ import os
 import hydra
 import torch
 from tqdm import tqdm
-from minsu3d.evaluation.object_detection import evaluate_bbox_acc, get_gt_bbox
-from minsu3d.evaluation.instance_segmentation import GeneralDatasetEvaluator, get_gt_instances
-from minsu3d.util.io import read_gt_files_from_disk, read_pred_files_from_disk
+from min3dcapose.evaluation.obb_prediction import GeneralDatasetEvaluator
+from min3dcapose.util.io import read_gt_files_from_disk, read_pred_files_from_disk
 
 
 @hydra.main(version_base=None, config_path="config", config_name="config")
