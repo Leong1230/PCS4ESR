@@ -19,7 +19,7 @@ class Backbone_NOCS(pl.LightningModule):
             sp_norm(output_channel),
             ME.MinkowskiReLU(inplace=True)
         )
-
+        
         # 2.1 semantic prediction branch
         self.semantic_branch = nn.Sequential(
             nn.Linear(output_channel, output_channel),
@@ -38,12 +38,12 @@ class Backbone_NOCS(pl.LightningModule):
 
         # 2.3 canonical coordinate branch
         self.coordinate_branch = nn.Sequential(
-            nn.Linear(output_channel, output_channel),
+            nn.Linear(output_channel, 32),
             norm(output_channel),
             nn.ReLU(),
-            nn.Linear(output_channel, 32),
+            nn.Linear(32, 9),
             nn.ReLU(),
-            nn.Linear(32, 3),
+            nn.Linear(9, 3),
         )
 
     def forward(self, voxel_features, voxel_coordinates, v2p_map):

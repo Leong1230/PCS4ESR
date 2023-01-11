@@ -44,7 +44,7 @@ def main(cfg):
 
     print("==> initializing model ...")
     model = init_model(cfg)
-    # trained from pretrained HAIS model
+    #trained from pretrained ObjectClassifier model
     # pretrained_model = getattr(import_module("min3dcapose.model"), cfg.model.model.pretrained_module)(cfg.model.model, cfg.data, cfg.model.optimizer, cfg.model.lr_decay, None)
     # pretrained_model.load_from_checkpoint(cfg.model.ckpt_path)
     # weights = pretrained_model.state_dict()

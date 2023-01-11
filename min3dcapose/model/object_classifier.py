@@ -38,7 +38,7 @@ class ObjectClassifier(pl.LightningModule):
         self.conv1 = nn.Conv3d(16, 32, 2, 1, 2)
         self.conv2 = nn.Conv3d(32, 32, 2, 2, 2)
         self.conv3 = nn.Conv3d(4, 2, 3, 3, 3)
-        self.conv4 = nn.Conv3d(2, 1, 3, 3, 3)
+        self.conv4 = nn.Conv3d(2, 1, 3, 3, 3)                                        
 
         self.relu = nn.functional.relu6
 
@@ -46,10 +46,10 @@ class ObjectClassifier(pl.LightningModule):
         self.pool2 = torch.nn.MaxPool3d(2)
         
         n_sizes = self._get_conv_output()
-        # self.fc0 = nn.Linear(n_sizes, 2048)
-        self.fc1 = nn.Linear(n_sizes, 512)
-        self.fc_lat = nn.Linear(512, (data.lat_class))
-        self.fc_lng = nn.Linear(512, (data.lng_class))
+        self.fc1 = nn.Linear(n_sizes, 1024)
+        self.fc_lat = nn.Linear(1024, (data.lat_class))
+        self.fc_lng = nn.Linear(1024, (data.lng_class))
+        self.fc_up = nn.Linear(1024, (data.lng_class))
         self.accuracy = torchmetrics.Accuracy()
         self.log_softmax = nn.functional.log_softmax
         self.nll_loss = nn.functional.nll_loss
@@ -59,8 +59,6 @@ class ObjectClassifier(pl.LightningModule):
     def _get_conv_output(self):
         batch_size = self.hparams.data.batch_size
         input = torch.autograd.Variable(torch.rand(batch_size, self.hparams.model.feature_size, self.voxel_size, self.voxel_size, self.voxel_size))
-        # output_feat = self._forward_features(input) 
-        # n_size = output_feat.data.view(batch_size, -1).size(1)
         n_size = input.data.view(batch_size, -1).size(1)
         return n_size
         
@@ -155,14 +153,17 @@ class ObjectClassifier(pl.LightningModule):
         # x = self.relu(self.fc2(x)).clone()
         x_lng = self.log_softmax(self.fc_lng(x))
         x_lat = self.log_softmax(self.fc_lat(x))
+        x_up = self.log_softmax(self.fc_up(x))
         output_dict["direction_lng_scores"] = x_lng    
         output_dict["direction_lat_scores"] = x_lat        
+        output_dict["direction_up_scores"] = x_up        
         return output_dict
 
     def _loss(self, data_dict, output_dict):
         lng_loss = self.nll_loss(output_dict["direction_lng_scores"], data_dict["lng_class"])
         lat_loss = self.nll_loss(output_dict["direction_lat_scores"], data_dict["lat_class"])
-        return (lng_loss + lat_loss) / 2
+        up_loss = self.nll_loss(output_dict["direction_up_scores"], data_dict["up_class"])
+        return (lng_loss + lat_loss + up_loss) / 3
 
     def training_step(self, data_dict, idx):
         output_dict = self.forward(data_dict)
@@ -172,24 +173,16 @@ class ObjectClassifier(pl.LightningModule):
         # training metrics
         lng_preds = torch.argmax(output_dict["direction_lng_scores"], dim=1)
         lat_preds = torch.argmax(output_dict["direction_lat_scores"], dim=1)
+        up_preds = torch.argmax(output_dict["direction_up_scores"], dim=1)
         lng_acc = self.accuracy(lng_preds, data_dict["lng_class"])
         lat_acc = self.accuracy(lat_preds, data_dict["lat_class"])
+        up_acc = self.accuracy(up_preds, data_dict["up_class"])
         self.log('train_loss', loss, on_step=True, on_epoch=True, logger=True, batch_size=self.hparams.data.batch_size)
         self.log('train_lng_acc', lng_acc, on_step=True, on_epoch=True, logger=True, batch_size=self.hparams.data.batch_size)   
         self.log('train_lat_acc', lat_acc, on_step=True, on_epoch=True, logger=True, batch_size=self.hparams.data.batch_size)    
+        self.log('train_up_acc', up_acc, on_step=True, on_epoch=True, logger=True, batch_size=self.hparams.data.batch_size)    
  
         return loss
-
-    # def test_step(self, data_dict, idx):
-    #     y = self.forward(data_dict)
-    #     loss = self.nll_loss(y, data_dict["class"])
-        
-    #     # validation metrics
-    #     preds = torch.argmax(y, dim=1)
-    #     acc = self.accuracy(preds, data_dict["class"])
-    #     self.log('test_loss', loss, on_step=True, on_epoch=True, logger=True, batch_size=self.hparams.data.batch_size, prog_bar=True)
-    #     self.log('test_acc', acc,  on_step=True, on_epoch=True, logger=True, batch_size=self.hparams.data.batch_size, prog_bar=True)
-    #     return loss
 
     def validation_step(self, data_dict, idx):
         # prepare input and forward
@@ -203,6 +196,7 @@ class ObjectClassifier(pl.LightningModule):
         # log semantic prediction accuracy
         lng_direction_predictions = torch.argmax(output_dict["direction_lng_scores"])
         lat_direction_predictions = torch.argmax(output_dict["direction_lat_scores"])
+        up_direction_predictions = torch.argmax(output_dict["direction_up_scores"])
 
         # if self.current_epoch > self.hparams.model.prepare_epochs:
         pred_obb = self._get_pred_obb(data_dict["scan_ids"][0],
@@ -210,7 +204,7 @@ class ObjectClassifier(pl.LightningModule):
                                         data_dict["instance_ids"],
                                         output_dict["direction_lng_scores"].cpu(),
                                         output_dict["direction_lat_scores"].cpu(),
-                                        data_dict["up_direction"][0])
+                                        output_dict["direction_up_scores"].cpu())
         gt_obb = self._get_gt_obb(data_dict["scan_ids"][0],
                                     data_dict["sem_labels"],
                                     data_dict["instance_ids"],
@@ -257,7 +251,7 @@ class ObjectClassifier(pl.LightningModule):
                                         data_dict["instance_ids"],
                                         output_dict["direction_lng_scores"].cpu(),
                                         output_dict["direction_lat_scores"].cpu(),
-                                        data_dict["up_direction"][0])
+                                        output_dict["direction_up_scores"].cpu())
         gt_obb = self._get_gt_obb(data_dict["scan_ids"][0],
                                     data_dict["sem_labels"],
                                     data_dict["instance_ids"],
@@ -327,13 +321,39 @@ class ObjectClassifier(pl.LightningModule):
         direction = direction/np.linalg.norm(direction)
         return direction
 
-    def _get_pred_obb(self, scan_id, sem_labels, instance_id, direction_lng_scores, direction_lat_scores, up):
+    def _get_up_direction_from_class(self, front_direction, direction_up_class):
+        x1 = front_direction[0]
+        y1 = front_direction[1]
+        z1 = front_direction[2]
+        up_class = direction_up_class
+        up = ((up_class) * 2 * math.pi) / self.hparams.data.up_class - math.pi
+        if (up_class > self.hparams.data.up_class / 4) and (up_class < self.hparams.data.up_class*3/4): 
+            z = np.float32(1)
+            y = math.tan(up) * z
+        elif up_class == self.hparams.data.up_class / 4:
+            z =  np.float32(0)
+            y = np.float32(-1)
+        elif up_class == self.hparams.data.up_class*3 / 4:
+            z =  np.float32(0)
+            y = np.float32(1)
+        else:
+            z = np.float32(-1)
+            y = math.tan(up) * z
+
+        x = (0-z1*z-y1*y) / x1
+        direction  = np.array([x, y, z])
+        direction = direction/np.linalg.norm(direction)
+        return direction
+
+    def _get_pred_obb(self, scan_id, sem_labels, instance_id, direction_lng_scores, direction_lat_scores, direction_up_scores):
         obb = {}
         direction_lng_pred = (torch.argmax(direction_lng_scores)).detach().cpu().numpy()
         direction_lat_pred = (torch.argmax(direction_lat_scores)).detach().cpu().numpy()
+        direction_up_pred = (torch.argmax(direction_up_scores)).detach().cpu().numpy()
         direction_lng_score = torch.max(direction_lng_scores) 
         direction_lat_score = torch.max(direction_lat_scores) 
-        up = up.detach().cpu().numpy()
+        direction_up_score = torch.max(direction_up_scores) 
+        # up = up.detach().cpu().numpy()
         # obb["sem_label"] = np.argmax(np.bincount(sem_labels.detach().cpu().numpy())) - num_ignored_classes + 1
         semantic_label = sem_labels.detach().cpu().numpy()
         instance_id = instance_id.detach().cpu().numpy()
@@ -342,7 +362,7 @@ class ObjectClassifier(pl.LightningModule):
         obb["scan_id"] = scan_id
         # obb["conf"] = direction_score
         obb["front"] = self._get_front_direction_from_class(direction_lng_pred, direction_lat_pred)
-        obb["up"] = up
+        obb["up"] = self._get_up_direction_from_class(obb["front"], direction_up_pred)
         
         return obb
 

@@ -54,6 +54,7 @@ def sparse_collate_fn(batch):
     total_num_inst = 0
     object_lng_class = []
     object_lat_class = []
+    object_up_class = []
     R = []
     front_direction = []
     up_direction = []
@@ -77,6 +78,7 @@ def sparse_collate_fn(batch):
 
         object_lng_class.append(torch.from_numpy(b["lng_class"]))
         object_lat_class.append(torch.from_numpy(b["lat_class"]))
+        object_up_class.append(torch.from_numpy(b["up_class"]))
         front_direction.append(torch.tensor(b["obb"]["front"]))
         up_direction.append(torch.tensor(b["obb"]["up"]))
         R.append(torch.tensor(b["R"]))
@@ -103,6 +105,7 @@ def sparse_collate_fn(batch):
     data["instance_semantic_cls"] = torch.tensor(instance_cls, dtype=torch.int32)  # long (total_nInst)
     data["lng_class"] = torch.tensor(object_lng_class)
     data["lat_class"] = torch.tensor(object_lat_class)
+    data["up_class"] = torch.tensor(object_up_class)
     data["front_direction"] = torch.stack(front_direction)
     data["up_direction"] = torch.stack(up_direction)
     data["R"] = torch.stack(R)

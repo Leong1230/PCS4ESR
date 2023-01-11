@@ -127,52 +127,6 @@ class NOCS(pl.LightningModule):
             current_nocs_xyz = (current_coord.clone())[None, :].to(dtype=torch.float)
             R, T, S = corresponding_points_alignment(current_nocs_xyz, current_xyz, estimate_scale=False, allow_reflection=True)    
 
-
-            # xyz = current_xyz[0]
-            # pred_xyz = current_nocs_xyz[0]
-            # rgb = current_rgb
-            # gt_xyz = gt_xyz
-
-            # xyz = xyz.detach().cpu().numpy()
-            # pred_xyz = pred_xyz.detach().cpu().numpy()
-            # gt_xyz = gt_xyz.detach().cpu().numpy()
-            # rgb = rgb.detach().cpu().numpy()
-            # output_dir = "visualization_results"
-            # split = "test"
-
-            # #draw xyz
-            # pcd = o3d.geometry.PointCloud()
-            # pcd.points = o3d.utility.Vector3dVector(xyz)
-            # pcd.colors = o3d.utility.Vector3dVector(rgb)
-            # vis = o3d.visualization.Visualizer()
-            # vis.create_window(visible=True)
-            # vis.add_geometry(pcd)
-            # opt = vis.get_render_option()
-            # opt.show_coordinate_frame = True
-            # vis.capture_screen_image(os.path.join(output_dir, split, "xyz.png"), do_render=True)
-
-            # #draw gt xyz
-            # gt_pcd = o3d.geometry.PointCloud()
-            # gt_pcd.points = o3d.utility.Vector3dVector(gt_xyz)
-            # gt_pcd.colors = o3d.utility.Vector3dVector(rgb)
-            # gt_vis = o3d.visualization.Visualizer()
-            # gt_vis.create_window(visible=True)
-            # gt_vis.add_geometry(gt_pcd)
-            # opt = gt_vis.get_render_option()
-            # opt.show_coordinate_frame = True
-            # gt_vis.capture_screen_image(os.path.join(output_dir, split, "gt_xyz.png"), do_render=True)
-
-            # #draw pred xyz
-            # pred_pcd = o3d.geometry.PointCloud()
-            # pred_pcd.points = o3d.utility.Vector3dVector(pred_xyz)
-            # pred_pcd.colors = o3d.utility.Vector3dVector(rgb)
-            # pred_vis = o3d.visualization.Visualizer()
-            # pred_vis.create_window(visible=True)
-            # pred_vis.add_geometry(pred_pcd)
-            # opt = pred_vis.get_render_option()
-            # opt.show_coordinate_frame = True
-            # pred_vis.capture_screen_image(os.path.join(output_dir, split, "pred_xyz.png"), do_render=True)
-
             coord_divide_start = coord_divide_end
             # current_coord_gt_R = torch.mm(current_nocs_xyz[0, :, :], R[0, :, :]) + T[0, :]
             pred_R[i] = R[0, :, :]

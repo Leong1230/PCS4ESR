@@ -69,6 +69,17 @@ class GeneralDataset(Dataset):
             lng_class = 0
         return lng_class, lat_class
 
+    def _get_up_direction_class(self, object):
+        x = object["obb"]["up"][0]
+        y = object["obb"]["up"][1]
+        z = object["obb"]["up"][2]
+        up = math.atan2(y, z)
+        up_class = np.round(self.cfg.data.up_class*(up+math.pi)/(2*math.pi))
+        up_class.astype(np.int)
+        if up_class == self.cfg.data.up_class:
+            up_class = 0
+        return up_class
+
     def _get_rotation_matrix(self, object):
         front = object["obb"]["front"]
         up = object["obb"]["up"]
@@ -147,8 +158,10 @@ class GeneralDataset(Dataset):
         obbs = object["obb"]
         # lng_class, lat_class = np.array([self._get_front_direction_class(object)]).astype(np.int)
         lng_class, lat_class = self._get_front_direction_class(object)
+        up_class = self._get_up_direction_class(object)
         lng_class = np.array([lng_class]).astype(np.int)
         lat_class = np.array([lat_class]).astype(np.int)
+        up_class = np.array([up_class]).astype(np.int)
 
 
         # get rotation matrix
@@ -233,6 +246,7 @@ class GeneralDataset(Dataset):
         data["instance_semantic_cls"] = instance_semantic_cls
         data["lng_class"] = lng_class
         data["lat_class"] = lat_class
+        data["up_class"] = up_class
         data["R"] = R # (, 3)
         data["obb"] = obbs
         return data

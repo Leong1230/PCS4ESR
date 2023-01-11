@@ -14,7 +14,7 @@ trainer:
   max_epochs: 496
 
 optimizer:
-    lr: 0.001
+    lr: 0.0003
 
 lr_decay:
   decay_start_epoch: 250
@@ -23,7 +23,7 @@ lr_decay:
 model:
   module: ObjectClassifier
   pretrained_module: ObjectClassifier
-  experiment_name: run_1
+  experiment_name: with_up_final_1
   m: 16 # 16 or 32
   blocks: [1, 2, 3, 4, 5, 6, 7]
   voxel_size: 30
