@@ -15,9 +15,9 @@ metadata:
   # multiview_file: ${data.dataset_path}/enet_feats_maxpool.hdf5
 
 classes: 20
-up_class: 512
-lng_class: 512
-lat_class: 256
+up_class: 256
+lng_class: 256
+lat_class: 128
 ignore_classes: [-1, 0, 1, 2, 4, 8, 10, 11, 12, 14, 15, 16, 17]
 class_names: ['floor', 'ceiling', 'wall', 'door', 'table', 'chair', 'cabinet', 'window', 'sofa', 'microwave', 'pillow',
               'tv_monitor', 'curtain', 'trash_can', 'suitcase', 'sink', 'backpack', 'bed', 'refrigerator', 'toilet']

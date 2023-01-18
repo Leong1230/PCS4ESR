@@ -34,11 +34,15 @@ class GeneralDataset(Dataset):
         with open(self.data_map[self.split]) as f:
             self.scene_names = [line.strip() for line in f]
         self.objects = []
+        self.object_num = 0
+        self.scene_num = 0
 
         for scene_name in tqdm(self.scene_names, desc=f"Loading {self.split} data from disk"):
+            self.scene_num +=1
             scene_path = os.path.join(self.dataset_root_path, self.split, scene_name + self.file_suffix)
             scene = torch.load(scene_path)
             for object in scene["objects"]:
+                self.object_num +=1
                 # object["xyz"] -= object["xyz"].mean(axis=0)
                 object["xyz"] -= object["obb"]["centroid"]
                 object["rgb"] = object["rgb"].astype(np.float32) / 127.5 - 1
@@ -49,6 +53,9 @@ class GeneralDataset(Dataset):
                 #     object["class"] = np.array([0])
                 if mode(object["sem_labels"]) not in self.cfg.data.ignore_classes:
                     self.objects.append(object)
+
+        print("object number in ", self.split, "set: ", self.object_num )
+        print("scene number in ", self.split, "set: ", self.scene_num )
 
     def __len__(self):
         return len(self.objects)
@@ -168,7 +175,8 @@ class GeneralDataset(Dataset):
         R = self._get_rotation_matrix(object) 
 
         # get rotated canonical coordinate
-        rotated_points = np.matmul(points, np.linalg.inv(R))
+        rotated_points = np.matmul(points, R)
+        # rotated_points = np.matmul(points, np.linalg.inv(R))
 
         if self.cfg.model.model.use_multiview:
             multiviews = self.multiview_hdf5_file[scene_id]

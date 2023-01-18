@@ -43,13 +43,14 @@ class ObjectClassifier(pl.LightningModule):
         self.relu = nn.functional.relu6
 
         self.pool1 = torch.nn.MaxPool3d(2)
+        self.drop_out = torch.nn.Dropout(p=0.5) 
         self.pool2 = torch.nn.MaxPool3d(2)
         
         n_sizes = self._get_conv_output()
-        self.fc1 = nn.Linear(n_sizes, 1024)
-        self.fc_lat = nn.Linear(1024, (data.lat_class))
-        self.fc_lng = nn.Linear(1024, (data.lng_class))
-        self.fc_up = nn.Linear(1024, (data.lng_class))
+        self.fc1 = nn.Linear(n_sizes, 256)
+        self.fc_lat = nn.Linear(256, (data.lat_class))
+        self.fc_lng = nn.Linear(256, (data.lng_class))
+        self.fc_up = nn.Linear(256, (data.lng_class))
         self.accuracy = torchmetrics.Accuracy()
         self.log_softmax = nn.functional.log_softmax
         self.nll_loss = nn.functional.nll_loss
@@ -151,9 +152,9 @@ class ObjectClassifier(pl.LightningModule):
         # x = self.relu(self.fc0(x)).clone()
         x = self.relu(self.fc1(x)).clone()
         # x = self.relu(self.fc2(x)).clone()
-        x_lng = self.log_softmax(self.fc_lng(x))
-        x_lat = self.log_softmax(self.fc_lat(x))
-        x_up = self.log_softmax(self.fc_up(x))
+        x_lng = self.log_softmax(self.drop_out(self.fc_lng(x)))
+        x_lat = self.log_softmax(self.drop_out(self.fc_lat(x)))
+        x_up = self.log_softmax(self.drop_out(self.fc_up(x)))
         output_dict["direction_lng_scores"] = x_lng    
         output_dict["direction_lat_scores"] = x_lat        
         output_dict["direction_up_scores"] = x_up        
@@ -188,15 +189,18 @@ class ObjectClassifier(pl.LightningModule):
         # prepare input and forward
         output_dict = self.forward(data_dict)
         front_loss = self._loss(data_dict, output_dict)
-
-        # log losses
-        self.log("val/loss", front_loss, prog_bar=True, on_step=False,
-                 on_epoch=True, sync_dist=True, batch_size=1)
+        lng_preds = torch.argmax(output_dict["direction_lng_scores"], dim=1)
 
         # log semantic prediction accuracy
         lng_direction_predictions = torch.argmax(output_dict["direction_lng_scores"])
         lat_direction_predictions = torch.argmax(output_dict["direction_lat_scores"])
         up_direction_predictions = torch.argmax(output_dict["direction_up_scores"])
+
+        lng_acc = self.accuracy(lng_preds, data_dict["lng_class"])
+        # log losses and accuracies
+        self.log("val/loss", front_loss, prog_bar=True, on_step=False,
+                 on_epoch=True, sync_dist=True, batch_size=1)
+        self.log('val/lng_acc', lng_acc, on_step=True, on_epoch=True, logger=True, batch_size=self.hparams.data.batch_size)   
 
         # if self.current_epoch > self.hparams.model.prepare_epochs:
         pred_obb = self._get_pred_obb(data_dict["scan_ids"][0],
@@ -210,14 +214,14 @@ class ObjectClassifier(pl.LightningModule):
                                     data_dict["instance_ids"],
                                     data_dict["front_direction"][0],
                                     data_dict["up_direction"][0])
-        return pred_obb, gt_obb
+        return pred_obb, gt_obb, lng_acc
 
     def validation_epoch_end(self, outputs):
         # evaluate instance predictions
         # if self.current_epoch > self.hparams.model.prepare_epochs:
         all_pred_obbs = []
         all_gt_obbs = []
-        for pred_obb, gt_obb in outputs:
+        for pred_obb, gt_obb, lng_acc in outputs:
             all_pred_obbs.append(pred_obb)
             all_gt_obbs.append(gt_obb)
         obb_direction_evaluator = GeneralDatasetEvaluator(self.hparams.data.class_names, self.hparams.data.ignore_label)
@@ -296,7 +300,7 @@ class ObjectClassifier(pl.LightningModule):
 
 
     def configure_optimizers(self):
-        optimizer = torch.optim.Adam(self.parameters(), lr=self.hparams.optimizer.lr)
+        optimizer = torch.optim.Adam(self.parameters(), lr=self.hparams.optimizer.lr, weight_decay=1e-5)
         return optimizer
 
     def _get_front_direction_from_class(self, direction_lng_class, direction_lat_class):
