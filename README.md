@@ -15,6 +15,7 @@ The classification details in a sphere:
 
 ## Normalized Object Coordinate Space regression introduction
 - The Normalized Object Coordinate Space is the reimplementation of the **N**ormalized **P**art **C**oordinate **Space** model. We modified some model details and loss function to fit the [Multiscan](https://github.com/smartscenes/multiscan) dataset and the features from UNet in [MinkowskiEngine](https://github.com/NVIDIA/MinkowskiEngine)
+<img src="https://github.com/Kaola-2115/MIN3dCaPose/blob/main/NOCS.png" width="800"/>
 
 ### The Evalutaion metrics
 * AC_(angle): the accuracy, the threshold is that the angle between prediction and ground truth direction is within [angle] degree 
