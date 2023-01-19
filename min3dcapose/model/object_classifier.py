@@ -262,11 +262,11 @@ class ObjectClassifier(pl.LightningModule):
                                     data_dict["front_direction"][0],
                                     data_dict["up_direction"][0])
         if self.hparams.inference.show_visualization:
-            angle = np.arccos(np.dot(pred_obb["direction_pred"], gt_obb["direction_gt"]))
+            angle = np.arccos(np.dot(pred_obb["front"], gt_obb["front"]))
             if angle < 5/180 * 3.14:
-                draw_prediction(data_dict, pred_obb["direction_pred"], self.hparams.data.class_names, True)
+                draw_prediction(data_dict, pred_obb["front"], self.hparams.data.class_names, True)
             if angle > 30/180 * 3.14:
-                draw_prediction(data_dict, pred_obb["direction_pred"], self.hparams.data.class_names, False)
+                draw_prediction(data_dict, pred_obb["front"], self.hparams.data.class_names, False)
         return pred_obb, gt_obb, end_time
 
     def test_epoch_end(self, results):

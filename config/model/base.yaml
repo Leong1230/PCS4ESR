@@ -1,8 +1,8 @@
 # Managed by Hydra
 
 # ckpt_path: /home/zhenli/Downloads/ObjectClassifier-Multiscan-best.ckpt
-ckpt_path: 
-# ckpt_path: /home/zhenli/data/output/Multiscan/ObjectClassifier/run_1/training/ObjectClassifier-Multiscan-epoch=27.ckpt
+# ckpt_path: 
+ckpt_path: /home/zhenli/data/output/Multiscan/ObjectClassifier/final_24_up_256/training/ObjectClassifier-Multiscan-epoch=6.ckpt
 log:
   module: WandbLogger  # WandbLogger or TensorBoardLogger
   # https://pytorch-lightning.readthedocs.io/en/stable/extensions/generated/pytorch_lightning.loggers.WandbLogger.html
@@ -22,7 +22,7 @@ trainer:
   strategy: ddp
   num_nodes: 1
   max_epochs: 496
-  num_sanity_val_steps: 20
+  num_sanity_val_steps: 2O
   check_val_every_n_epoch: 1
 
 
@@ -51,5 +51,5 @@ inference:
   split: test
   evaluate: True
   save_predictions: False
-  show_visualization: False
+  show_visualization: True
   output_dir: prediction

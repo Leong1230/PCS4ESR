@@ -20,7 +20,7 @@ def draw_prediction(data_dict, pred_direction, label2name, good_prediction):
     xyz = xyz.detach().cpu().numpy()
     rgb = rgb.detach().cpu().numpy()
     front = pred_direction
-    output_dir = "visualization_results"
+    output_dir = "new_visualization_results"
     if good_prediction:
         split = "Ac5-"
     else:
@@ -77,7 +77,7 @@ def draw_prediction(data_dict, pred_direction, label2name, good_prediction):
     pred_obb = o3d.geometry.OrientedBoundingBox.create_from_axis_aligned_bounding_box(pred_aabb)
     pred_obb.color = colors.to_rgb('red')
     vis_r.add_geometry(pred_obb)
-    vis_r.add_geometry(front_arrow)
+    # vis_r.add_geometry(front_arrow)
     vis_r.add_geometry(coordinate_r)
     opt_r = vis_r.get_render_option()
     # view_ctrl_r = vis_r.get_view_control()
