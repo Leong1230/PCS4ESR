@@ -1,11 +1,11 @@
 # MIN3dCaPose
-MIN3dCaPose：**Min**kowskiEngine-powered **Ca**nonical **3D** **Pose** estimation contains a new voxel based object level classification method on point clouds powered by [MinkowskiEngine](https://github.com/NVIDIA/MinkowskiEngine) and reimplementation of a **N**ormalized **O**bject **C**oordinate **Space** based method by[GAPartNet](https://arxiv.org/pdf/2211.05272.pdf)
+We present a **Min**kowskiEngine-powered **Ca**nonical **3D** **Pose** estimation method via object-level classification and reimplementation of a **N**ormalized **P**art **C**oordinate **Space-based** method to object level by[GAPartNet](https://arxiv.org/pdf/2211.05272.pdf) to do 3D pose estimation. We use the newly released 3D scene dataset [Multiscan](https://github.com/smartscenes/multiscan) with over 200 scans. Our model relies on **the Min**kowskiEngine-powered U-Net backbone to get point-level features, voxelized point-level features to get object-level features, and does object-level classification. We formalize 3d Pose as a combination of the up-direction class, front-direction latitude class, and front-direction longitude class. As a result, we used the results of the NPCS method as a baseline, and our Min3dCaPose outperformed the baseline method in the Multiscan dataset. 
 
 We trained the two model on newly released [Multiscan](https://github.com/smartscenes/multiscan) dataset
 
-The main contribution is predicting the canonical 3d pose(front and up direction) of an object given its point cloud
+The main contribution is predicting the canonical 3d pose(front and up direction) of an object given its point cloud by object-level classification
 
-The basic code architecture of W&B logger and Hydra part and the Backbone model is from[MINSU3D](https://github.com/3dlg-hcvc/minsu3d)
+The basic code architecture of W&B logger,  Hydra part and the Backbone model are from[MINSU3D](https://github.com/3dlg-hcvc/minsu3d)
 
 ## ObjectClassifier model introduction
 - ObjectClassifier is an efficient framework(MinkowskiEngine based) for point cloud object level pose estimation. It voxelizes the per point features from UNet to obtain object-level features. It also discretizes the front/up directions into different latitude and longitude classes and then computes the directions given the predicted class. Therefore, the canonical pose estimation can be simplied as a classifiction problem and 3 layer MLP is used. 
@@ -36,6 +36,20 @@ The classification details in a sphere:
 The dataset is the newly released [Multiscan](https://github.com/smartscenes/multiscan) dataset using our ObjectClassifier model. Our model is only trained on the 8 object categoried with articulated parts. 
 
 The results using the NOCS model are lower than results in our model.
+
+### Baseline NOCS results on test set
+| What         | AC_5  | AC_10 | AC_20 | Rerr  |
+| ------------ | ----- | ----- | ----- | ----- |
+| door         | 0.000 | 0.000 | 0.067 | NaN |
+| chair        | 0.033 | 0.067 | 0.350 | NaN |
+| cabinet      | 0.000 | 0.022 | 0.065 | NaN |
+| window       | 0.000 | 0.000 | 0.000 | NaN|
+| microwave    | 0.000 | 0.000 | 0.000 | 1.922 |
+| trash_can    | 0.000 | 0.000 | 0.125 | 1.117 |
+| refrigerator | 0.000 | 0.062 | 0.125 | NaN |
+| toilet       | 0.000 | 0.167 | 0.677 | 0.823 |
+| average      | 0.004 | 0.040 | 0.175 | 1.288 |
+
 
 ## Features
 - Design a new object level classfier method based on latitude class and longitude class, the model architecture is as followed.
