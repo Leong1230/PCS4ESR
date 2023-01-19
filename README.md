@@ -239,7 +239,9 @@ We report the time it takes to train on Multiscan data of 134 scans
 **Training time in total (without validation)**
 |      Model      | Epochs | Batch Size | Time |
 |-----------------|--------|------------|------|
-| ObjectClassifier | 15 | 8 | 12hr |
+| ObjectClassifier | 15 | 8 | 12hr4min |
+| NOCS | 91 | 8 | 30hr10min |
+
 
 **Inference time per object (avg)**
 | Model | Time |
