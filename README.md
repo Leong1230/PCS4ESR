@@ -41,15 +41,15 @@ The results using the NOCS model are lower than results in our model.
 ### Baseline NOCS results on test set
 | What         | AC_5  | AC_10 | AC_20 | Rerr  |
 | ------------ | ----- | ----- | ----- | ----- |
-| door         | 0.000 | 0.000 | 0.067 | NaN |
-| chair        | 0.033 | 0.067 | 0.350 | NaN |
-| cabinet      | 0.000 | 0.022 | 0.065 | NaN |
-| window       | 0.000 | 0.000 | 0.000 | NaN|
+| door         | 0.000 | 0.000 | 0.067 | 1.812 |
+| chair        | 0.033 | 0.067 | 0.350 | 0.710 |
+| cabinet      | 0.000 | 0.022 | 0.065 | 1.247 |
+| window       | 0.000 | 0.000 | 0.000 | 1.756|
 | microwave    | 0.000 | 0.000 | 0.000 | 1.922 |
 | trash_can    | 0.000 | 0.000 | 0.125 | 1.117 |
-| refrigerator | 0.000 | 0.062 | 0.125 | NaN |
+| refrigerator | 0.000 | 0.062 | 0.125 | 1.486 |
 | toilet       | 0.000 | 0.167 | 0.677 | 0.823 |
-| average      | 0.004 | 0.040 | 0.175 | 1.288 |
+| average      | 0.004 | 0.040 | 0.175 | 1.359 |
 
 
 ## Features
