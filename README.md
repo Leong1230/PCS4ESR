@@ -1,7 +1,7 @@
-# MIN3dCaPose
-We present a **Min**kowskiEngine-powered **Ca**nonical **3D** **Pose** estimation method via object-level classification and reimplementation of a **N**ormalized **P**art **C**oordinate **Space-based** method to object level by[GAPartNet](https://arxiv.org/pdf/2211.05272.pdf) to do 3D pose estimation. We use the newly released 3D scene dataset [Multiscan](https://github.com/smartscenes/multiscan) with over 200 scans. Our model relies on **the Min**kowskiEngine-powered U-Net backbone to get point-level features, voxelized point-level features to get object-level features, and does object-level classification. We formalize 3d Pose as a combination of the up-direction class, front-direction latitude class, and front-direction longitude class. As a result, we used the results of the NPCS method as a baseline, and our Min3dCaPose outperformed the baseline method in the Multiscan dataset. 
+# Ca3dPose
+We present a Ca3DPose(Canonical 3D Pose) estimation method via object-level classification and reimplementation of a NPCS (Normalized Part Coordinate Space) based method to object level to do 3D pose estimation. We use the newly released 3D scene dataset Multiscan with over 200 scans. Our model relies on the MinkowskiEngine-powered U-Net backbone or PAConv backbone to get point-level features, voxelized or max pooled point-level features to get object-level features and does object-level classification. We formalize 3D Pose as a combination of the up-direction class, front-direction latitude class, and front-direction longitude class. As a result, we used the results of the NPCS method as a baseline, and our Ca3DPose outperformed the baseline method in the Multiscan dataset. We also found that PAConv backbone outperformed the U-Net backbone.
 
-We trained the two model on newly released [Multiscan](https://github.com/smartscenes/multiscan) dataset
+We trained the our model on newly released [Multiscan](https://github.com/smartscenes/multiscan) dataset
 
 The main contribution is predicting the canonical 3d pose(front and up direction) of an object given its point cloud by object-level classification
 
@@ -22,34 +22,38 @@ The classification details in a sphere:
 * Rerr: average angle between prediction and ground truth direction, in Radian system 
 
 ### Our best results on test set
-| What         | AC_5  | AC_10 | AC_20 | Rerr  |
-| ------------ | ----- | ----- | ----- | ----- |
-| door         | 0.244 | 0.244 | 0.268 | 1.365 |
-| chair        | 0.214 | 0.243 | 0.314 | 1.287 |
-| cabinet      | 0.232 | 0.261 | 0.304 | 1.527 |
-| window       | 0.118 | 0.118 | 0.118 | 1.816 |
-| microwave    | 0.000 | 0.000 | 0.167 | 1.864 |
-| trash_can    | 0.750 | 0.750 | 0.750 | 0.589 |
-| refrigerator | 0.400 | 0.400 | 0.400 | 1.302 |
-| toilet       | 0.677 | 0.788 | 0.788 | 0.384 |
-| average      | 0.328 | 0.349 | 0.387 | 1.267 |
+| What         | AC_5  | AC_10 | AC_20 | Rerr  | Number |
+| ------------ | ----- | ----- | ----- | ----- | ------ |
+| wall         | 0.764 | 0.809 | 0.828 | 0.543 | 157    |
+| door         | 0.610 | 0.659 | 0.683 | 0.937 | 41     |
+| table        | 0.517 | 0.583 | 0.633 | 0.849 | 60     |
+| chair        | 0.529 | 0.657 | 0.857 | 0.236 | 70     |
+| cabinet      | 0.652 | 0.710 | 0.783 | 0.595 | 69     |
+| window       | 0.824 | 0.941 | 1.000 | 0.046 | 17     |
+| sofa         | 0.636 | 0.727 | 0.864 | 0.274 | 22     |
+| microwave    | 0.500 | 0.667 | 0.667 | 1.061 | 6      |
+| pillow       | 0.727 | 0.788 | 0.939 | 0.157 | 33     |
+| tv_monitor   | 0.455 | 0.500 | 0.545 | 1.427 | 22     |
+| curtain      | 0.591 | 0.591 | 0.682 | 0.791 | 22     |
+| trash_can    | 0.875 | 0.875 | 0.875 | 0.393 | 8      |
+| suitcase     | 0.594 | 0.625 | 0.688 | 0.669 | 32     |
+| sink         | 0.286 | 0.500 | 0.500 | 1.479 | 14     |
+| backpack     | 0.000 | 0.250 | 0.250 | 1.808 | 4      |
+| bed          | 0.750 | 0.750 | 0.750 | 0.588 | 8      |
+| refrigerator | 0.600 | 0.600 | 0.600 | 0.909 | 10     |
+| toilet       | 0.333 | 0.444 | 0.444 | 1.052 | 9      |
+| average      | 0.631 | 0.697 | 0.763 | 0.621 | 604    |
 
 The dataset is the newly released [Multiscan](https://github.com/smartscenes/multiscan) dataset using our ObjectClassifier model. Our model is only trained on the 8 object categoried with articulated parts. 
 
 The results using the NOCS model are lower than results in our model.
 
 ### Baseline NOCS results on test set
-| What         | AC_5  | AC_10 | AC_20 | Rerr  |
-| ------------ | ----- | ----- | ----- | ----- |
-| door         | 0.000 | 0.000 | 0.067 | 1.812 |
-| chair        | 0.033 | 0.067 | 0.350 | 0.710 |
-| cabinet      | 0.000 | 0.022 | 0.065 | 1.247 |
-| window       | 0.000 | 0.000 | 0.000 | 1.756|
-| microwave    | 0.000 | 0.000 | 0.000 | 1.922 |
-| trash_can    | 0.000 | 0.000 | 0.125 | 1.117 |
-| refrigerator | 0.000 | 0.062 | 0.125 | 1.486 |
-| toilet       | 0.000 | 0.167 | 0.677 | 0.823 |
-| average      | 0.004 | 0.040 | 0.175 | 1.359 |
+| Method            | AC_5  | AC_10 | AC_20 | Rerr  |
+| ----------------- | ----- | ----- | ----- | ----- |
+| Ca3DPose (U-Net)  | 0.328 | 0.349 | 0.387 | 1.812 |
+| Ca3DPose (PAConv) | 0.631 | 0.697 | 0.763 | 0.621 |
+| NOCS (baseline)   | 0.004 | 0.040 | 0.175 | 1.359 |
 
 
 ## Features
