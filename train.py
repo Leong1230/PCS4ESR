@@ -44,7 +44,7 @@ def main(cfg):
 
     print("==> initializing model ...")
     model = init_model(cfg)
-    #trained from pretrained ObjectClassifier model
+    #trained from pretrained model
     # pretrained_model = getattr(import_module("hybridpc.model"), cfg.model.model.pretrained_module)(cfg.model.model, cfg.data, cfg.model.optimizer, cfg.model.lr_decay, None)
     # pretrained_model.load_from_checkpoint(cfg.model.ckpt_path)
     # weights = pretrained_model.state_dict()

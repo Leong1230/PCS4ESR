@@ -1,1 +1,1 @@
-from .optimizer import init_optimizer, cosine_lr_decay
+from .optimizer import cosine_lr_decay

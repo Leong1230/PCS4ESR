@@ -15,20 +15,22 @@ trainer:
   max_epochs: 496
 
 optimizer:
-    lr: 0.00015
+  _target_: torch.optim.Adam
+  lr: 0.002
 
 lr_decay:
   decay_start_epoch: 250
   decay_stop_epoch: 496
 
 model:
-
-  module: NOCS
-  pretrained_module: NOCS
-  experiment_name: run_1
+  module: AutoDecoder
+  pretrained_module: Decoder
+  experiment_name: debug_1
   positional_encoding: Fourier # Triplane
 
   latent_dimention: 1024
+  
+
   fourier_encoder:
     embedding_dim: 1024
 

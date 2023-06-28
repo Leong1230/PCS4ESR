@@ -1,3 +1,2 @@
-from .object_classifier import ObjectClassifier
-from .nocs import NOCS
+from .auto_decoder import AutoDecoder
 
