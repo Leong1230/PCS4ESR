@@ -1,0 +1,7 @@
+tqdm
+lightning
+scipy
+open3d
+wandb
+hydra-core
+ninja

@@ -2,15 +2,17 @@ from importlib import import_module
 import numpy as np
 import torch
 from torch.utils.data import DataLoader
+import torch
+from torch.utils.data import Sampler, DistributedSampler, Dataset
 import pytorch_lightning as pl
-from min3dcapose.common_ops.functions import common_ops
+from hybridpc.common_ops.functions import common_ops
 
 
 class DataModule(pl.LightningDataModule):
     def __init__(self, data_cfg):
         super().__init__()
         self.data_cfg = data_cfg
-        self.dataset = getattr(import_module('min3dcapose.data.dataset'), data_cfg.data.dataset)
+        self.dataset = getattr(import_module('hybridpc.data.dataset'), data_cfg.data.dataset)
 
     def setup(self, stage=None):
         if stage == "fit" or stage is None:
@@ -19,13 +21,18 @@ class DataModule(pl.LightningDataModule):
         if stage == "test" or stage is None:
             self.val_set = self.dataset(self.data_cfg, self.data_cfg.model.inference.split)
         if stage == "predict" or stage is None:
-            self.test_set = self.dataset(self.data_cfg, "test")
+                self.test_set = self.dataset(self.data_cfg, "test")
+
+        if self.world_size > 1: 
+            sampler = DistributedInfSampler(dataset, shuffle=flags.shuffle)
+        else:
+            sampler = InfSampler(dataset, shuffle=flags.shuffle)
 
     def train_dataloader(self):
         return DataLoader(self.train_set, batch_size=self.data_cfg.data.batch_size, shuffle=True, pin_memory=True,
                           collate_fn=sparse_collate_fn, num_workers=self.data_cfg.data.num_workers)
 
-    def val_dataloader(self):
+    def val_dataloader(self):          
         return DataLoader(self.val_set, batch_size=1, pin_memory=True, collate_fn=sparse_collate_fn,
                           num_workers=self.data_cfg.data.num_workers)
 
@@ -118,3 +125,51 @@ def sparse_collate_fn(batch):
                                                                                        len(batch),
                                                                                        4)
     return data
+
+class InfSampler(Sampler):
+  def __init__(self, dataset: Dataset, shuffle: bool = True) -> None:
+    self.dataset = dataset
+    self.shuffle = shuffle
+    self.reset_sampler()
+
+  def reset_sampler(self):
+    num = len(self.dataset)
+    indices = torch.randperm(num) if self.shuffle else torch.arange(num)
+    self.indices = indices.tolist()
+    self.iter_num = 0
+
+  def __iter__(self):
+    return self
+
+  def __next__(self):
+    value = self.indices[self.iter_num]
+    self.iter_num = self.iter_num + 1
+
+    if self.iter_num >= len(self.indices):
+      self.reset_sampler()
+    return value
+
+  def __len__(self):
+    return len(self.dataset)
+
+
+class DistributedInfSampler(DistributedSampler):
+  def __init__(self, dataset: Dataset, shuffle: bool = True) -> None:
+    super().__init__(dataset, shuffle=shuffle)
+    self.reset_sampler()
+
+  def reset_sampler(self):
+    self.indices = list(super().__iter__())
+    self.iter_num = 0
+
+  def __iter__(self):
+    return self
+
+  def __next__(self):
+    value = self.indices[self.iter_num]
+    self.iter_num = self.iter_num + 1
+
+    if self.iter_num >= len(self.indices):
+      self.reset_sampler()
+    return value
+

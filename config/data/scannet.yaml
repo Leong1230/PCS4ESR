@@ -1,0 +1,16 @@
+# Managed by Hydra
+
+defaults:
+  - base
+
+dataset: Scannet
+dataset_path: ${data.dataset_root_path}/scannet.ply
+
+metadata:
+  train_list: ${data.metadata.metadata_path}/scannetv2_train.txt
+  val_list: ${data.metadata.metadata_path}/scannetv2_val.txt
+  test_list: ${data.metadata.metadata_path}/scannetv2_test.txt
+
+has_normal: True
+has_color: True
+has_label: True

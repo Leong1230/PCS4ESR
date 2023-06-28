@@ -9,13 +9,13 @@ import torchmetrics
 import pytorch_lightning as pl
 import pyransac3d as pyrsc
 from pytorch3d.ops import corresponding_points_alignment
-from min3dcapose.evaluation.obb_prediction import GeneralDatasetEvaluator
-from min3dcapose.optimizer import init_optimizer, cosine_lr_decay
-from min3dcapose.common_ops.functions import common_ops
-from min3dcapose.util import save_prediction, save_gt
-from min3dcapose.model.module import Backbone
-from min3dcapose.model.module import Backbone_NOCS
-from min3dcapose.evaluation.visualization import *
+from hybridpc.evaluation.obb_prediction import GeneralDatasetEvaluator
+from hybridpc.optimizer import init_optimizer, cosine_lr_decay
+from hybridpc.common_ops.functions import common_ops
+from hybridpc.util import save_prediction, save_gt
+from hybridpc.model.module import Backbone
+from hybridpc.model.module import Backbone_NOCS
+from hybridpc.evaluation.visualization import *
 
 
 class NOCS(pl.LightningModule):

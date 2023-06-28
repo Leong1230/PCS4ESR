@@ -5,10 +5,10 @@ defaults:
 
 log:
   WandbLogger:
-    project: MIN3dCaPose
+    project: hybridpc
     name: ${model.model.experiment_name}
   TensorBoardLogger:
-    name: MIN3dCaPose
+    name: hybridpc
 
 trainer:
   max_epochs: 496

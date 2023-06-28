@@ -1,4 +1,4 @@
-from min3dcapose.data.dataset import GeneralDataset
+from hybridpc.data.dataset import GeneralDataset
 
 
 class Multiscan(GeneralDataset):

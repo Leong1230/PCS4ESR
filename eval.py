@@ -2,8 +2,8 @@ import os
 import hydra
 import torch
 from tqdm import tqdm
-from min3dcapose.evaluation.obb_prediction import GeneralDatasetEvaluator
-from min3dcapose.util.io import read_gt_files_from_disk, read_pred_files_from_disk
+from hybridpc.evaluation.obb_prediction import GeneralDatasetEvaluator
+from hybridpc.util.io import read_gt_files_from_disk, read_pred_files_from_disk
 
 
 @hydra.main(version_base=None, config_path="config", config_name="config")

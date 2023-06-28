@@ -3,8 +3,8 @@ import hydra
 from importlib import import_module
 import pytorch_lightning as pl
 from pytorch_lightning.callbacks import ModelCheckpoint, LearningRateMonitor
-from min3dcapose.callback import *
-from min3dcapose.data.data_module import DataModule
+from hybridpc.callback import *
+from hybridpc.data.data_module import DataModule
 
 
 def init_callbacks(cfg, output_path):
@@ -17,7 +17,7 @@ def init_callbacks(cfg, output_path):
     return [checkpoint_monitor, gpu_cache_clean_monitor, lr_monitor, time_logging_callback]
 
 def init_model(cfg):
-    model = getattr(import_module("min3dcapose.model"), cfg.model.model.module)(cfg.model.model, cfg.data, cfg.model.optimizer, cfg.model.lr_decay, None)
+    model = getattr(import_module("hybridpc.model"), cfg.model.model.module)(cfg.model.model, cfg.data, cfg.model.optimizer, cfg.model.lr_decay, None)
     return model
 
 @hydra.main(version_base=None, config_path="config", config_name="config")
@@ -45,7 +45,7 @@ def main(cfg):
     print("==> initializing model ...")
     model = init_model(cfg)
     #trained from pretrained ObjectClassifier model
-    # pretrained_model = getattr(import_module("min3dcapose.model"), cfg.model.model.pretrained_module)(cfg.model.model, cfg.data, cfg.model.optimizer, cfg.model.lr_decay, None)
+    # pretrained_model = getattr(import_module("hybridpc.model"), cfg.model.model.pretrained_module)(cfg.model.model, cfg.data, cfg.model.optimizer, cfg.model.lr_decay, None)
     # pretrained_model.load_from_checkpoint(cfg.model.ckpt_path)
     # weights = pretrained_model.state_dict()
     # model_dict = model.state_dict()

@@ -6,7 +6,7 @@ import copy
 import random
 import matplotlib.pyplot as plt
 from matplotlib import colors
-from min3dcapose.evaluation.gravity_aligned_obb import gravity_aligned_mobb
+from hybridpc.evaluation.gravity_aligned_obb import gravity_aligned_mobb
 
 
 def draw_prediction(data_dict, pred_direction, label2name, good_prediction):

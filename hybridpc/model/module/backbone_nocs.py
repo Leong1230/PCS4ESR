@@ -2,7 +2,7 @@ import functools
 import torch.nn as nn
 import pytorch_lightning as pl
 import MinkowskiEngine as ME
-from min3dcapose.model.module.common import ResidualBlock, UBlock
+from hybridpc.model.module.common import ResidualBlock, UBlock
 
 
 class Backbone_NOCS(pl.LightningModule):
