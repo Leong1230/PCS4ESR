@@ -24,7 +24,7 @@ lr_decay:
 
 model:
   module: AutoDecoder
-  pretrained_module: Decoder
+  pretrained_module: AutoDecoder
   experiment_name: debug_1
   positional_encoding: Fourier # Triplane
 

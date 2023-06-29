@@ -8,12 +8,12 @@
             "name": "Python: Current File",
             "type": "python",
             "request": "launch",
-            "program": "test.py",
+            "program": "train.py",
             "console": "integratedTerminal",
             "justMyCode": true,
             "args": [
-                "model=object_classifier",
-                "data=multiscan",
+                "model=auto_decoder",
+                "data=scannet",
                 "model.trainer.max_epochs=100"
             ]
         }

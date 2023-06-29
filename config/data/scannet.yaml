@@ -3,7 +3,7 @@
 defaults:
   - base
 
-dataset: Scannet
+dataset: scannet
 dataset_path: ${data.dataset_root_path}/scannet.ply
 
 metadata:

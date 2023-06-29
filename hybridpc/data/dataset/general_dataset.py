@@ -11,11 +11,8 @@ import torch
 from torch.utils.data import Dataset
 import open3d as o3d
 import matplotlib.cm as cm
-from pycarus.geometry.pcd import compute_udf_from_pcd, farthest_point_sampling
 from plyfile import PlyData
-from hybridpc.util.pc import crop
-from hybridpc.util.transform import jitter, flip, rotz, elastic
-
+from pycarus.geometry.pcd import compute_udf_from_pcd 
 
 
 class GeneralDataset(Dataset):
@@ -119,7 +116,6 @@ class GeneralDataset(Dataset):
         else:
             return len(self.filenames)
 
-
     def __getitem__(self, idx):
         if self.cfg.data.over_fitting:
             sample = self.samples[idx] if self.in_memory else \
@@ -184,8 +180,3 @@ class GeneralDataset(Dataset):
 
             self.visualize_voxel(data)
             return data
-
-        else:
-
-
-
