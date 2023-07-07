@@ -5,6 +5,7 @@ from torch.utils.data import DataLoader
 import torch
 from torch.utils.data import Sampler, DistributedSampler, Dataset
 import pytorch_lightning as pl
+from arrgh import arrgh
 
 
 class DataModule(pl.LightningDataModule):
@@ -24,22 +25,22 @@ class DataModule(pl.LightningDataModule):
 
     def train_dataloader(self):
         return DataLoader(self.train_set, batch_size=self.data_cfg.data.batch_size, shuffle=True, pin_memory=True,
-                          collate_fn=sparse_collate_fn, num_workers=self.data_cfg.data.num_workers)
+                          collate_fn=_sparse_collate_fn, num_workers=self.data_cfg.data.num_workers)
 
     def val_dataloader(self):          
-        return DataLoader(self.val_set, batch_size=1, pin_memory=True, collate_fn=sparse_collate_fn,
+        return DataLoader(self.val_set, batch_size=1, pin_memory=True, collate_fn=_sparse_collate_fn,
                           num_workers=self.data_cfg.data.num_workers)
 
     def test_dataloader(self):
-        return DataLoader(self.val_set, batch_size=1, pin_memory=True, collate_fn=sparse_collate_fn,
+        return DataLoader(self.val_set, batch_size=1, pin_memory=True, collate_fn=_sparse_collate_fn,
                           num_workers=self.data_cfg.data.num_workers)
 
     def predict_dataloader(self):
-        return DataLoader(self.test_set, batch_size=1, pin_memory=True, collate_fn=sparse_collate_fn,
+        return DataLoader(self.test_set, batch_size=1, pin_memory=True, collate_fn=_sparse_collate_fn,
                           num_workers=self.data_cfg.data.num_workers)
 
 
-def sparse_collate_fn(batch):
+def _sparse_collate_fn(batch):
     data = {}
 
     # Batch together points, colors, labels, query_points, values
@@ -54,11 +55,20 @@ def sparse_collate_fn(batch):
         labels.append(torch.from_numpy(b["labels"]))
         query_points.append(torch.from_numpy(b["query_points"]))
         values.append(torch.from_numpy(b["values"]))
-    
-    data["points"] = torch.cat(points, dim=0)  # size: (N, 3)
-    data["colors"] = torch.cat(colors, dim=0)  # size: (N, 3)
-    data["labels"] = torch.cat(labels, dim=0)  # size: (N,)
-    data["query_points"] = torch.cat(query_points, dim=0)  # size: (M, 3)
-    data["values"] = torch.cat(values, dim=0)  # size: (M,)
-    
-    return data
+
+    if len(batch) == 1:  # if batch size is 1
+        data["points"] = torch.unsqueeze(torch.cat(points, dim=0), 0).to(torch.float32)  # size: (1, N, 3)
+        data["colors"] = torch.unsqueeze(torch.cat(colors, dim=0), 0)  # size: (1, N, 3)
+        data["labels"] = torch.unsqueeze(torch.cat(labels, dim=0), 0)  # size: (1, N)
+        data["query_points"] = torch.unsqueeze(torch.cat(query_points, dim=0), 0).to(torch.float32)  # size: (1, M, 3)
+        data["values"] = torch.unsqueeze(torch.cat(values, dim=0), 0)  # size: (1, M)
+    else:
+        data["points"] = torch.stack(points, dim=0).to(torch.float32)  # size: (B, N, 3)
+        data["colors"] = torch.stack(colors, dim=0)  # size: (B, N, 3)
+        data["labels"] = torch.stack(labels, dim=0)  # size: (B, N)
+        data["query_points"] = torch.stack(query_points, dim=0).to(torch.float32) # size: (B, M, 3)
+        data["values"] = torch.stack(values, dim=0)  # size: (B, M)
+        data["points"] = data["points"].to(torch.float32)
+        data["query_points"] = data["query_points"].to(torch.float32)
+        arrgh(data)
+    return data 

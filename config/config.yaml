@@ -10,8 +10,9 @@ defaults:
   - data: base
   - model: base
 
-
+experiment_name: run_2
 project_root_path: ${hydra:runtime.cwd}
-exp_output_root_path: ${project_root_path}/../data/output
+exp_output_root_path: ${project_root_path}/../data/output/${data.dataset}/${model.network.module}/${experiment_name}
+
 global_train_seed: 123
 global_test_seed: 321

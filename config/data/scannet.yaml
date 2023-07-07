@@ -3,12 +3,13 @@
 defaults:
   - base
 
-dataset: scannet
+dataset: Scannet
 dataset_path: ${data.dataset_root_path}/scannet.ply
 
 metadata:
+  metadata_path: ${data.dataset_path}/metadata
   train_list: ${data.metadata.metadata_path}/scannetv2_train.txt
-  val_list: ${data.metadata.metadata_path}/scannetv2_val.txt
+  val_list: ${data.metadata.metadata_path}/scannetv2_train.txt
   test_list: ${data.metadata.metadata_path}/scannetv2_test.txt
 
 has_normal: True

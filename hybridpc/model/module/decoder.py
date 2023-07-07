@@ -18,22 +18,15 @@ class CoordsEncoder(pl.LightningModule):
         max_freq_log2: int = 9,
         num_freqs: int = 10,
         log_sampling: bool = True,
-        periodic_fns: Tuple[Callable, Callable] = (torch.sin, torch.cos),
+        periodic_fns: Tuple[Callable, Callable] = (torch.sin, torch.cos)
     ) -> None:
+        super().__init__()
         self.input_dims = input_dims
         self.include_input = include_input
         self.max_freq_log2 = max_freq_log2
         self.num_freqs = num_freqs
         self.log_sampling = log_sampling
         self.periodic_fns = periodic_fns
-        self.create_embedding_fn()
-                
-        self.input_dims = 3
-        self.include_input = True
-        self.max_freq_log2 = 9
-        self.num_freqs = 10
-        self.log_sampling = True
-        self.periodic_fns = (torch.sin, torch.cos),
         self.create_embedding_fn()
 
     def create_embedding_fn(self) -> None:

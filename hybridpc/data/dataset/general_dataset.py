@@ -23,7 +23,11 @@ class GeneralDataset(Dataset):
         self.voxel_size = cfg.data.voxel_size
         self.voxel_category_num = cfg.data.voxel_category_num
         self.num_point = cfg.data.num_point
-        self.num_queries_on_surface = cfg.data.num_queries_on_surface
+        self.rotate_num = cfg.data.rotate_num
+        self.take = cfg.data.take
+        self.num_queries_on_surface = cfg.data.udf_queries.num_queries_on_surface
+        self.queries_stds = cfg.data.udf_queries.queries_stds
+        self.num_queries_per_std = cfg.data.udf_queries.num_queries_per_std
         self.in_memory = cfg.data.in_memory
         self.dataset_split = "test" if split == "test" else "train" # train and val scenes and all under train set
         self.data_map = {
@@ -35,16 +39,118 @@ class GeneralDataset(Dataset):
         self.filenames, self.labels = self.load_filenames()
 
         if self.cfg.data.over_fitting:
-            self.random_idx = random.randint(0, len(self.filenames) - 1)
+            # self.random_idx = random.randint(0, len(self.filenames) - 1)
+            self.random_idx = 0
         
         if self.in_memory:
             """ Load all files into memory. """
             print('Load files into memory from ' + self.filelist)
             if self.cfg.data.over_fitting:
-                self.read_file(os.path.join(self.dataset_root_path, self.dataset_split, self.filenames[self.random_idx]))
+                self.samples = self.read_file(os.path.join(self.dataset_root_path, self.dataset_split, self.filenames[self.random_idx]))
+                # Voxelize the points
+                voxel_coords, unique_map, inverse_map = MinkowskiEngine.utils.sparse_quantize(
+                    self.samples['points'], return_index=True, return_inverse=True, quantization_size=self.voxel_size)
+
+                # Get unique voxel coordinates and count the number of points per voxel
+                unique_voxel_coords, counts = np.unique(inverse_map, return_counts=True, axis=0)
+                
+                # Compute the number of unique labels per voxel
+                labels_per_voxel = [np.unique(self.samples['labels'][inverse_map == i]) for i in range(len(unique_voxel_coords))]
+                num_labels_per_voxel = [len(labels) for labels in labels_per_voxel]
+
+                print(f"Total number of voxels: {len(unique_voxel_coords)}")
+                print(f"Number of points per voxel: min={counts.min()}, max={counts.max()}")
+                print(f"Number of unique labels per voxel: min={min(num_labels_per_voxel)}, max={max(num_labels_per_voxel)}")
+
+                # Find voxels that meet the constraints: the number of points is close to self.num_point 
+                # and the number of unique labels equals self.voxel_category_num
+                valid_voxels = np.abs(counts - self.num_point) < 0.4 * self.num_point  # Adjust tolerance as needed
+                valid_voxels = valid_voxels & (np.array(num_labels_per_voxel) == self.voxel_category_num)
+
+                if not np.any(valid_voxels):
+                        raise ValueError("No voxel meets the criteria! Please adjust the constraints.")
+
+                # Generate random voxel index from the valid voxels
+                np.random.seed(42)  # You can replace '42' with any integer you want
+                voxel_idx = np.random.choice(np.where(valid_voxels)[0])
+
+
+                # Create a mask for all points within the selected voxel
+                mask = (inverse_map == voxel_idx)
+
+                # Print the information
+                print(f"Number of points in selected voxel: {counts[voxel_idx]}")
+                print(f"Number of unique labels in selected voxel: {len(labels_per_voxel[voxel_idx])}")
+
+                # Define voxel_min and voxel_range
+                points_in_selected_voxel = self.samples['points'][mask]
+                voxel_min = points_in_selected_voxel.min(axis=0)
+                voxel_max = points_in_selected_voxel.max(axis=0)
+                voxel_range = voxel_max - voxel_min
+
+                # Normalize the voxel to be within the range [-1, 1]
+                norm_points_in_selected_voxel = 2 * (points_in_selected_voxel - voxel_min) / voxel_range - 1
+
+                # Compute the unsigned distance function (UDF) from the normalized point cloud (PCD).
+
+                # Assuming norm_points_in_selected_voxel is a numpy array of shape (N, 3)
+                norm_points_in_selected_voxel_tensor = torch.tensor(np.asarray(norm_points_in_selected_voxel))
+
+                query_points, values = compute_udf_from_pcd(
+                    norm_points_in_selected_voxel_tensor,
+                    self.num_queries_on_surface,
+                    self.queries_stds,
+                    self.num_queries_per_std
+                )
+
+                # After computation, if query_points and values are tensors and you want to convert them back to numpy arrays:
+                query_points = query_points.cpu().numpy()
+                values = values.cpu().numpy()
+                self.data = {
+                    "points": norm_points_in_selected_voxel,
+                    "colors": self.samples['colors'][mask],
+                    "labels": self.remap_labels(self.samples['labels'][mask]),
+                    "query_points": query_points,
+                    "values": values
+                }
+                rotated_data = []
+
+                for _ in range(self.rotate_num):
+                    rotation_matrix =self.random_rotation_matrix()
+
+                    rotated_points = np.dot(self.data["points"], rotation_matrix.T).astype(float)
+                    rotated_query_points = np.dot(self.data["query_points"], rotation_matrix.T).astype(float)
+
+
+                    rotated_data_dict = {
+                        "points": rotated_points,
+                        "colors": self.data["colors"],
+                        "labels": self.data["labels"],
+                        "query_points": rotated_query_points,
+                        "values": self.data["values"]
+                    }
+                    
+                    rotated_data.append(rotated_data_dict)
+
+                self.data = rotated_data
+                self.visualize_voxel(self.data[0])
+
             else:
                 self.samples = [self.read_file(os.path.join(self.dataset_root_path, self.dataset_split, f))
                             for f in tqdm(self.filenames, ncols=80, leave=False)]
+
+    def random_rotation_matrix(self):
+        theta = np.random.uniform(0, 2*np.pi)  # Uniformly distributed angle between 0 and 2pi
+        rotation_matrix = np.array([[np.cos(theta), -np.sin(theta), 0],
+                                    [np.sin(theta),  np.cos(theta), 0],
+                                    [0,              0,             1]])
+        return rotation_matrix
+
+    def remap_labels(self, labels):
+        unique_labels = np.unique(labels)
+        mapping = {label: i for i, label in enumerate(unique_labels)}
+        new_labels = np.vectorize(mapping.get)(labels)
+        return new_labels
 
     def read_file(self, filename: str):
         """ Read a point cloud from a file and return a dictionary. """
@@ -97,86 +203,132 @@ class GeneralDataset(Dataset):
         # Color mapping for labels
         cmap = cm.get_cmap("tab20")
 
-        # Convert output['points'] and output['query_points'] to PointCloud
-        normalized_labels = output['labels'].astype(float) / output['labels'].max()  # Normalize labels to [0, 1]
-        colors = cmap(output['labels'])[:, :3] * 255  # Use labels for color
+        # Normalize labels to [0, 1]
+        normalized_labels = output['labels'].astype(float) / output['labels'].max() 
+
+        # Use labels for color
+        colors = cmap(normalized_labels)[:, :3] * 255  
+
         pcd = numpy_to_open3d(output['points'], colors)
-        query_pcd = numpy_to_open3d(output['query_points'], np.array([0, 255, 0]))  # Use green for query_points
+        # Create an array of the same length as output['query_points'], all of color green
+        green_color = np.tile(np.array([0, 255, 0]), (len(output['query_points']), 1))
+
+        query_pcd = numpy_to_open3d(output['query_points'], green_color)
 
         # Create a voxel grid
-        bbox = o3d.geometry.AxisAlignedBoundingBox(min_bound=-1, max_bound=1)
-        voxel_grid = o3d.geometry.VoxelGrid.create_from_axis_aligned_bounding_box(bbox, voxel_size=self.voxel_size)
+        min_bound = np.array([-1, -1, -1])
+        max_bound = np.array([1, 1, 1])
+        bbox = o3d.geometry.AxisAlignedBoundingBox(min_bound=min_bound, max_bound=max_bound)
+
+        # Define the eight corners of the bounding box
+        points = np.array([
+            [min_bound[0], min_bound[1], min_bound[2]],
+            [max_bound[0], min_bound[1], min_bound[2]],
+            [max_bound[0], max_bound[1], min_bound[2]],
+            [min_bound[0], max_bound[1], min_bound[2]],
+            [min_bound[0], min_bound[1], max_bound[2]],
+            [max_bound[0], min_bound[1], max_bound[2]],
+            [max_bound[0], max_bound[1], max_bound[2]],
+            [min_bound[0], max_bound[1], max_bound[2]]
+        ])
+
+        # Define the twelve edges of the bounding box
+        lines = np.array([
+            [0, 1], [1, 2], [2, 3], [3, 0],  # bottom edges
+            [4, 5], [5, 6], [6, 7], [7, 4],  # top edges
+            [0, 4], [1, 5], [2, 6], [3, 7]   # vertical edges
+        ])
+
+        # Create a LineSet and color the lines
+        line_set = o3d.geometry.LineSet(
+            points=o3d.utility.Vector3dVector(points),
+            lines=o3d.utility.Vector2iVector(lines),
+        )
+        line_set.paint_uniform_color([0, 0, 0])  # black color
+
+        # Visualize the bounding box
+        o3d.visualization.draw_geometries([line_set])
 
         # Visualize point cloud and voxel grid
-        o3d.visualization.draw_geometries([pcd, query_pcd, voxel_grid])
+        o3d.visualization.draw_geometries([pcd, line_set])
 
     def __len__(self):
         if self.cfg.data.over_fitting:
-            return 1
+            return len(self.data)
         else:
             return len(self.filenames)
 
     def __getitem__(self, idx):
         if self.cfg.data.over_fitting:
-            sample = self.samples[idx] if self.in_memory else \
-                self.read_file(os.path.join(self.dataset_root_path, self.dataset_split, self.filenames[self.random_idx]))
+            # sample = self.samples[idx] if self.in_memory else \
+            #     self.read_file(os.path.join(self.dataset_root_path, self.dataset_split, self.filenames[self.random_idx]))
 
-            # Voxelize the points
-            voxel_coords, unique_map = MinkowskiEngine.utils.sparse_quantize(
-                sample['points'], return_index=True, quantization_size=self.voxel_size)
+            # # Voxelize the points
+            # voxel_coords, unique_map, inverse_map = MinkowskiEngine.utils.sparse_quantize(
+            #     sample['points'], return_index=True, return_inverse=True, quantization_size=self.voxel_size)
 
-            # Get unique voxel coordinates and count the number of points per voxel
-            unique_voxel_coords, counts = np.unique(voxel_coords, return_counts=True, axis=0)
+            # # Get unique voxel coordinates and count the number of points per voxel
+            # unique_voxel_coords, counts = np.unique(inverse_map, return_counts=True, axis=0)
             
-            # Compute the number of unique labels per voxel
-            labels_per_voxel = [np.unique(sample['labels'][unique_map == i]) for i in range(len(unique_voxel_coords))]
-            num_labels_per_voxel = [len(labels) for labels in labels_per_voxel]
+            # # Compute the number of unique labels per voxel
+            # labels_per_voxel = [np.unique(sample['labels'][inverse_map == i]) for i in range(len(unique_voxel_coords))]
+            # num_labels_per_voxel = [len(labels) for labels in labels_per_voxel]
 
-            # Find voxels that meet the constraints: the number of points is close to self.num_point 
-            # and the number of unique labels equals self.voxel_category_num
-            valid_voxels = np.abs(counts - self.num_point) < 0.1 * self.num_point  # Adjust tolerance as needed
-            valid_voxels = valid_voxels & (np.array(num_labels_per_voxel) == self.voxel_category_num)
+            # print(f"Total number of voxels: {len(unique_voxel_coords)}")
+            # print(f"Number of points per voxel: min={counts.min()}, max={counts.max()}")
+            # print(f"Number of unique labels per voxel: min={min(num_labels_per_voxel)}, max={max(num_labels_per_voxel)}")
 
-            if not np.any(valid_voxels):
-                    raise ValueError("No voxel meets the criteria! Please adjust the constraints.")
-            # The code for generating the voxel_idx and beyond remains the same.
+            # # Find voxels that meet the constraints: the number of points is close to self.num_point 
+            # # and the number of unique labels equals self.voxel_category_num
+            # valid_voxels = np.abs(counts - self.num_point) < 0.4 * self.num_point  # Adjust tolerance as needed
+            # valid_voxels = valid_voxels & (np.array(num_labels_per_voxel) == self.voxel_category_num)
+
+            # if not np.any(valid_voxels):
+            #         raise ValueError("No voxel meets the criteria! Please adjust the constraints.")
+
+            # # Generate random voxel index from the valid voxels
+            # voxel_idx = np.random.choice(np.where(valid_voxels)[0])
+
+            # # Create a mask for all points within the selected voxel
+            # mask = (inverse_map == voxel_idx)
+
+            # # Print the information
+            # print(f"Number of points in selected voxel: {counts[voxel_idx]}")
+            # print(f"Number of unique labels in selected voxel: {len(labels_per_voxel[voxel_idx])}")
+
+            # # Define voxel_min and voxel_range
+            # points_in_selected_voxel = sample['points'][mask]
+            # voxel_min = points_in_selected_voxel.min(axis=0)
+            # voxel_max = points_in_selected_voxel.max(axis=0)
+            # voxel_range = voxel_max - voxel_min
+
+            # # Normalize the voxel to be within the range [-1, 1]
+            # norm_points_in_selected_voxel = 2 * (points_in_selected_voxel - voxel_min) / voxel_range - 1
+
+            # # Compute the unsigned distance function (UDF) from the normalized point cloud (PCD).
+
+            # # Assuming norm_points_in_selected_voxel is a numpy array of shape (N, 3)
+            # norm_points_in_selected_voxel_tensor = torch.tensor(np.asarray(norm_points_in_selected_voxel))
+
+            # query_points, values = compute_udf_from_pcd(
+            #     norm_points_in_selected_voxel_tensor,
+            #     self.num_queries_on_surface,
+            #     self.queries_stds,
+            #     self.num_queries_per_std
+            # )
+
+            # # After computation, if query_points and values are tensors and you want to convert them back to numpy arrays:
+            # query_points = query_points.cpu().numpy()
+            # values = values.cpu().numpy()
 
 
-            # Generate random voxel index from the valid voxels
-            voxel_idx = np.random.choice(np.where(valid_voxels)[0])
+            # data = {
+            #     "points": norm_points_in_selected_voxel,
+            #     "colors": sample['colors'][mask],
+            #     "labels": sample['labels'][mask],
+            #     "query_points": query_points,
+            #     "values": values
+            # }
 
-            # Create a mask for all points within the selected voxel
-            mask = np.all(voxel_coords[unique_map] == unique_voxel_coords[voxel_idx], axis=1)
-
-            # Print the information
-            print(f"Total number of voxels: {len(unique_voxel_coords)}")
-            print(f"Number of points per voxel: min={counts.min()}, max={counts.max()}")
-            print(f"Number of unique labels per voxel: min={min(num_labels_per_voxel)}, max={max(num_labels_per_voxel)}")
-            print(f"Number of points in selected voxel: {counts[voxel_idx]}")
-            print(f"Number of unique labels in selected voxel: {len(labels_per_voxel[voxel_idx])}")
-
-            # Define voxel_min and voxel_range
-            points_in_selected_voxel = sample['points'][mask]
-            voxel_min = points_in_selected_voxel.min(axis=0)
-            voxel_max = points_in_selected_voxel.max(axis=0)
-            voxel_range = voxel_max - voxel_min
-
-            # Normalize the voxel to be within the range [-1, 1]
-            norm_points_in_selected_voxel = 2 * (points_in_selected_voxel - voxel_min) / voxel_range - 1
-
-            # Compute the unsigned distance function (UDF) from the normalized point cloud (PCD).
-            query_points, values = compute_udf_from_pcd(
-                norm_points_in_selected_voxel, 
-                self.num_queries_on_surface,
-            )
-
-            data = {
-                "points": norm_points_in_selected_voxel,
-                "colors": sample['colors'][mask],
-                "labels": sample['labels'][mask],
-                "query_points": query_points,
-                "values": values
-            }
-
-            self.visualize_voxel(data)
-            return data
+            # self.visualize_voxel(data)
+            return self.data[idx]

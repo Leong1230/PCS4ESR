@@ -2,14 +2,19 @@
 
 dataset_root_path: ${project_root_path}/../../data
 
-file_suffix: .pth
-batch_size: 1
-num_workers: 8
-voxel_size: 0.05
-voxel_category_num: 1
-num_point: 40
-num_queries_on_surface: 256
-in_memory: False # whether to load all data into memory
+batch_size: 8
+num_workers: 0
+voxel_size: 0.8
+voxel_category_num: 4
+num_point: 200
+rotate_num: 100
+
+udf_queries:
+  num_queries_on_surface: 100
+  queries_stds: [0.003, 0.01, 0.1]
+  num_queries_per_std: [400, 320, 400, 400]
+in_memory: True # whether precompute voxel indices and load voxel into memory
+take: 2 # how many data to take for training and validation, -1 means all
 over_fitting: True # whether to use only one voxel for training and validation
 
 augmentation:
