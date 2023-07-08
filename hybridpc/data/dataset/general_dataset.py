@@ -259,76 +259,130 @@ class GeneralDataset(Dataset):
             return len(self.filenames)
 
     def __getitem__(self, idx):
-        if self.cfg.data.over_fitting:
-            # sample = self.samples[idx] if self.in_memory else \
-            #     self.read_file(os.path.join(self.dataset_root_path, self.dataset_split, self.filenames[self.random_idx]))
+            sample = self.samples[idx] if self.in_memory else \
+                self.read_file(os.path.join(self.dataset_root_path, self.dataset_split, self.filenames[self.random_idx]))
 
-            # # Voxelize the points
-            # voxel_coords, unique_map, inverse_map = MinkowskiEngine.utils.sparse_quantize(
-            #     sample['points'], return_index=True, return_inverse=True, quantization_size=self.voxel_size)
+            # Voxelize the points
+            voxel_coords, unique_map, inverse_map = MinkowskiEngine.utils.sparse_quantize(
+                sample['points'], return_index=True, return_inverse=True, quantization_size=self.voxel_size)
 
-            # # Get unique voxel coordinates and count the number of points per voxel
-            # unique_voxel_coords, counts = np.unique(inverse_map, return_counts=True, axis=0)
+            # Get unique voxel coordinates and count the number of points per voxel
+            unique_voxel_coords, counts = np.unique(inverse_map, return_counts=True, axis=0)
             
-            # # Compute the number of unique labels per voxel
-            # labels_per_voxel = [np.unique(sample['labels'][inverse_map == i]) for i in range(len(unique_voxel_coords))]
-            # num_labels_per_voxel = [len(labels) for labels in labels_per_voxel]
+            # Compute the number of unique labels per voxel
+            labels_per_voxel = [np.unique(sample['labels'][inverse_map == i]) for i in range(len(unique_voxel_coords))]
+            num_labels_per_voxel = [len(labels) for labels in labels_per_voxel]
 
-            # print(f"Total number of voxels: {len(unique_voxel_coords)}")
-            # print(f"Number of points per voxel: min={counts.min()}, max={counts.max()}")
-            # print(f"Number of unique labels per voxel: min={min(num_labels_per_voxel)}, max={max(num_labels_per_voxel)}")
+            if self.cfg.data.over_fitting:
+                print(f"Total number of voxels: {len(unique_voxel_coords)}")
+                print(f"Number of points per voxel: min={counts.min()}, max={counts.max()}")
+                print(f"Number of unique labels per voxel: min={min(num_labels_per_voxel)}, max={max(num_labels_per_voxel)}")
 
-            # # Find voxels that meet the constraints: the number of points is close to self.num_point 
-            # # and the number of unique labels equals self.voxel_category_num
-            # valid_voxels = np.abs(counts - self.num_point) < 0.4 * self.num_point  # Adjust tolerance as needed
-            # valid_voxels = valid_voxels & (np.array(num_labels_per_voxel) == self.voxel_category_num)
+                # Find voxels that meet the constraints: the number of points is close to self.num_point 
+                # and the number of unique labels equals self.voxel_category_num
+                valid_voxels = np.abs(counts - self.num_point) < 0.4 * self.num_point  # Adjust tolerance as needed
+                valid_voxels = valid_voxels & (np.array(num_labels_per_voxel) == self.voxel_category_num)
 
-            # if not np.any(valid_voxels):
-            #         raise ValueError("No voxel meets the criteria! Please adjust the constraints.")
+                if not np.any(valid_voxels):
+                        raise ValueError("No voxel meets the criteria! Please adjust the constraints.")
 
-            # # Generate random voxel index from the valid voxels
-            # voxel_idx = np.random.choice(np.where(valid_voxels)[0])
+                # Generate random voxel index from the valid voxels
+                voxel_idx = np.random.choice(np.where(valid_voxels)[0])
 
-            # # Create a mask for all points within the selected voxel
-            # mask = (inverse_map == voxel_idx)
+                # Create a mask for all points within the selected voxel
+                mask = (inverse_map == voxel_idx)
 
-            # # Print the information
-            # print(f"Number of points in selected voxel: {counts[voxel_idx]}")
-            # print(f"Number of unique labels in selected voxel: {len(labels_per_voxel[voxel_idx])}")
+                # Print the information
+                print(f"Number of points in selected voxel: {counts[voxel_idx]}")
+                print(f"Number of unique labels in selected voxel: {len(labels_per_voxel[voxel_idx])}")
 
-            # # Define voxel_min and voxel_range
-            # points_in_selected_voxel = sample['points'][mask]
-            # voxel_min = points_in_selected_voxel.min(axis=0)
-            # voxel_max = points_in_selected_voxel.max(axis=0)
-            # voxel_range = voxel_max - voxel_min
+                # Define voxel_min and voxel_range
+                points_in_selected_voxel = sample['points'][mask]
+                voxel_min = points_in_selected_voxel.min(axis=0)
+                voxel_max = points_in_selected_voxel.max(axis=0)
+                voxel_range = voxel_max - voxel_min
 
-            # # Normalize the voxel to be within the range [-1, 1]
-            # norm_points_in_selected_voxel = 2 * (points_in_selected_voxel - voxel_min) / voxel_range - 1
+                # Normalize the voxel to be within the range [-1, 1]
+                norm_points_in_selected_voxel = 2 * (points_in_selected_voxel - voxel_min) / voxel_range - 1
 
-            # # Compute the unsigned distance function (UDF) from the normalized point cloud (PCD).
+                # Compute the unsigned distance function (UDF) from the normalized point cloud (PCD).
 
-            # # Assuming norm_points_in_selected_voxel is a numpy array of shape (N, 3)
-            # norm_points_in_selected_voxel_tensor = torch.tensor(np.asarray(norm_points_in_selected_voxel))
+                # Assuming norm_points_in_selected_voxel is a numpy array of shape (N, 3)
+                norm_points_in_selected_voxel_tensor = torch.tensor(np.asarray(norm_points_in_selected_voxel))
 
-            # query_points, values = compute_udf_from_pcd(
-            #     norm_points_in_selected_voxel_tensor,
-            #     self.num_queries_on_surface,
-            #     self.queries_stds,
-            #     self.num_queries_per_std
-            # )
+                query_points, values = compute_udf_from_pcd(
+                    norm_points_in_selected_voxel_tensor,
+                    self.num_queries_on_surface,
+                    self.queries_stds,
+                    self.num_queries_per_std
+                )
 
-            # # After computation, if query_points and values are tensors and you want to convert them back to numpy arrays:
-            # query_points = query_points.cpu().numpy()
-            # values = values.cpu().numpy()
+                # After computation, if query_points and values are tensors and you want to convert them back to numpy arrays:
+                query_points = query_points.cpu().numpy()
+                values = values.cpu().numpy()
 
 
-            # data = {
-            #     "points": norm_points_in_selected_voxel,
-            #     "colors": sample['colors'][mask],
-            #     "labels": sample['labels'][mask],
-            #     "query_points": query_points,
-            #     "values": values
-            # }
+                data = {
+                    "points": norm_points_in_selected_voxel,
+                    "colors": sample['colors'][mask],
+                    "labels": sample['labels'][mask],
+                    "query_points": query_points,
+                    "values": values
+                }
 
-            # self.visualize_voxel(data)
-            return self.data[idx]
+                self.visualize_voxel(data)
+                return data
+            else:
+                # Define placeholders for all voxel data
+                all_points = []
+                all_colors = []
+                all_labels = []
+                all_query_points = []
+                all_values = []
+                all_voxel_indices = []
+                all_query_voxel_indices = []
+
+                for voxel_idx in range(len(unique_voxel_coords)):
+                    mask = (inverse_map == voxel_idx)
+
+                    points_in_selected_voxel = sample['points'][mask]
+                    voxel_min = points_in_selected_voxel.min(axis=0)
+                    voxel_max = points_in_selected_voxel.max(axis=0)
+                    voxel_range = voxel_max - voxel_min
+
+                    # Normalize the voxel to be within the range [-1, 1]
+                    norm_points_in_selected_voxel = 2 * (points_in_selected_voxel - voxel_min) / voxel_range - 1
+                    norm_points_in_selected_voxel_tensor = torch.tensor(np.asarray(norm_points_in_selected_voxel))
+
+                    query_points, values = compute_udf_from_pcd(
+                        norm_points_in_selected_voxel_tensor,
+                        self.num_queries_on_surface,
+                        self.queries_stds,
+                        self.num_queries_per_std
+                    )
+
+                    # After computation, convert tensors back to numpy arrays:
+                    query_points = query_points.cpu().numpy()
+                    values = values.cpu().numpy()
+
+                    all_points.append(points_in_selected_voxel) #output points in not normalized within each voxel
+                    all_colors.append(sample['colors'][mask])
+                    all_labels.append(sample['labels'][mask])
+                    all_query_points.append(query_points) #output query points in normalized within each voxel
+                    all_values.append(values)
+                    all_voxel_indices.append(np.full((points_in_selected_voxel.shape[0],), voxel_idx))
+                    all_query_voxel_indices.append(np.full((query_points.shape[0],), voxel_idx))
+
+                # Concatenate all the data
+                data = {
+                    "points": np.concatenate(all_points, axis=0), #N, 3
+                    "colors": np.concatenate(all_colors, axis=0), #N, 3
+                    "labels": np.concatenate(all_labels, axis=0), #N, 3
+                    "voxel_indices": np.concatenate(all_voxel_indices, axis=0), #N, 
+                    "query_points": np.concatenate(all_query_points, axis=0), # M, 3
+                    "values": np.concatenate(all_values, axis=0), # M,3 
+                    "query_voxel_indices": np.concatenate(all_query_voxel_indices, axis=0), # M, 3
+                    "voxel_coords": unique_voxel_coords # B, 3
+                }
+
+                return data

@@ -18,8 +18,13 @@ class AutoDecoder(pl.LightningModule):
         super().__init__()
         self.save_hyperparameters()
         # Shared latent code across both decoders
-        self.latent_code = nn.Parameter(torch.randn(cfg.model.network.latent_dim))
+        self.latent_dim = cfg.model.network.latent_dim
         self.seg_loss_weight = cfg.model.network.seg_loss_weight
+
+        self.backbone = Backbone(
+            input_channel=3, output_channel=cfg.model.network.m, block_channels=cfg.model.network.blocks,
+            block_reps=cfg.model.network.block_reps
+        )
 
         self.seg_decoder = ImplicitDecoder(
             cfg.model.network.latent_dim,
@@ -42,18 +47,19 @@ class AutoDecoder(pl.LightningModule):
 
     def configure_optimizers(self):
         # The outer loop optimizer is applied to all parameters except the latent code
-        outer_optimizer = torch.optim.SGD([p for p in self.parameters() if p is not self.latent_code], 
+        outer_optimizer = torch.optim.SGD([p for p in self.parameters()], 
                                           lr=self.hparams.cfg.model.optimizer.lr)
         return [self.inner_optimizer, outer_optimizer]
 
-    def forward(self, data_dict):
+    def forward(self, data_dict, latent_code):
         # points = torch.cat([data_dict['points'], self.latent_code.repeat(data_dict['points'].size(0), 1, 1)], dim=-1)
         # query_points = torch.cat([data_dict['query_points'], self.latent_code.repeat(data_dict['query_points'].size(0), 1, 1)], dim=-1)
         # points = torch.cat([data_dict['points'], self.latent_code.repeat(data_dict['points'].size(0), 1)], dim=-1)
         # query_points = torch.cat([data_dict['query_points'], self.latent_code.repeat(data_dict['query_points'].size(0), 1)], dim=-1)
         
-        segmentation = self.seg_decoder(self.latent_code.repeat(data_dict['points'].size(0), 1), data_dict['points'])  # embeddings (B, D1) coords (B, N, D2)
-        values = self.functa_decoder(self.latent_code.repeat(data_dict['query_points'].size(0), 1), data_dict['query_points']) # embeddings (B, D1) coords (B, M, D2)
+        modulations = self.backbone(latent_code, data_dict['voxel_coords']) # B, C
+        segmentation = self.seg_decoder(modulations, data_dict['points'], data_dict["voxel_indices"])  # embeddings (B, C) coords (N, 3) indices (N, )
+        values = self.functa_decoder(modulations, data_dict['query_points'], data_dict["query_voxel_indices"]) # embeddings (B, D1) coords (M, 3) indices (M, )
 
         return {"segmentation": segmentation, "values": values}
 
@@ -68,14 +74,27 @@ class AutoDecoder(pl.LightningModule):
     #     return optimizer
 
     def training_step(self, data_dict, idx, optimizer_idx):
-        output_dict = self.forward(data_dict)
+        batch_size = data_dict["voxel_coords"].shape[0] # B voxels
+        latent_code = torch.zeros(batch_size, self.latent_dim, requires_grad=True, device=self.device)
+
+        # Creating the optimizer for latent_code
+        latent_optimizer = torch.optim.SGD([latent_code], lr=self.hparams.cfg.inner_loop_lr)
+
+        output_dict = self.forward(data_dict, latent_code)
 
         # Inner loop
         if optimizer_idx == 0:
             seg_loss, _, _ = self._loss(data_dict, output_dict)
+            seg_loss.backward()
+
+            # Step the latent optimizer and zero its gradients
+            latent_optimizer.step()
+            latent_optimizer.zero_grad()
+
             self.log("train/seg_loss", seg_loss, on_step=True, on_epoch=False)
             return seg_loss
-        
+    
+
         # Outer loop
         elif optimizer_idx == 1:
             _, value_loss, total_loss = self._loss(data_dict, output_dict)

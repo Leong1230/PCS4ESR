@@ -84,14 +84,17 @@ class ImplicitDecoder(pl.LightningModule):
         after_skip.append(nn.Linear(hidden_dim, out_dim))
         self.after_skip = nn.Sequential(*after_skip)
 
-    def forward(self, embeddings: Tensor, coords: Tensor) -> Tensor:
+    def forward(self, embeddings: Tensor, coords: Tensor, index: Tensor) -> Tensor:
         # embeddings (B, D1)
-        # coords (B, N, D2)
+        # coords (N, D2)
+        # index (N, )
         coords = self.coords_enc.embed(coords)
 
-        repeated_embeddings = repeat(embeddings, "b d -> b n d", n=coords.shape[1])
+        # Use the index to select the appropriate embeddings for each point
+        selected_embeddings = embeddings[index]
 
-        emb_and_coords = torch.cat([repeated_embeddings, coords], dim=-1)
+        # Concatenate the selected embeddings and the encoded coordinates
+        emb_and_coords = torch.cat([selected_embeddings, coords], dim=-1)
 
         x = self.in_layer(emb_and_coords)
         x = self.before_skip(x)
@@ -102,3 +105,4 @@ class ImplicitDecoder(pl.LightningModule):
         x = self.after_skip(x)
 
         return x.squeeze(-1)
+
