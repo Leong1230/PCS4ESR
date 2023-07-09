@@ -10,7 +10,7 @@ defaults:
   - data: base
   - model: base
 
-experiment_name: run_2
+experiment_name: debug
 project_root_path: ${hydra:runtime.cwd}
 exp_output_root_path: ${project_root_path}/../data/output/${data.dataset}/${model.network.module}/${experiment_name}
 

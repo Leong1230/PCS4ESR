@@ -4,18 +4,20 @@ dataset_root_path: ${project_root_path}/../../data
 
 batch_size: 8
 num_workers: 0
-voxel_size: 0.8
-voxel_category_num: 4
+voxel_size: 0.3
+category_num: 21
 num_point: 200
 rotate_num: 100
 
 udf_queries:
   num_queries_on_surface: 100
+  queries_ratio_on_surface: 0.5
   queries_stds: [0.003, 0.01, 0.1]
   num_queries_per_std: [400, 320, 400, 400]
-in_memory: True # whether precompute voxel indices and load voxel into memory
+  queries_ratio_per_std: 2
+in_memory: False # whether precompute voxel indices and load voxel into memory
 take: 2 # how many data to take for training and validation, -1 means all
-over_fitting: True # whether to use only one voxel for training and validation
+over_fitting: False # whether to use only one voxel for training and validation
 
 augmentation:
   jitter_xyz: True

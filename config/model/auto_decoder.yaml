@@ -15,8 +15,10 @@ trainer:
   max_epochs: 496
 
 optimizer:
-    _target_: torch.optim.Adam
+    target_: torch.optim.Adam
     lr: 0.002
+    inner_loop_steps: 3
+    inner_loop_lr: 0.001
 
 lr_decay:
   decay_start_epoch: 250
@@ -30,7 +32,8 @@ network:
   block_reps: 2
 
   positional_encoding: Fourier # Triplane
-  latent_dim: 8
+  modulation_dim: 32
+  latent_dim: 8 #
   seg_loss_weight: 0.2
 
   prepare_epochs: 2

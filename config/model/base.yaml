@@ -10,7 +10,7 @@ logger:
 
 # https://pytorch-lightning.readthedocs.io/en/stable/common/trainer.html
 trainer:
-  accelerator: gpu
+  accelerator: gpu #cpu or gpu
   devices: auto
   strategy: ddp_find_unused_parameters_true
   num_nodes: 1

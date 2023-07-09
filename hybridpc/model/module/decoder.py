@@ -89,10 +89,9 @@ class ImplicitDecoder(pl.LightningModule):
         # coords (N, D2)
         # index (N, )
         coords = self.coords_enc.embed(coords)
+        selected_embeddings = embeddings.F[index]
 
-        # Use the index to select the appropriate embeddings for each point
-        selected_embeddings = embeddings[index]
-
+        # selected_embeddings = embeddings[index]
         # Concatenate the selected embeddings and the encoded coordinates
         emb_and_coords = torch.cat([selected_embeddings, coords], dim=-1)
 

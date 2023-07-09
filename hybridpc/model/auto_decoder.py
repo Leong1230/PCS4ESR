@@ -18,24 +18,27 @@ class AutoDecoder(pl.LightningModule):
         super().__init__()
         self.save_hyperparameters()
         # Shared latent code across both decoders
+        # set automatic_optimization to False
+        self.automatic_optimization = False
+        
         self.latent_dim = cfg.model.network.latent_dim
         self.seg_loss_weight = cfg.model.network.seg_loss_weight
 
         self.backbone = Backbone(
-            input_channel=3, output_channel=cfg.model.network.m, block_channels=cfg.model.network.blocks,
+            input_channel=self.latent_dim, output_channel=cfg.model.network.modulation_dim, block_channels=cfg.model.network.blocks,
             block_reps=cfg.model.network.block_reps
         )
 
         self.seg_decoder = ImplicitDecoder(
-            cfg.model.network.latent_dim,
+            cfg.model.network.modulation_dim,
             cfg.model.network.seg_decoder.input_dim,
             cfg.model.network.seg_decoder.hidden_dim,
             cfg.model.network.seg_decoder.num_hidden_layers_before_skip,
             cfg.model.network.seg_decoder.num_hidden_layers_after_skip,
-            cfg.data.voxel_category_num,
+            cfg.data.category_num,
         )
         self.functa_decoder = ImplicitDecoder(
-            cfg.model.network.latent_dim,
+            cfg.model.network.modulation_dim,
             cfg.model.network.functa_decoder.input_dim,
             cfg.model.network.functa_decoder.hidden_dim,
             cfg.model.network.functa_decoder.num_hidden_layers_before_skip,
@@ -43,13 +46,9 @@ class AutoDecoder(pl.LightningModule):
             1,
         )
       # The inner loop optimizer is applied to the latent code
-        self.inner_optimizer = torch.optim.SGD([self.latent_code], lr=cfg.inner_loop_lr)
+        self.inner_optimizer = torch.optim.SGD([p for p in self.parameters()], lr=cfg.model.optimizer.inner_loop_lr)
 
-    def configure_optimizers(self):
-        # The outer loop optimizer is applied to all parameters except the latent code
-        outer_optimizer = torch.optim.SGD([p for p in self.parameters()], 
-                                          lr=self.hparams.cfg.model.optimizer.lr)
-        return [self.inner_optimizer, outer_optimizer]
+
 
     def forward(self, data_dict, latent_code):
         # points = torch.cat([data_dict['points'], self.latent_code.repeat(data_dict['points'].size(0), 1, 1)], dim=-1)
@@ -64,7 +63,9 @@ class AutoDecoder(pl.LightningModule):
         return {"segmentation": segmentation, "values": values}
 
     def _loss(self, data_dict, output_dict):
-        seg_loss = F.cross_entropy(output_dict['segmentation'].view(-1, self.hparams.cfg.data.voxel_category_num), data_dict['labels'].view(-1))
+        # seg_loss = F.cross_entropy(output_dict['segmentation'].view(-1, self.hparams.cfg.data.category_num), data_dict['labels'].view(-1))
+        seg_loss = F.cross_entropy(output_dict['segmentation'], data_dict['labels'])
+
         value_loss = F.mse_loss(output_dict['values'], data_dict['values'])
 
         return seg_loss, value_loss, self.seg_loss_weight * seg_loss + (1 - self.seg_loss_weight) * value_loss
@@ -73,34 +74,45 @@ class AutoDecoder(pl.LightningModule):
     #     optimizer = torch.optim.Adam(self.parameters(), lr=self.hparams.optimizer.lr)
     #     return optimizer
 
-    def training_step(self, data_dict, idx, optimizer_idx):
+    def configure_optimizers(self):
+        dummy_param = torch.zeros((1,), requires_grad=True, device=self.device)  # Dummy tensor
+        latent_optimizer = torch.optim.SGD([dummy_param], lr=self.hparams.cfg.model.optimizer.inner_loop_lr)
+        outer_optimizer = torch.optim.SGD(self.parameters(), lr=self.hparams.cfg.model.optimizer.lr)
+        return outer_optimizer
+
+    
+    def training_step(self, data_dict):
         batch_size = data_dict["voxel_coords"].shape[0] # B voxels
         latent_code = torch.zeros(batch_size, self.latent_dim, requires_grad=True, device=self.device)
 
         # Creating the optimizer for latent_code
-        latent_optimizer = torch.optim.SGD([latent_code], lr=self.hparams.cfg.inner_loop_lr)
-
-        output_dict = self.forward(data_dict, latent_code)
+        outer_optimizer = self.optimizers()
+        latent_optimizer = torch.optim.SGD([latent_code], lr=self.hparams.cfg.model.optimizer.inner_loop_lr)
 
         # Inner loop
-        if optimizer_idx == 0:
-            seg_loss, _, _ = self._loss(data_dict, output_dict)
-            seg_loss.backward()
-
+        for _ in range(self.hparams.cfg.model.optimizer.inner_loop_steps):  # Perform multiple steps
+            output_dict = self.forward(data_dict, latent_code)
+            _, value_loss, _ = self._loss(data_dict, output_dict)
+            self.manual_backward(value_loss)
+            
             # Step the latent optimizer and zero its gradients
             latent_optimizer.step()
             latent_optimizer.zero_grad()
 
-            self.log("train/seg_loss", seg_loss, on_step=True, on_epoch=False)
-            return seg_loss
-    
+        self.log("train/value_loss", value_loss, on_step=True, on_epoch=False)
 
         # Outer loop
-        elif optimizer_idx == 1:
-            _, value_loss, total_loss = self._loss(data_dict, output_dict)
-            self.log("train/value_loss", value_loss, on_step=True, on_epoch=False)
-            self.log("train/loss", total_loss, on_step=True, on_epoch=False)
-            return total_loss
+        output_dict = self.forward(data_dict, latent_code)
+        _, value_loss, total_loss = self._loss(data_dict, output_dict)
+        self.manual_backward(total_loss)
+        outer_optimizer.step()
+        outer_optimizer.zero_grad()
+
+        self.log("train/value_loss", value_loss, on_step=True, on_epoch=False)
+        self.log("train/loss", total_loss, on_step=True, on_epoch=False)
+
+        return total_loss
+
     
 
     def on_train_epoch_end(self):
@@ -110,30 +122,46 @@ class AutoDecoder(pl.LightningModule):
         )
 
     def validation_step(self, data_dict, idx):
-        output_dict = self.forward(data_dict)
-        seg_loss, value_loss, total_loss = self._loss(data_dict, output_dict)
-        
-        # Convert the predicted segmentations to discrete labels
-        pred_labels = torch.argmax(output_dict['segmentation'], dim=-1) # (B, N)
+        torch.set_grad_enabled(True)
+        batch_size = data_dict["voxel_coords"].shape[0]  # B voxels
+        latent_code = torch.zeros(batch_size, self.latent_dim, requires_grad=True, device=self.device)
+
+        # Creating the optimizer for latent_code
+        latent_optimizer = torch.optim.SGD([latent_code], lr=self.hparams.cfg.model.optimizer.inner_loop_lr)
+
+        # Inner loop
+        for _ in range(self.hparams.cfg.model.optimizer.inner_loop_steps):  # Perform multiple steps
+            output_dict = self.forward(data_dict, latent_code)
+            _, value_loss, _ = self._loss(data_dict, output_dict)
+            self.manual_backward(value_loss)
+
+            # Step the latent optimizer and zero its gradients
+            latent_optimizer.step()
+            latent_optimizer.zero_grad()
+
+        self.log("val/value_loss", value_loss, prog_bar=True, on_step=False, on_epoch=True, sync_dist=True)
+
+        # No outer loop for validation
+
+        # Calculating the metrics
+        pred_labels = torch.argmax(output_dict['segmentation'], dim=-1)  # (B, N)
         iou = jaccard_score(data_dict['labels'].view(-1).cpu().numpy(), pred_labels.view(-1).cpu().numpy(), average=None).mean()
         acc = (pred_labels == data_dict['labels']).float().mean()
 
-        self.log("val/seg_loss", seg_loss, prog_bar=True, on_step=False, on_epoch=True, sync_dist=True)
-        self.log("val/value_loss", value_loss, prog_bar=True, on_step=False, on_epoch=True, sync_dist=True)
-        self.log("val/total_loss", total_loss, prog_bar=True, on_step=False, on_epoch=True, sync_dist=True)
         self.log("val/iou", iou, prog_bar=True, on_step=False, on_epoch=True, sync_dist=True)
         self.log("val/acc", acc, prog_bar=True, on_step=False, on_epoch=True, sync_dist=True)
 
-    def on_validation_epoch_end(self):
-        if self.current_epoch > self.hparams.cfg.model.network.prepare_epochs:
-            avg_seg_loss = torch.stack([self.trainer.callback_metrics['val/seg_loss']]).mean()
-            avg_value_loss = torch.stack([self.trainer.callback_metrics['val/value_loss']]).mean()
-            avg_total_loss = torch.stack([self.trainer.callback_metrics['val/total_loss']]).mean()
-            avg_iou = torch.stack([self.trainer.callback_metrics['val/iou']]).mean()
-            avg_acc = torch.stack([self.trainer.callback_metrics['val/acc']]).mean()
+
+    # def on_validation_epoch_end(self):
+    #     if self.current_epoch > self.hparams.cfg.model.network.prepare_epochs:
+    #         avg_seg_loss = torch.stack([self.trainer.callback_metrics['val/seg_loss']]).mean()
+    #         avg_value_loss = torch.stack([self.trainer.callback_metrics['val/value_loss']]).mean()
+    #         avg_total_loss = torch.stack([self.trainer.callback_metrics['val/total_loss']]).mean()
+    #         avg_iou = torch.stack([self.trainer.callback_metrics['val/iou']]).mean()
+    #         avg_acc = torch.stack([self.trainer.callback_metrics['val/acc']]).mean()
             
-            self.log("avg_val_seg_loss", avg_seg_loss, prog_bar=True)
-            self.log("avg_val_value_loss", avg_value_loss, prog_bar=True)
-            self.log("avg_val_total_loss", avg_total_loss, prog_bar=True)
-            self.log("avg_val_iou", avg_iou, prog_bar=True)
-            self.log("avg_val_acc", avg_acc, prog_bar=True)
+    #         self.log("avg_val_seg_loss", avg_seg_loss, prog_bar=True)
+    #         self.log("avg_val_value_loss", avg_value_loss, prog_bar=True)
+    #         self.log("avg_val_total_loss", avg_total_loss, prog_bar=True)
+    #         self.log("avg_val_iou", avg_iou, prog_bar=True)
+    #         self.log("avg_val_acc", avg_acc, prog_bar=True)
