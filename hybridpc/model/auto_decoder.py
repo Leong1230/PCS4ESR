@@ -57,6 +57,7 @@ class AutoDecoder(pl.LightningModule):
         # query_points = torch.cat([data_dict['query_points'], self.latent_code.repeat(data_dict['query_points'].size(0), 1)], dim=-1)
         
         modulations = self.backbone(latent_code, data_dict['voxel_coords']) # B, C
+        # modulations = latent_code
         segmentation = self.seg_decoder(modulations, data_dict['points'], data_dict["voxel_indices"])  # embeddings (B, C) coords (N, 3) indices (N, )
         values = self.functa_decoder(modulations, data_dict['query_points'], data_dict["query_voxel_indices"]) # embeddings (B, D1) coords (M, 3) indices (M, )
 
@@ -68,6 +69,8 @@ class AutoDecoder(pl.LightningModule):
 
         value_loss = F.mse_loss(output_dict['values'], data_dict['values'])
 
+        # test_loss = F.mse_loss(output_dict['modulations'].F.view(-1), output_dict['latent_code'].view(-1))
+
         return seg_loss, value_loss, self.seg_loss_weight * seg_loss + (1 - self.seg_loss_weight) * value_loss
 
     # def configure_optimizers(self):
@@ -75,19 +78,18 @@ class AutoDecoder(pl.LightningModule):
     #     return optimizer
 
     def configure_optimizers(self):
-        dummy_param = torch.zeros((1,), requires_grad=True, device=self.device)  # Dummy tensor
-        latent_optimizer = torch.optim.SGD([dummy_param], lr=self.hparams.cfg.model.optimizer.inner_loop_lr)
-        outer_optimizer = torch.optim.SGD(self.parameters(), lr=self.hparams.cfg.model.optimizer.lr)
+        outer_optimizer = torch.optim.Adam(self.parameters(), lr=self.hparams.cfg.model.optimizer.lr)
+
         return outer_optimizer
 
     
     def training_step(self, data_dict):
-        batch_size = data_dict["voxel_coords"].shape[0] # B voxels
-        latent_code = torch.zeros(batch_size, self.latent_dim, requires_grad=True, device=self.device)
+        voxel_num = data_dict["voxel_coords"].shape[0] # B voxels
+        latent_code = torch.rand(voxel_num, self.latent_dim, requires_grad=True, device=self.device)
 
         # Creating the optimizer for latent_code
         outer_optimizer = self.optimizers()
-        latent_optimizer = torch.optim.SGD([latent_code], lr=self.hparams.cfg.model.optimizer.inner_loop_lr)
+        latent_optimizer = torch.optim.Adam([latent_code], lr=self.hparams.cfg.model.optimizer.inner_loop_lr)
 
         # Inner loop
         for _ in range(self.hparams.cfg.model.optimizer.inner_loop_steps):  # Perform multiple steps
@@ -124,7 +126,7 @@ class AutoDecoder(pl.LightningModule):
     def validation_step(self, data_dict, idx):
         torch.set_grad_enabled(True)
         batch_size = data_dict["voxel_coords"].shape[0]  # B voxels
-        latent_code = torch.zeros(batch_size, self.latent_dim, requires_grad=True, device=self.device)
+        latent_code = torch.rand(batch_size, self.latent_dim, requires_grad=True, device=self.device)
 
         # Creating the optimizer for latent_code
         latent_optimizer = torch.optim.SGD([latent_code], lr=self.hparams.cfg.model.optimizer.inner_loop_lr)
@@ -132,14 +134,14 @@ class AutoDecoder(pl.LightningModule):
         # Inner loop
         for _ in range(self.hparams.cfg.model.optimizer.inner_loop_steps):  # Perform multiple steps
             output_dict = self.forward(data_dict, latent_code)
-            _, value_loss, _ = self._loss(data_dict, output_dict)
+            _, value_loss,  _ = self._loss(data_dict, output_dict)
             self.manual_backward(value_loss)
 
             # Step the latent optimizer and zero its gradients
             latent_optimizer.step()
             latent_optimizer.zero_grad()
 
-        self.log("val/value_loss", value_loss, prog_bar=True, on_step=False, on_epoch=True, sync_dist=True)
+        self.log("val/value_loss", value_loss, prog_bar=True, on_step=True, on_epoch=True, sync_dist=True)
 
         # No outer loop for validation
 
