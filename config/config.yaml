@@ -10,7 +10,7 @@ defaults:
   - data: base
   - model: base
 
-experiment_name: latent-2-2_overfitting_with_Conv_run_1
+experiment_name: latent-32-128_no-overfitting_with_Conv_batch_2_debug_1
 project_root_path: ${hydra:runtime.cwd}
 exp_output_root_path: ${project_root_path}/../data/output/${data.dataset}/${model.network.module}/${experiment_name}
 

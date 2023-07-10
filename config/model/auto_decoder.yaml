@@ -17,7 +17,7 @@ trainer:
 optimizer:
     target_: torch.optim.Adam
     lr: 0.02
-    inner_loop_steps: 12
+    inner_loop_steps: 14
     inner_loop_lr: 0.1
 
 lr_decay:
@@ -27,28 +27,28 @@ network:
   module: AutoDecoder
 
   m: 16 # 16 or 32 (U-Net hidden dimension)
-  blocks: [1, 2, 3]
+  blocks: [1, 2, 3, 4]
   cluster_blocks: [1, 2]
-  block_reps: 2
+  block_reps: 1
 
   positional_encoding: Fourier # Triplane
-  modulation_dim: 2
-  latent_dim: 2 #
+  modulation_dim: 128
+  latent_dim: 32 #
   seg_loss_weight: 0.5
 
   prepare_epochs: 2
 
   fourier_encoder:
-    embedding_dim: 16
+    embedding_dim: 64
 
   seg_decoder:
     input_dim: 3
-    hidden_dim: 32
+    hidden_dim: 64
     num_hidden_layers_before_skip: 2
     num_hidden_layers_after_skip: 2
 
   functa_decoder:
     input_dim: 3
-    hidden_dim: 32
+    hidden_dim: 64
     num_hidden_layers_before_skip: 2
     num_hidden_layers_after_skip: 2
