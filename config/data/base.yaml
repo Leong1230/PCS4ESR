@@ -4,12 +4,14 @@ dataset_root_path: ${project_root_path}/../../data
 
 batch_size: 1
 num_workers: 0
-voxel_size: 0.6
+voxel_size: 0.1 #scannet default: 0.02
 category_num: 21
 num_point: 200
 rotate_num: 100
+use_relative: True # use relative query coordinates within each voxel
 
 udf_queries:
+  sample_entire_scene: True
   num_queries_on_surface: 100
   queries_ratio_on_surface: 0.5
   queries_stds: [0.003, 0.01, 0.1]
@@ -17,7 +19,7 @@ udf_queries:
   queries_ratio_per_std: 1
 in_memory: True # whether precompute voxel indices and load voxel into memory
 take: 1 # how many data to take for training and validation, -1 means all
-over_fitting: False # whether to use only one voxel for training and validation
+over_fitting: True # whether to use only one voxel for training and validation
 
 augmentation:
   jitter_xyz: True

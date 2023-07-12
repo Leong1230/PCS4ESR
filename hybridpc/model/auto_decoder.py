@@ -25,6 +25,7 @@ class AutoDecoder(pl.LightningModule):
         self.seg_loss_weight = cfg.model.network.seg_loss_weight
 
         self.backbone = Backbone(
+            backbone_type=cfg.model.network.backbone_type,
             input_channel=self.latent_dim, output_channel=cfg.model.network.modulation_dim, block_channels=cfg.model.network.blocks,
             block_reps=cfg.model.network.block_reps
         )

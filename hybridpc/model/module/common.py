@@ -48,21 +48,21 @@ class ResidualBlock(pl.LightningModule):
         return x
 
 
-class VGGBlock(pl.LightningModule):
+# class VGGBlock(pl.LightningModule):
 
-    def __init__(self, in_channels, out_channels, dimension, norm_fn=None):
-        super().__init__()
-        if norm_fn is None:
-            norm_fn = ME.MinkowskiBatchNorm
+#     def __init__(self, in_channels, out_channels, dimension, norm_fn=None):
+#         super().__init__()
+#         if norm_fn is None:
+#             norm_fn = ME.MinkowskiBatchNorm
 
-        self.conv_layers = nn.Sequential(
-            norm_fn(in_channels),
-            ME.MinkowskiReLU(inplace=True),
-            ME.MinkowskiConvolution(in_channels, out_channels, kernel_size=3, dimension=dimension)
-        )
+#         self.conv_layers = nn.Sequential(
+#             norm_fn(in_channels),
+#             ME.MinkowskiReLU(inplace=True),
+#             ME.MinkowskiConvolution(in_channels, out_channels, kernel_size=3, dimension=dimension)
+#         )
 
-    def forward(self, x):
-        return self.conv_layers(x)
+#     def forward(self, x):
+#         return self.conv_layers(x)
 
 
 class UBlock(pl.LightningModule):

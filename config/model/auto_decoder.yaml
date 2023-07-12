@@ -27,13 +27,14 @@ network:
   module: AutoDecoder
 
   m: 16 # 16 or 32 (U-Net hidden dimension)
-  blocks: [1, 2, 3, 4]
+  backbone_type: Conv # Conv or UNet
+  blocks: [1, 2, 3, 2, 1]
   cluster_blocks: [1, 2]
   block_reps: 1
 
   positional_encoding: Fourier # Triplane
-  modulation_dim: 128
-  latent_dim: 32 #
+  modulation_dim: 32
+  latent_dim: 64 #
   seg_loss_weight: 0.5
 
   prepare_epochs: 2
