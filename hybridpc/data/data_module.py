@@ -54,18 +54,23 @@ def _sparse_collate_fn(batch):
     voxel_coords = []
     batch_ids = []
 
+    cumulative_voxel_coords_len = 0  # Keep track of the cumulative length
+
     for i, b in enumerate(batch):
         voxel_coords_list.append(b["voxel_coords"])
         points.append(torch.from_numpy(b["points"]))
         colors.append(torch.from_numpy(b["colors"]))
         labels.append(torch.from_numpy(b["labels"]))
-        voxel_indices.append(torch.from_numpy(b["voxel_indices"]))
+        voxel_indices.append(b["voxel_indices"] + cumulative_voxel_coords_len)
         query_points.append(torch.from_numpy(b["query_points"]))
         values.append(torch.from_numpy(b["values"]))
-        query_voxel_indices.append(torch.from_numpy(b["query_voxel_indices"]))
+        query_voxel_indices.append(b["query_voxel_indices"] + cumulative_voxel_coords_len)
 
         # Create a batch ID for each point and query point in the batch
         batch_ids.append(torch.full((b["points"].shape[0],), fill_value=i, dtype=torch.int32))
+
+        # Update the cumulative length for the next iteration
+        cumulative_voxel_coords_len += len(b["voxel_coords"])
 
     data['points'] = torch.cat(points, dim=0)
     data['colors'] = torch.cat(colors, dim=0)
@@ -80,16 +85,4 @@ def _sparse_collate_fn(batch):
 
     return data
 
-
-# def _sparse_collate_fn(batch):
-#     data = {}
-
-#     for key in batch[0].keys():
-#         if batch[0][key].dtype == np.int64 or batch[0][key].dtype == np.int32:
-#             data[key] = torch.from_numpy(batch[0][key]).int()
-#         else:
-#             data[key] = torch.from_numpy(batch[0][key])
-
-
-#     return data
 

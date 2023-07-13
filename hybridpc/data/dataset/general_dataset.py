@@ -4,6 +4,7 @@ import statistics
 from statistics import mode
 import numpy as np
 import MinkowskiEngine
+from arrgh import arrgh
 import random
 import math
 import h5py
@@ -12,7 +13,7 @@ from torch.utils.data import Dataset
 import open3d as o3d
 import matplotlib.cm as cm
 from plyfile import PlyData
-from pycarus.geometry.pcd import compute_udf_from_pcd 
+from pycarus.geometry.pcd import compute_udf_from_pcd, knn 
 
 
 class GeneralDataset(Dataset):
@@ -160,104 +161,53 @@ class GeneralDataset(Dataset):
         voxel_coords, unique_map, inverse_map = MinkowskiEngine.utils.sparse_quantize(
             sample['points'], return_index=True, return_inverse=True, quantization_size=self.voxel_size)
 
-        # Shift the points to the range [0, voxel_size]
-        shifted_points = sample['points'] - np.min(sample['points'], 0)
-
-        # Scale to the range [0, 1]
-        scaled_points = shifted_points / self.voxel_size
-
-        # Shift and scale to the range [-1, 1]
-        norm_points = 2.0 * scaled_points - 1.0
+        voxel_center = voxel_coords * self.voxel_size + self.voxel_size / 2.0 # compute voxel_center in orginal coordinate system (torch.tensor)
+        points = sample['points']
 
         # Convert to tensor
-        norm_points_tensor = torch.tensor(np.asarray(norm_points))
+        points_tensor = torch.tensor(np.asarray(points))
 
         # Calculate number of queries based on the ratio and the number of points
-        num_queries_on_surface = int(len(norm_points) * self.ratio_on_surface + 1)
-        num_queries_per_std = [int(len(norm_points) * self.ratio_per_std + 1)] * 4  # A list of 4 equal values
+        num_queries_on_surface = int(len(points) * self.ratio_on_surface + 1)
+        num_queries_per_std = [int(len(points) * self.ratio_per_std + 1)] * 4  # A list of 4 equal values
+        min_range = np.min(points, axis=0)
+        max_range = np.max(points, axis=0)
 
         query_points, values = compute_udf_from_pcd(
-            norm_points_tensor,
+            points_tensor,
             num_queries_on_surface,
             self.queries_stds,
-            num_queries_per_std
-        )
+            num_queries_per_std,
+            (torch.tensor(min_range), torch.tensor(max_range))
+        ) # torch.tensor
 
-        # Convert tensors to numpy arrays:
-        query_points = query_points.cpu().numpy()
-        values = values.cpu().numpy()
+        # find the nearest voxel center for each query point
+        query_indices, _, _ = knn(query_points, torch.tensor(voxel_center).clone().detach(), 1)
+        query_indices = query_indices[:, 0]
+        relative_coords = points - voxel_center[inverse_map].cpu().numpy()
+        query_relative_coords = query_points.cpu().numpy() - voxel_center[query_indices].cpu().numpy()
 
-        # Check for NaN values:
-        nan_mask_query_points = np.isnan(query_points).any(axis=1)
-        nan_mask_values = np.isnan(values)
-
-        # Check if there are any NaNs in either query_points or values:
-        nan_mask_combined = nan_mask_query_points | nan_mask_values
-
-        # If there are any NaNs, print a warning and remove them:
-        if np.any(nan_mask_combined):
-            # print(f"Warning: found NaN in data, removing corresponding rows.")
-            query_points = query_points[~nan_mask_combined]
-            values = values[~nan_mask_combined]
-
-        # Determine which voxel each query point belongs to
-        # Start by scaling and shifting query points back to the original coordinates
-        unscaled_query_points = (query_points + 1.0) / 2.0 * self.voxel_size
-        unscaled_query_points += np.min(sample['points'], 0)
-
-        # Quantize the query points to determine voxel indices
-        query_voxel_coords = np.floor(unscaled_query_points / self.voxel_size)
-
-        # Prepare for voxel_indices
-        voxel_indices_set = set(map(tuple, voxel_coords.tolist()))  # for quick lookup
-
-        valid_indices = []
-        valid_query_points = []
-        valid_values = []
-
-        # For each voxel coordinate, check if the current query voxel coordinate matches
-        # Convert your numpy array to torch tensor and to type int32
-        query_voxel_coords_torch = torch.from_numpy(query_voxel_coords).int()
-
-        # Initialize an indices tensor with shape (N,) and set all values to -1
-        indices = torch.full((query_voxel_coords_torch.shape[0],), -1, dtype=torch.int32)
-
-        # Loop through each entry in query_voxel_coords_torch
-        for idx, qvc in enumerate(query_voxel_coords_torch):
-            # Compare the current entry in query_voxel_coords_torch with voxel_coords
-            matches = torch.all(voxel_coords == qvc, dim=-1)
-            
-            # If there is a match, get the first index of the matching entries
-            match_indices = torch.where(matches)[0]
-            if match_indices.size(0) > 0:
-                indices[idx] = match_indices[0]
-
-        # Identify valid indices
-        valid_mask = indices != -1
-
-        # Filter query_points and query_values using the mask
-        valid_query_points = query_points[valid_mask]
-        valid_values = values[valid_mask]
-
-        # Update the valid_indices tensor to only contain valid indices
-        valid_indices = indices[valid_mask]
-
-        # Convert everything to numpy
-        valid_query_points_np = valid_query_points.cpu().numpy()
-        # valid_values_np = valid_values.cpu().numpy()
-        valid_indices_np = valid_indices.cpu().numpy()
-        voxel_coords_np = voxel_coords.cpu().numpy()
+        # remove query_points outside the voxel
+        lower_bound = -self.voxel_size / 2
+        upper_bound = self.voxel_size / 2
+        # Create a mask
+        mask = (query_relative_coords >= lower_bound) & (query_relative_coords <= upper_bound)
+        # Reduce across the last dimension to get a (N, ) mask
+        mask = np.all(mask,-1)
+        query_indices = query_indices[mask]
+        query_relative_coords = query_relative_coords[mask]
+        values = values[mask].cpu().numpy()
 
         # Concatenate all the data
         data = {
-            "points": norm_points,  # N, 3
+            "points": relative_coords,  # N, 3
             "colors": sample['colors'],  # N, 3
             "labels": sample['labels'],  # N,
-            "voxel_indices": unique_map,  # N,
-            "query_points": valid_query_points_np,  # M, 3
-            "values": valid_values,  # M,
-            "query_voxel_indices": valid_indices_np,  # M, 3
-            "voxel_coords": voxel_coords_np  # K, 3
+            "voxel_indices": inverse_map,  # N,
+            "query_points": query_relative_coords,  # M, 3
+            "query_voxel_indices": query_indices,  # M,
+            "values": values,  # M,
+            "voxel_coords": voxel_coords.cpu().numpy()  # K, 3
         }
         return data
 
