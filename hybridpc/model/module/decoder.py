@@ -105,3 +105,85 @@ class ImplicitDecoder(pl.LightningModule):
 
         return x.squeeze(-1)
 
+class Dense_Generator(pl.LightningModule):
+    def __init__(self, model, num_step, threshold, filter_val):
+        super().__init__()
+        self.model = model
+        self.model.eval()
+        self.num_step = num_step
+        self.threshold = threshold
+        self.filter_val = filter_val
+
+    # def generate_point_cloud(self, data, modulations):
+    #     start = time.time()
+
+    #     # ensure data is on the correct device
+    #     inputs = data['inputs'].to(self.device)
+
+    #     # freeze model parameters
+    #     for param in self.model.parameters():
+    #         param.requires_grad = False
+
+    #     # sample_num set to 200000
+    #     sample_num = 200000
+
+    #     # Initialize samples in CUDA device
+    #     samples_cpu = np.zeros((0, 3))
+
+    #     # Initialize samples and move to CUDA device
+    #     samples = torch.rand(1, sample_num, 3).float().to(self.device) * 3 - 1.5
+    #     samples.requires_grad = True
+
+    #     encoding = self.model.encoder(inputs)
+
+    #     i = 0
+    #     while len(samples_cpu) < num_points:
+    #         print('iteration', i)
+
+    #         for j in range(num_steps):
+    #             print('refinement', j)
+    #             df_pred = torch.clamp(self.model.decoder(data, *encoding), max=self.threshold)
+    #             df_pred.sum().backward()
+    #             gradient = samples.grad.detach()
+    #             samples = samples.detach()
+    #             df_pred = df_pred.detach()
+    #             inputs = inputs.detach()
+    #             samples = samples - F.normalize(gradient, dim=2) * df_pred.reshape(-1, 1)  
+    #             samples = samples.detach()
+    #             samples.requires_grad = True
+
+    #         print('finished refinement')
+
+    #         if not i == 0:
+    #             # Move samples to CPU, detach from computation graph, convert to numpy array, and stack to samples_cpu
+    #             samples_cpu = np.vstack((samples_cpu, samples[df_pred < filter_val].detach().cpu().numpy()))
+
+    #         samples = samples[df_pred < 0.03].unsqueeze(0)
+    #         indices = torch.randint(samples.shape[1], (1, sample_num))
+    #         samples = samples[[[0, ] * sample_num], indices]
+    #         samples += (self.threshold / 3) * torch.randn(samples.shape).to(self.device)  # 3 sigma rule
+    #         samples = samples.detach()
+    #         samples.requires_grad = True
+
+    #         i += 1
+    #         print(samples_cpu.shape)
+
+    #     duration = time.time() - start
+    #     return samples_cpu, duration
+
+    # def generate_df(self, data):
+    #     # Move the inputs and points to the appropriate device
+    #     inputs = data['inputs'].to(self.device)
+    #     points = data['point_cloud'].to(self.device)
+    #     scale = data['scale']
+    #     # Compute the encoding of the input
+    #     encoding = self.model.encoder(inputs)
+
+    #     # Compute the predicted distance field for the points using the decoder
+    #     df_pred = self.model.decoder(points, *encoding).squeeze(0)
+    #     # Scale distance field back w.r.t. original point cloud scale
+    #     # The predicted distance field is returned to the cpu
+    #     df_pred_cpu = df_pred.detach().cpu().numpy()
+    #     df_pred_cpu *= scale.detach().cpu().numpy()
+
+    #     return df_pred_cpu

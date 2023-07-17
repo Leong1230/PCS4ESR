@@ -10,7 +10,7 @@ class BasicConvolutionBlock(pl.LightningModule):
         super().__init__()
         self.net = nn.Sequential(
             ME.MinkowskiConvolution(in_channels, out_channels, kernel_size=kernel_size, stride=stride, dimension=3),
-            ME.MinkowskiInstanceNorm(out_channels),
+            ME.MinkowskiBatchNorm(out_channels),
             ME.MinkowskiReLU(inplace=True))
 
     def forward(self, x):
@@ -23,7 +23,7 @@ class ResidualBlock(pl.LightningModule):
         super().__init__()
         self.downsample = None
         if norm_fn is None:
-            norm_fn = ME.MinkowskiInstanceNorm
+            norm_fn = ME.MinkowskiBatchNorm
 
         if in_channels != out_channels:
             self.downsample = nn.Sequential(

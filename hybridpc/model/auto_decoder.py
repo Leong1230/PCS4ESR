@@ -10,7 +10,7 @@ import torchmetrics
 import pytorch_lightning as pl
 import hydra
 from hybridpc.optimizer.optimizer import cosine_lr_decay
-from hybridpc.model.module import Backbone, ImplicitDecoder
+from hybridpc.model.module import Backbone, ImplicitDecoder, Dense_Generator
 from torch.nn import functional as F
 
 class AutoDecoder(pl.LightningModule):
@@ -46,6 +46,12 @@ class AutoDecoder(pl.LightningModule):
             cfg.model.network.functa_decoder.num_hidden_layers_after_skip,
             1,
         )
+
+        # self.dense_generator = Dense_Generator(
+        #     model = self.functa_decoder,
+        #     cfg.model.dense_generator.num_steps,
+        #     cfg.model.dense_generator.threshold
+        # )
       # The inner loop optimizer is applied to the latent code
         self.inner_optimizer = torch.optim.SGD([p for p in self.parameters()], lr=cfg.model.optimizer.inner_loop_lr)
 
@@ -157,14 +163,22 @@ class AutoDecoder(pl.LightningModule):
 
     # def on_validation_epoch_end(self):
     #     if self.current_epoch > self.hparams.cfg.model.network.prepare_epochs:
-    #         avg_seg_loss = torch.stack([self.trainer.callback_metrics['val/seg_loss']]).mean()
-    #         avg_value_loss = torch.stack([self.trainer.callback_metrics['val/value_loss']]).mean()
-    #         avg_total_loss = torch.stack([self.trainer.callback_metrics['val/total_loss']]).mean()
-    #         avg_iou = torch.stack([self.trainer.callback_metrics['val/iou']]).mean()
-    #         avg_acc = torch.stack([self.trainer.callback_metrics['val/acc']]).mean()
-            
-    #         self.log("avg_val_seg_loss", avg_seg_loss, prog_bar=True)
-    #         self.log("avg_val_value_loss", avg_value_loss, prog_bar=True)
-    #         self.log("avg_val_total_loss", avg_total_loss, prog_bar=True)
-    #         self.log("avg_val_iou", avg_iou, prog_bar=True)
-    #         self.log("avg_val_acc", avg_acc, prog_bar=True)
+    #         self.udf_visualization(self.data_dict)
+
+    # def udf_visualization(self, data_dict):
+    #     torch.set_grad_enabled(True)
+    #     batch_size = data_dict["voxel_coords"].shape[0]  # B voxels
+    #     latent_code = torch.rand(batch_size, self.latent_dim, requires_grad=True, device=self.device)
+
+    #     # Creating the optimizer for latent_code
+    #     latent_optimizer = torch.optim.SGD([latent_code], lr=self.hparams.cfg.model.optimizer.inner_loop_lr)
+
+    #     # Inner loop
+    #     for _ in range(self.hparams.cfg.model.optimizer.inner_loop_steps):  # Perform multiple steps
+    #         output_dict = self.forward(data_dict, latent_code)
+    #         _, value_loss,  _ = self._loss(data_dict, output_dict)
+    #         self.manual_backward(value_loss)
+
+    #         # Step the latent optimizer and zero its gradients
+    #         latent_optimizer.step()
+    #         latent_optimizer.zero_grad()

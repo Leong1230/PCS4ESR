@@ -61,10 +61,10 @@ def _sparse_collate_fn(batch):
         points.append(torch.from_numpy(b["points"]))
         colors.append(torch.from_numpy(b["colors"]))
         labels.append(torch.from_numpy(b["labels"]))
-        voxel_indices.append(b["voxel_indices"] + cumulative_voxel_coords_len)
+        voxel_indices.append(torch.from_numpy(b["voxel_indices"] + cumulative_voxel_coords_len))
         query_points.append(torch.from_numpy(b["query_points"]))
         values.append(torch.from_numpy(b["values"]))
-        query_voxel_indices.append(b["query_voxel_indices"] + cumulative_voxel_coords_len)
+        query_voxel_indices.append(torch.from_numpy(b["query_voxel_indices"] + cumulative_voxel_coords_len))
 
         # Create a batch ID for each point and query point in the batch
         batch_ids.append(torch.full((b["points"].shape[0],), fill_value=i, dtype=torch.int32))

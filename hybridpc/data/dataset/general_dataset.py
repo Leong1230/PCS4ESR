@@ -26,6 +26,7 @@ class GeneralDataset(Dataset):
         self.num_point = cfg.data.num_point
         self.rotate_num = cfg.data.rotate_num
         self.take = cfg.data.take
+        self.intake_start = cfg.data.intake_start
         self.use_relative = cfg.data.use_relative
         self.sample_entire_scene = cfg.data.udf_queries.sample_entire_scene
         self.num_queries_on_surface = cfg.data.udf_queries.num_queries_on_surface
@@ -182,7 +183,12 @@ class GeneralDataset(Dataset):
         ) # torch.tensor
 
         # find the nearest voxel center for each query point
-        query_indices, _, _ = knn(query_points, torch.tensor(voxel_center).clone().detach(), 1)
+        device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        query_points = query_points.to(device)
+        voxel_center = voxel_center.to(device)
+
+        query_indices, _, _ = knn(query_points, voxel_center, 1)
+        inverse_map = inverse_map.to(device)
         query_indices = query_indices[:, 0]
         relative_coords = points - voxel_center[inverse_map].cpu().numpy()
         query_relative_coords = query_points.cpu().numpy() - voxel_center[query_indices].cpu().numpy()
@@ -203,12 +209,23 @@ class GeneralDataset(Dataset):
             "points": relative_coords,  # N, 3
             "colors": sample['colors'],  # N, 3
             "labels": sample['labels'],  # N,
-            "voxel_indices": inverse_map,  # N,
+            "voxel_indices": inverse_map.cpu().numpy(),  # N,
             "query_points": query_relative_coords,  # M, 3
-            "query_voxel_indices": query_indices,  # M,
+            "query_voxel_indices": query_indices.cpu().numpy(),  # M,
             "values": values,  # M,
             "voxel_coords": voxel_coords.cpu().numpy()  # K, 3
         }
+        # # Concatenate all the data
+        # data = {
+        #     "points": points,  # N, 3
+        #     "colors": sample['colors'],  # N, 3
+        #     "labels": sample['labels'],  # N,
+        #     "voxel_indices": inverse_map,  # N,
+        #     "query_points": query_points[mask].cpu().numpy(),  # M, 3
+        #     "query_voxel_indices": query_indices,  # M,
+        #     "values": values,  # M,
+        #     "voxel_coords": voxel_coords.cpu().numpy()  # K, 3
+        # }
         return data
 
 
@@ -263,7 +280,7 @@ class GeneralDataset(Dataset):
         if self.take > num or self.take < 1:
             self.take = num
 
-        return filenames[:self.take], labels[:self.take]
+        return filenames[self.intake_start:self.take+self.intake_start], labels[self.intake_start:self.take+self.intake_start]
   
     def visualize_voxel(self, output):
 

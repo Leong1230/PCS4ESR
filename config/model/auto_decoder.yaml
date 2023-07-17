@@ -16,21 +16,26 @@ trainer:
 
 optimizer:
     target_: torch.optim.Adam
-    lr: 0.02
-    inner_loop_steps: 14
+    lr: 0.004
+    inner_loop_steps: 10
     inner_loop_lr: 0.1
 
 lr_decay:
   decay_start_epoch: 250
 
+dense_generator:
+  num_steps: 10
+  threshold: 0.1
+
+
 network:
   module: AutoDecoder
 
   m: 16 # 16 or 32 (U-Net hidden dimension)
-  backbone_type: Conv # Conv or UNet
+  backbone_type: UNet # Conv or UNet
   blocks: [1, 2, 3, 2, 1]
-  cluster_blocks: [1, 2]
-  block_reps: 1
+  cluster_blocks: [1, 2, 3]
+  block_reps: 2
 
   positional_encoding: Fourier # Triplane
   modulation_dim: 32

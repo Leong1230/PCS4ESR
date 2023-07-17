@@ -10,7 +10,7 @@ defaults:
   - data: base
   - model: base
 
-experiment_name: voxel-0.1_query-entire-scene_latent-32-64_overfitting-1-scene_fixed-coords-issues_run_1
+experiment_name: batch-4_voxel-0.1_query-entire-scene_latent-32-64_all-scene_backbone-unet_run_1
 project_root_path: ${hydra:runtime.cwd}
 exp_output_root_path: ${project_root_path}/../data/output/${data.dataset}/${model.network.module}/${experiment_name}
 
