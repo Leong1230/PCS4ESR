@@ -13,7 +13,7 @@ from torch.utils.data import Dataset
 import open3d as o3d
 import matplotlib.cm as cm
 from plyfile import PlyData
-from pycarus.geometry.pcd import compute_udf_from_pcd, knn 
+from pycarus.geometry.pcd import compute_udf_from_pcd, knn, compute_sdf_from_pcd
 
 
 class GeneralDataset(Dataset):
@@ -42,7 +42,7 @@ class GeneralDataset(Dataset):
             "val": cfg.data.metadata.val_list,
             "test": cfg.data.metadata.test_list
         }
-        self.filelist = os.path.join(self.dataset_root_path, self.data_map[split]) # train.txt, val.txt, test.txt
+        self.filelist = os.path.join(self.dataset_root_path, self.data_map[self.split]) # train.txt, val.txt, test.txt
         self.filenames, self.labels = self.load_filenames()
 
         if self.cfg.data.over_fitting:
@@ -50,7 +50,7 @@ class GeneralDataset(Dataset):
             self.random_idx = 0
         
         if self.in_memory:
-            print('Load ' + self.dataset_split + ' dataset into memory')
+            print('Load ' + self.split + ' dataset into memory')
             self.samples = [self.read_file(os.path.join(self.dataset_root_path, self.dataset_split, f))
                             for f in tqdm(self.filenames, ncols=80, leave=False)]    
             self.data = []

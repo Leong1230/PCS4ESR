@@ -7,7 +7,9 @@ import torch.nn as nn
 import numpy as np
 import math
 import torchmetrics
+import open3d as o3d
 import pytorch_lightning as pl
+import matplotlib.pyplot as plt
 import hydra
 from hybridpc.optimizer.optimizer import cosine_lr_decay
 from hybridpc.model.module import Backbone, ImplicitDecoder, Dense_Generator
@@ -36,7 +38,7 @@ class AutoDecoder(pl.LightningModule):
             cfg.model.network.seg_decoder.hidden_dim,
             cfg.model.network.seg_decoder.num_hidden_layers_before_skip,
             cfg.model.network.seg_decoder.num_hidden_layers_after_skip,
-            cfg.data.category_num,
+            cfg.data.category_num
         )
         self.functa_decoder = ImplicitDecoder(
             cfg.model.network.modulation_dim,
@@ -44,29 +46,28 @@ class AutoDecoder(pl.LightningModule):
             cfg.model.network.functa_decoder.hidden_dim,
             cfg.model.network.functa_decoder.num_hidden_layers_before_skip,
             cfg.model.network.functa_decoder.num_hidden_layers_after_skip,
-            1,
+            1
         )
 
-        # self.dense_generator = Dense_Generator(
-        #     model = self.functa_decoder,
-        #     cfg.model.dense_generator.num_steps,
-        #     cfg.model.dense_generator.threshold
-        # )
+        self.dense_generator = Dense_Generator(
+            self.functa_decoder,
+            cfg.data.voxel_size,
+            cfg.model.dense_generator.num_steps,
+            cfg.model.dense_generator.num_points,
+            cfg.model.dense_generator.threshold,
+            cfg.model.dense_generator.filter_val
+        )
       # The inner loop optimizer is applied to the latent code
         self.inner_optimizer = torch.optim.SGD([p for p in self.parameters()], lr=cfg.model.optimizer.inner_loop_lr)
 
 
 
     def forward(self, data_dict, latent_code):
-        # points = torch.cat([data_dict['points'], self.latent_code.repeat(data_dict['points'].size(0), 1, 1)], dim=-1)
-        # query_points = torch.cat([data_dict['query_points'], self.latent_code.repeat(data_dict['query_points'].size(0), 1, 1)], dim=-1)
-        # points = torch.cat([data_dict['points'], self.latent_code.repeat(data_dict['points'].size(0), 1)], dim=-1)
-        # query_points = torch.cat([data_dict['query_points'], self.latent_code.repeat(data_dict['query_points'].size(0), 1)], dim=-1)
         
         modulations = self.backbone(latent_code, data_dict['voxel_coords']) # B, C
         # modulations = latent_code
-        segmentation = self.seg_decoder(modulations, data_dict['points'], data_dict["voxel_indices"])  # embeddings (B, C) coords (N, 3) indices (N, )
-        values = self.functa_decoder(modulations, data_dict['query_points'], data_dict["query_voxel_indices"]) # embeddings (B, D1) coords (M, 3) indices (M, )
+        segmentation = self.seg_decoder(modulations.F, data_dict['points'], data_dict["voxel_indices"])  # embeddings (B, C) coords (N, 3) indices (N, )
+        values = self.functa_decoder(modulations.F, data_dict['query_points'], data_dict["query_voxel_indices"]) # embeddings (B, D1) coords (M, 3) indices (M, )
 
         return {"segmentation": segmentation, "values": values}
 
@@ -76,7 +77,8 @@ class AutoDecoder(pl.LightningModule):
 
         value_loss = F.mse_loss(output_dict['values'], data_dict['values'])
 
-        # test_loss = F.mse_loss(output_dict['modulations'].F.view(-1), output_dict['latent_code'].view(-1))
+        # loss_i = torch.nn.L1Loss(reduction='none')(torch.clamp(output_dict['values'], max=self.hparams.cfg.data.udf_queries.max_dist),torch.clamp(data_dict['values'], max=self.hparams.cfg.data.udf_queries.max_dist))# out = (B,num_points) by componentwise comparing vecots of size num_samples:
+        # value_loss = loss_i.sum(-1).mean() # loss_i summed over all #num_samples samples -> out = (B,1) and mean over batch -> out = (1)
 
         return seg_loss, value_loss, self.seg_loss_weight * seg_loss + (1 - self.seg_loss_weight) * value_loss
 
@@ -132,8 +134,8 @@ class AutoDecoder(pl.LightningModule):
 
     def validation_step(self, data_dict, idx):
         torch.set_grad_enabled(True)
-        batch_size = data_dict["voxel_coords"].shape[0]  # B voxels
-        latent_code = torch.rand(batch_size, self.latent_dim, requires_grad=True, device=self.device)
+        voxel_num = data_dict["voxel_coords"].shape[0]  # K voxels
+        latent_code = torch.rand(voxel_num, self.latent_dim, requires_grad=True, device=self.device)
 
         # Creating the optimizer for latent_code
         latent_optimizer = torch.optim.SGD([latent_code], lr=self.hparams.cfg.model.optimizer.inner_loop_lr)
@@ -160,25 +162,57 @@ class AutoDecoder(pl.LightningModule):
         self.log("val/iou", iou, prog_bar=True, on_step=False, on_epoch=True, sync_dist=True)
         self.log("val/acc", acc, prog_bar=True, on_step=False, on_epoch=True, sync_dist=True)
 
+        if self.current_epoch > self.hparams.cfg.model.dense_generator.prepare_epochs:
+            self.udf_visualization(data_dict, output_dict, latent_code)
 
-    # def on_validation_epoch_end(self):
-    #     if self.current_epoch > self.hparams.cfg.model.network.prepare_epochs:
-    #         self.udf_visualization(self.data_dict)
 
-    # def udf_visualization(self, data_dict):
-    #     torch.set_grad_enabled(True)
-    #     batch_size = data_dict["voxel_coords"].shape[0]  # B voxels
-    #     latent_code = torch.rand(batch_size, self.latent_dim, requires_grad=True, device=self.device)
+    def udf_visualization(self, data_dict, output_dict, latent_code):
+        torch.set_grad_enabled(True)
 
-    #     # Creating the optimizer for latent_code
-    #     latent_optimizer = torch.optim.SGD([latent_code], lr=self.hparams.cfg.model.optimizer.inner_loop_lr)
+        # sort input values and get sorted indices
+        # sorted_values, sorted_indices = torch.sort(data_dict["values"])
 
-    #     # Inner loop
-    #     for _ in range(self.hparams.cfg.model.optimizer.inner_loop_steps):  # Perform multiple steps
-    #         output_dict = self.forward(data_dict, latent_code)
-    #         _, value_loss,  _ = self._loss(data_dict, output_dict)
-    #         self.manual_backward(value_loss)
+        # # use sorted indices to reorder output values
+        # sorted_output = output_dict["values"][sorted_indices]
 
-    #         # Step the latent optimizer and zero its gradients
-    #         latent_optimizer.step()
-    #         latent_optimizer.zero_grad()
+        # # plot
+        # plt.figure(figsize=(10, 5))
+        # plt.plot(sorted_values.cpu().numpy(), label='Input')
+        # plt.plot(sorted_output.cpu().numpy(), label='Output')
+        # plt.xlabel('Index')
+        # plt.ylabel('Value')
+        # plt.legend()
+        # plt.title('Input and Output Values')
+        # plt.show()
+
+        modulations = self.backbone(latent_code, data_dict['voxel_coords']) # B, C 
+        voxel_num = modulations.F.shape[0]
+        voxel_id = torch.randint(0, voxel_num, (1,)).item()  # Creates a single random integer between 0 and voxel_num - 1
+        dense_points, duration = self.dense_generator.generate_point_cloud(modulations.F, voxel_id)
+
+        # Create dense point cloud
+        dense_points_cloud = o3d.geometry.PointCloud()
+        dense_points_cloud.points = o3d.utility.Vector3dVector(dense_points)
+
+        # Translate the dense point cloud along z-axis by 1 unit to avoid overlap
+        dense_points_cloud.translate([0, 0, 1], relative=False)
+
+        original_points = data_dict["points"][data_dict['voxel_indices'] == voxel_id].cpu().numpy()
+        sampled_points = data_dict["query_points"][data_dict['query_voxel_indices'] == voxel_id].cpu().numpy()
+        # create point cloud for original points
+        original_points_cloud = o3d.geometry.PointCloud()
+        original_points_cloud.points = o3d.utility.Vector3dVector(original_points)
+        original_points_cloud.paint_uniform_color([1, 0, 0])  # red color
+
+        # create point cloud for sampled points
+        sampled_points_cloud = o3d.geometry.PointCloud()
+        sampled_points_cloud.points = o3d.utility.Vector3dVector(sampled_points)
+        sampled_points_cloud.paint_uniform_color([0, 1, 0])  # green color
+
+        # visualize the point clouds together
+
+
+        # Visualize both point clouds
+        o3d.visualization.draw_geometries([dense_points_cloud])
+        o3d.visualization.draw_geometries([original_points_cloud, sampled_points_cloud])
+        flag = 1
