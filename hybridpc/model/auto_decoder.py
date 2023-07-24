@@ -26,13 +26,19 @@ class AutoDecoder(pl.LightningModule):
         self.latent_dim = cfg.model.network.latent_dim
         self.seg_loss_weight = cfg.model.network.seg_loss_weight
 
-        self.backbone = Backbone(
+        self.functa_backbone = Backbone(
+            backbone_type=cfg.model.network.backbone_type,
+            input_channel=self.latent_dim, output_channel=cfg.model.network.modulation_dim, block_channels=cfg.model.network.blocks,
+            block_reps=cfg.model.network.block_reps
+        )
+        self.seg_backbone = Backbone(
             backbone_type=cfg.model.network.backbone_type,
             input_channel=self.latent_dim, output_channel=cfg.model.network.modulation_dim, block_channels=cfg.model.network.blocks,
             block_reps=cfg.model.network.block_reps
         )
 
         self.seg_decoder = ImplicitDecoder(
+            "seg",
             cfg.model.network.modulation_dim,
             cfg.model.network.seg_decoder.input_dim,
             cfg.model.network.seg_decoder.hidden_dim,
@@ -41,6 +47,7 @@ class AutoDecoder(pl.LightningModule):
             cfg.data.category_num
         )
         self.functa_decoder = ImplicitDecoder(
+            "functa",
             cfg.model.network.modulation_dim,
             cfg.model.network.functa_decoder.input_dim,
             cfg.model.network.functa_decoder.hidden_dim,
@@ -49,14 +56,14 @@ class AutoDecoder(pl.LightningModule):
             1
         )
 
-        self.dense_generator = Dense_Generator(
-            self.functa_decoder,
-            cfg.data.voxel_size,
-            cfg.model.dense_generator.num_steps,
-            cfg.model.dense_generator.num_points,
-            cfg.model.dense_generator.threshold,
-            cfg.model.dense_generator.filter_val
-        )
+        # self.dense_generator = Dense_Generator(
+        #     self.functa_decoder,
+        #     cfg.data.voxel_size,
+        #     cfg.model.dense_generator.num_steps,
+        #     cfg.model.dense_generator.num_points,
+        #     cfg.model.dense_generator.threshold,
+        #     cfg.model.dense_generator.filter_val
+        # )
       # The inner loop optimizer is applied to the latent code
         self.inner_optimizer = torch.optim.SGD([p for p in self.parameters()], lr=cfg.model.optimizer.inner_loop_lr)
 
@@ -64,10 +71,12 @@ class AutoDecoder(pl.LightningModule):
 
     def forward(self, data_dict, latent_code):
         
-        modulations = self.backbone(latent_code, data_dict['voxel_coords']) # B, C
+        seg_modulations = self.seg_backbone(latent_code, data_dict['voxel_coords']) # B, C
+        functa_modulations = self.functa_backbone(latent_code, data_dict['voxel_coords']) # B, C
+
         # modulations = latent_code
-        segmentation = self.seg_decoder(modulations.F, data_dict['points'], data_dict["voxel_indices"])  # embeddings (B, C) coords (N, 3) indices (N, )
-        values = self.functa_decoder(modulations.F, data_dict['query_points'], data_dict["query_voxel_indices"]) # embeddings (B, D1) coords (M, 3) indices (M, )
+        segmentation = self.seg_decoder(seg_modulations.F, data_dict['points'], data_dict["voxel_indices"])  # embeddings (B, C) coords (N, 3) indices (N, )
+        values = self.functa_decoder(functa_modulations.F, data_dict['query_points'], data_dict["query_voxel_indices"]) # embeddings (B, D1) coords (M, 3) indices (M, )
 
         return {"segmentation": segmentation, "values": values}
 
@@ -100,27 +109,37 @@ class AutoDecoder(pl.LightningModule):
         outer_optimizer = self.optimizers()
         latent_optimizer = torch.optim.Adam([latent_code], lr=self.hparams.cfg.model.optimizer.inner_loop_lr)
 
+        train_loss_list = []  # To store the value_loss for each step
         # Inner loop
         for _ in range(self.hparams.cfg.model.optimizer.inner_loop_steps):  # Perform multiple steps
             output_dict = self.forward(data_dict, latent_code)
-            _, value_loss, _ = self._loss(data_dict, output_dict)
+            seg_loss, value_loss, _ = self._loss(data_dict, output_dict)
             self.manual_backward(value_loss)
             
             # Step the latent optimizer and zero its gradients
             latent_optimizer.step()
             latent_optimizer.zero_grad()
+            train_loss_list.append(value_loss.item())  # Store the value_loss for this step
 
-        self.log("train/value_loss", value_loss, on_step=True, on_epoch=False)
+        
+        # After the loop, plot the value_loss for each step
+        # plt.plot(train_loss_list)
+        # plt.xlabel('Step')
+        # plt.ylabel('Value Loss')
+        # plt.show()
+        # plt.clf()  # Clear the current figure
+
+        # self.log("train/value_loss", value_loss, on_step=True, on_epoch=False)
 
         # Outer loop
         output_dict = self.forward(data_dict, latent_code)
-        _, value_loss, total_loss = self._loss(data_dict, output_dict)
+        seg_loss, value_loss, total_loss = self._loss(data_dict, output_dict)
         self.manual_backward(total_loss)
         outer_optimizer.step()
         outer_optimizer.zero_grad()
 
-        self.log("train/value_loss", value_loss, on_step=True, on_epoch=False)
-        self.log("train/loss", total_loss, on_step=True, on_epoch=False)
+        self.log("train/value_loss", value_loss, on_step=True, on_epoch=True, sync_dist=True)
+        self.log("train/loss", total_loss, on_step=True, on_epoch=True, sync_dist=True)
 
         return total_loss
 
@@ -139,9 +158,10 @@ class AutoDecoder(pl.LightningModule):
 
         # Creating the optimizer for latent_code
         latent_optimizer = torch.optim.SGD([latent_code], lr=self.hparams.cfg.model.optimizer.inner_loop_lr)
-
+        
+        value_loss_list = []  # To store the value_loss for each step
         # Inner loop
-        for _ in range(self.hparams.cfg.model.optimizer.inner_loop_steps):  # Perform multiple steps
+        for step in range(self.hparams.cfg.model.optimizer.inner_loop_steps):  # Perform multiple steps
             output_dict = self.forward(data_dict, latent_code)
             _, value_loss,  _ = self._loss(data_dict, output_dict)
             self.manual_backward(value_loss)
@@ -149,9 +169,15 @@ class AutoDecoder(pl.LightningModule):
             # Step the latent optimizer and zero its gradients
             latent_optimizer.step()
             latent_optimizer.zero_grad()
+            value_loss_list.append(value_loss.item())  # Store the value_loss for this step
 
         self.log("val/value_loss", value_loss, prog_bar=True, on_step=True, on_epoch=True, sync_dist=True)
 
+        # After the loop, plot the value_loss for each step
+        # plt.plot(value_loss_list)
+        # plt.xlabel('Step')
+        # plt.ylabel('Value Loss')
+        # plt.show()
         # No outer loop for validation
 
         # Calculating the metrics
@@ -162,57 +188,66 @@ class AutoDecoder(pl.LightningModule):
         self.log("val/iou", iou, prog_bar=True, on_step=False, on_epoch=True, sync_dist=True)
         self.log("val/acc", acc, prog_bar=True, on_step=False, on_epoch=True, sync_dist=True)
 
-        if self.current_epoch > self.hparams.cfg.model.dense_generator.prepare_epochs:
-            self.udf_visualization(data_dict, output_dict, latent_code)
+        # if self.current_epoch > self.hparams.cfg.model.dense_generator.prepare_epochs:
+        #     self.udf_visualization(data_dict, output_dict, latent_code, self.current_epoch, value_loss)
 
 
-    def udf_visualization(self, data_dict, output_dict, latent_code):
-        torch.set_grad_enabled(True)
+    # def udf_visualization(self, data_dict, output_dict, latent_code, current_epoch, value_loss):
+    #     # torch.set_grad_enabled(True)
 
-        # sort input values and get sorted indices
-        # sorted_values, sorted_indices = torch.sort(data_dict["values"])
+    # #     # sort input values and get sorted indices
+    # #     # sorted_values, sorted_indices = torch.sort(data_dict["values"])
 
-        # # use sorted indices to reorder output values
-        # sorted_output = output_dict["values"][sorted_indices]
+    # #     # # use sorted indices to reorder output values
+    # #     # sorted_output = output_dict["values"][sorted_indices]
 
-        # # plot
-        # plt.figure(figsize=(10, 5))
-        # plt.plot(sorted_values.cpu().numpy(), label='Input')
-        # plt.plot(sorted_output.cpu().numpy(), label='Output')
-        # plt.xlabel('Index')
-        # plt.ylabel('Value')
-        # plt.legend()
-        # plt.title('Input and Output Values')
-        # plt.show()
-
-        modulations = self.backbone(latent_code, data_dict['voxel_coords']) # B, C 
-        voxel_num = modulations.F.shape[0]
-        voxel_id = torch.randint(0, voxel_num, (1,)).item()  # Creates a single random integer between 0 and voxel_num - 1
-        dense_points, duration = self.dense_generator.generate_point_cloud(modulations.F, voxel_id)
-
-        # Create dense point cloud
-        dense_points_cloud = o3d.geometry.PointCloud()
-        dense_points_cloud.points = o3d.utility.Vector3dVector(dense_points)
-
-        # Translate the dense point cloud along z-axis by 1 unit to avoid overlap
-        dense_points_cloud.translate([0, 0, 1], relative=False)
-
-        original_points = data_dict["points"][data_dict['voxel_indices'] == voxel_id].cpu().numpy()
-        sampled_points = data_dict["query_points"][data_dict['query_voxel_indices'] == voxel_id].cpu().numpy()
-        # create point cloud for original points
-        original_points_cloud = o3d.geometry.PointCloud()
-        original_points_cloud.points = o3d.utility.Vector3dVector(original_points)
-        original_points_cloud.paint_uniform_color([1, 0, 0])  # red color
-
-        # create point cloud for sampled points
-        sampled_points_cloud = o3d.geometry.PointCloud()
-        sampled_points_cloud.points = o3d.utility.Vector3dVector(sampled_points)
-        sampled_points_cloud.paint_uniform_color([0, 1, 0])  # green color
-
-        # visualize the point clouds together
+    # #     # # plot
+    # #     # plt.figure(figsize=(10, 5))
+    # #     # plt.plot(sorted_values.cpu().numpy(), label='Input')
+    # #     # plt.plot(sorted_output.cpu().numpy(), label='Output')
+    # #     # plt.xlabel('Index')
+    # #     # plt.ylabel('Value')
+    # #     # plt.legend()
+    # #     # plt.title('Input and Output Values')
+    # #     # plt.show()
 
 
-        # Visualize both point clouds
-        o3d.visualization.draw_geometries([dense_points_cloud])
-        o3d.visualization.draw_geometries([original_points_cloud, sampled_points_cloud])
-        flag = 1
+    #     modulations = self.functa_backbone(latent_code, data_dict['voxel_coords']) # B, C 
+    #     voxel_num = modulations.F.shape[0]
+    #     voxel_id = torch.randint(0, voxel_num, (1,)).item()
+
+    #     dense_points, duration = self.dense_generator.generate_point_cloud(modulations.F, voxel_id)
+
+    #     # Create dense point cloud
+    #     dense_points_cloud = o3d.geometry.PointCloud()
+    #     dense_points_cloud.points = o3d.utility.Vector3dVector(dense_points)
+
+    #     # Translate the dense point cloud along z-axis by 1 unit to avoid overlap
+    #     dense_points_cloud.translate([0, 0, 1], relative=False)
+
+    #     original_points = data_dict["points"][data_dict['voxel_indices'] == voxel_id].cpu().numpy()
+    #     sampled_points = data_dict["query_points"][data_dict['query_voxel_indices'] == voxel_id].cpu().numpy()
+
+    #     # create point cloud for original points
+    #     original_points_cloud = o3d.geometry.PointCloud()
+    #     original_points_cloud.points = o3d.utility.Vector3dVector(original_points)
+    #     original_points_cloud.paint_uniform_color([1, 0, 0])  # red color
+
+    #     # create point cloud for sampled points
+    #     sampled_points_cloud = o3d.geometry.PointCloud()
+    #     sampled_points_cloud.points = o3d.utility.Vector3dVector(sampled_points)
+    #     sampled_points_cloud.paint_uniform_color([0, 1, 0])  # green color
+
+    #     # Merge original and sampled point clouds
+    #     merged_points_cloud = original_points_cloud + sampled_points_cloud
+
+    #     # visualize the point clouds
+    #     o3d.visualization.draw_geometries([dense_points_cloud])
+    #     o3d.visualization.draw_geometries([merged_points_cloud])
+
+    #     # Save the point clouds
+    #     save_dir = os.path.join(self.hparams.cfg.exp_output_root_path, 'voxel_visualizations')
+    #     o3d.io.write_point_cloud(os.path.join(save_dir, 'voxel_' + str(self.hparams.cfg.data.voxel_size) + '_epoch_' + str(current_epoch) + 'value_loss_' + '{:.5f}'.format(value_loss.item()) + '_dense.ply'), dense_points_cloud)
+    #     o3d.io.write_point_cloud(os.path.join(save_dir, 'voxel_' + str(self.hparams.cfg.data.voxel_size) + '_epoch_' + str(current_epoch) + '_value_loss_' + '{:.5f}'.format(value_loss.item()) + '_merged.ply'), merged_points_cloud)
+
+    #     flag = 1

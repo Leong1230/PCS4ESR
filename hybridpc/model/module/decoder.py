@@ -58,6 +58,7 @@ class CoordsEncoder(pl.LightningModule):
 class ImplicitDecoder(pl.LightningModule):
     def __init__(
         self,
+        type: str,
         embed_dim: int,
         in_dim: int,
         hidden_dim: int,
@@ -83,7 +84,10 @@ class ImplicitDecoder(pl.LightningModule):
         for _ in range(num_hidden_layes_after_skip):
             after_skip.append(nn.Sequential(nn.Linear(hidden_dim, hidden_dim), nn.ReLU()))
         after_skip.append(nn.Linear(hidden_dim, out_dim))
+        if self.type == 'functa':
+            after_skip.append(nn.ReLU())
         self.after_skip = nn.Sequential(*after_skip)
+        
 
     def forward(self, embeddings: Tensor, coords: Tensor, index: Tensor) -> Tensor:
         # embeddings (B, D1)

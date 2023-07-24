@@ -10,7 +10,7 @@ defaults:
   - data: base
   - model: base
 
-experiment_name: batch-1_voxel-0.1_overfitting-1-scenes_latent-32-64_3-inner_visualization_debug
+experiment_name: backbone-2_run_1
 project_root_path: ${hydra:runtime.cwd}
 exp_output_root_path: ${project_root_path}/../data/output/${data.dataset}/${model.network.module}/${experiment_name}
 

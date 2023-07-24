@@ -215,17 +215,37 @@ class GeneralDataset(Dataset):
             "values": values,  # M,
             "voxel_coords": voxel_coords.cpu().numpy()  # K, 3
         }
-        # # Concatenate all the data
-        # data = {
-        #     "points": points,  # N, 3
-        #     "colors": sample['colors'],  # N, 3
-        #     "labels": sample['labels'],  # N,
-        #     "voxel_indices": inverse_map,  # N,
-        #     "query_points": query_points[mask].cpu().numpy(),  # M, 3
-        #     "query_voxel_indices": query_indices,  # M,
-        #     "values": values,  # M,
-        #     "voxel_coords": voxel_coords.cpu().numpy()  # K, 3
-        # }
+        # # computing voxel center coordinates
+        # voxel_centers = self.voxel_size * voxel_coords[data['voxel_indices']] + self.voxel_size / 2
+
+        # # recovering the absolute coordinates of points
+        # absolute_points = relative_coords + voxel_centers.cpu().numpy()
+
+        # # recover query points
+        # query_voxel_indices = data["query_voxel_indices"]
+        # query_points = data["query_points"]
+        # query_voxel_centers = self.voxel_size * voxel_coords[query_voxel_indices] + self.voxel_size / 2
+        # query_absolute_points = query_points + query_voxel_centers.cpu().numpy()
+
+        # # Create Open3D point cloud for points
+        # pcd = o3d.geometry.PointCloud()
+        # pcd.points = o3d.utility.Vector3dVector(absolute_points)
+        # pcd.colors = o3d.utility.Vector3dVector(np.ones_like(absolute_points) * [1, 0, 0])  # red
+
+        # # Create Open3D point cloud for query points
+        # query_pcd = o3d.geometry.PointCloud()
+        # query_pcd.points = o3d.utility.Vector3dVector(query_absolute_points)
+        # query_pcd.colors = o3d.utility.Vector3dVector(np.ones_like(query_absolute_points) * [0, 1, 0])  # green
+
+        # # visualize the point clouds
+        # merged_points_cloud = pcd + query_pcd
+        # o3d.visualization.draw_geometries([pcd, query_pcd])
+
+        # # Save the point clouds
+        # save_dir = os.path.join(self.cfg.exp_output_root_path, 'voxel_visualizations')
+        # o3d.io.write_point_cloud(os.path.join(save_dir, 'voxel_' + str(self.cfg.data.voxel_size) + '_merged.ply'), merged_points_cloud)
+
+
         return data
 
 
