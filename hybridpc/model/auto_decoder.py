@@ -56,14 +56,14 @@ class AutoDecoder(pl.LightningModule):
             1
         )
 
-        # self.dense_generator = Dense_Generator(
-        #     self.functa_decoder,
-        #     cfg.data.voxel_size,
-        #     cfg.model.dense_generator.num_steps,
-        #     cfg.model.dense_generator.num_points,
-        #     cfg.model.dense_generator.threshold,
-        #     cfg.model.dense_generator.filter_val
-        # )
+        self.dense_generator = Dense_Generator(
+            self.functa_decoder,
+            cfg.data.voxel_size,
+            cfg.model.dense_generator.num_steps,
+            cfg.model.dense_generator.num_points,
+            cfg.model.dense_generator.threshold,
+            cfg.model.dense_generator.filter_val
+        )
       # The inner loop optimizer is applied to the latent code
         self.inner_optimizer = torch.optim.SGD([p for p in self.parameters()], lr=cfg.model.optimizer.inner_loop_lr)
 
@@ -157,7 +157,7 @@ class AutoDecoder(pl.LightningModule):
         latent_code = torch.rand(voxel_num, self.latent_dim, requires_grad=True, device=self.device)
 
         # Creating the optimizer for latent_code
-        latent_optimizer = torch.optim.SGD([latent_code], lr=self.hparams.cfg.model.optimizer.inner_loop_lr)
+        latent_optimizer = torch.optim.Adam([latent_code], lr=self.hparams.cfg.model.optimizer.inner_loop_lr)
         
         value_loss_list = []  # To store the value_loss for each step
         # Inner loop
@@ -188,66 +188,66 @@ class AutoDecoder(pl.LightningModule):
         self.log("val/iou", iou, prog_bar=True, on_step=False, on_epoch=True, sync_dist=True)
         self.log("val/acc", acc, prog_bar=True, on_step=False, on_epoch=True, sync_dist=True)
 
-        # if self.current_epoch > self.hparams.cfg.model.dense_generator.prepare_epochs:
-        #     self.udf_visualization(data_dict, output_dict, latent_code, self.current_epoch, value_loss)
+        if self.current_epoch > self.hparams.cfg.model.dense_generator.prepare_epochs:
+            self.udf_visualization(data_dict, output_dict, latent_code, self.current_epoch, value_loss)
 
 
-    # def udf_visualization(self, data_dict, output_dict, latent_code, current_epoch, value_loss):
-    #     # torch.set_grad_enabled(True)
+    def udf_visualization(self, data_dict, output_dict, latent_code, current_epoch, value_loss):
+        # torch.set_grad_enabled(True)
 
-    # #     # sort input values and get sorted indices
-    # #     # sorted_values, sorted_indices = torch.sort(data_dict["values"])
+    #     # sort input values and get sorted indices
+    #     # sorted_values, sorted_indices = torch.sort(data_dict["values"])
 
-    # #     # # use sorted indices to reorder output values
-    # #     # sorted_output = output_dict["values"][sorted_indices]
+    #     # # use sorted indices to reorder output values
+    #     # sorted_output = output_dict["values"][sorted_indices]
 
-    # #     # # plot
-    # #     # plt.figure(figsize=(10, 5))
-    # #     # plt.plot(sorted_values.cpu().numpy(), label='Input')
-    # #     # plt.plot(sorted_output.cpu().numpy(), label='Output')
-    # #     # plt.xlabel('Index')
-    # #     # plt.ylabel('Value')
-    # #     # plt.legend()
-    # #     # plt.title('Input and Output Values')
-    # #     # plt.show()
+    #     # # plot
+    #     # plt.figure(figsize=(10, 5))
+    #     # plt.plot(sorted_values.cpu().numpy(), label='Input')
+    #     # plt.plot(sorted_output.cpu().numpy(), label='Output')
+    #     # plt.xlabel('Index')
+    #     # plt.ylabel('Value')
+    #     # plt.legend()
+    #     # plt.title('Input and Output Values')
+    #     # plt.show()
 
 
-    #     modulations = self.functa_backbone(latent_code, data_dict['voxel_coords']) # B, C 
-    #     voxel_num = modulations.F.shape[0]
-    #     voxel_id = torch.randint(0, voxel_num, (1,)).item()
+        modulations = self.functa_backbone(latent_code, data_dict['voxel_coords']) # B, C 
+        voxel_num = modulations.F.shape[0]
+        voxel_id = torch.randint(0, voxel_num, (1,)).item()
 
-    #     dense_points, duration = self.dense_generator.generate_point_cloud(modulations.F, voxel_id)
+        dense_points, duration = self.dense_generator.generate_point_cloud(modulations.F, voxel_id)
 
-    #     # Create dense point cloud
-    #     dense_points_cloud = o3d.geometry.PointCloud()
-    #     dense_points_cloud.points = o3d.utility.Vector3dVector(dense_points)
+        # Create dense point cloud
+        dense_points_cloud = o3d.geometry.PointCloud()
+        dense_points_cloud.points = o3d.utility.Vector3dVector(dense_points)
 
-    #     # Translate the dense point cloud along z-axis by 1 unit to avoid overlap
-    #     dense_points_cloud.translate([0, 0, 1], relative=False)
+        # Translate the dense point cloud along z-axis by 1 unit to avoid overlap
+        dense_points_cloud.translate([0, 0, 1], relative=False)
 
-    #     original_points = data_dict["points"][data_dict['voxel_indices'] == voxel_id].cpu().numpy()
-    #     sampled_points = data_dict["query_points"][data_dict['query_voxel_indices'] == voxel_id].cpu().numpy()
+        original_points = data_dict["points"][data_dict['voxel_indices'] == voxel_id].cpu().numpy()
+        sampled_points = data_dict["query_points"][data_dict['query_voxel_indices'] == voxel_id].cpu().numpy()
 
-    #     # create point cloud for original points
-    #     original_points_cloud = o3d.geometry.PointCloud()
-    #     original_points_cloud.points = o3d.utility.Vector3dVector(original_points)
-    #     original_points_cloud.paint_uniform_color([1, 0, 0])  # red color
+        # create point cloud for original points
+        original_points_cloud = o3d.geometry.PointCloud()
+        original_points_cloud.points = o3d.utility.Vector3dVector(original_points)
+        original_points_cloud.paint_uniform_color([1, 0, 0])  # red color
 
-    #     # create point cloud for sampled points
-    #     sampled_points_cloud = o3d.geometry.PointCloud()
-    #     sampled_points_cloud.points = o3d.utility.Vector3dVector(sampled_points)
-    #     sampled_points_cloud.paint_uniform_color([0, 1, 0])  # green color
+        # create point cloud for sampled points
+        sampled_points_cloud = o3d.geometry.PointCloud()
+        sampled_points_cloud.points = o3d.utility.Vector3dVector(sampled_points)
+        sampled_points_cloud.paint_uniform_color([0, 1, 0])  # green color
 
-    #     # Merge original and sampled point clouds
-    #     merged_points_cloud = original_points_cloud + sampled_points_cloud
+        # Merge original and sampled point clouds
+        merged_points_cloud = original_points_cloud + sampled_points_cloud
 
-    #     # visualize the point clouds
-    #     o3d.visualization.draw_geometries([dense_points_cloud])
-    #     o3d.visualization.draw_geometries([merged_points_cloud])
+        # visualize the point clouds
+        o3d.visualization.draw_geometries([dense_points_cloud])
+        o3d.visualization.draw_geometries([merged_points_cloud])
 
-    #     # Save the point clouds
-    #     save_dir = os.path.join(self.hparams.cfg.exp_output_root_path, 'voxel_visualizations')
-    #     o3d.io.write_point_cloud(os.path.join(save_dir, 'voxel_' + str(self.hparams.cfg.data.voxel_size) + '_epoch_' + str(current_epoch) + 'value_loss_' + '{:.5f}'.format(value_loss.item()) + '_dense.ply'), dense_points_cloud)
-    #     o3d.io.write_point_cloud(os.path.join(save_dir, 'voxel_' + str(self.hparams.cfg.data.voxel_size) + '_epoch_' + str(current_epoch) + '_value_loss_' + '{:.5f}'.format(value_loss.item()) + '_merged.ply'), merged_points_cloud)
+        # Save the point clouds
+        save_dir = os.path.join(self.hparams.cfg.exp_output_root_path)
+        o3d.io.write_point_cloud(os.path.join(save_dir, 'voxel_' + str(self.hparams.cfg.data.voxel_size) + '_epoch_' + str(current_epoch) + 'value_loss_' + '{:.5f}'.format(value_loss.item()) + '_dense.ply'), dense_points_cloud)
+        o3d.io.write_point_cloud(os.path.join(save_dir, 'voxel_' + str(self.hparams.cfg.data.voxel_size) + '_epoch_' + str(current_epoch) + '_value_loss_' + '{:.5f}'.format(value_loss.item()) + '_merged.ply'), merged_points_cloud)
 
-    #     flag = 1
+        flag = 1

@@ -4,7 +4,7 @@ dataset_root_path: ${project_root_path}/../../data
 
 batch_size: 1
 num_workers: 1
-voxel_size: 0.1 #scannet default: 0.02
+voxel_size: 0.6 #scannet default: 0.02
 category_num: 21
 num_point: 200
 rotate_num: 100

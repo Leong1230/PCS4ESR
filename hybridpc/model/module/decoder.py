@@ -201,7 +201,7 @@ class Dense_Generator(pl.LightningModule):
 
             for j in range(self.num_steps):
                 print('refinement', j)
-                df_pred = torch.clamp(self.model(modulations, samples[0], index), max=self.threshold).unsqueeze(0)
+                df_pred = torch.clamp(self.model(modulations.detach(), samples[0], index), max=self.threshold).unsqueeze(0)
                 df_pred.sum().backward(retain_graph=True)
                 gradient = samples.grad.detach()
                 samples = samples.detach()
