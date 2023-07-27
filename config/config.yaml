@@ -10,7 +10,7 @@ defaults:
   - data: base
   - model: base
 
-experiment_name: latent-128_voxel-0.6_backbone-2_lr-0.0005_visualization_run_1
+experiment_name: large-unet_latent-64_voxel-0.1_backbone-2_lr-0.0015_visualization_run_2
 project_root_path: ${hydra:runtime.cwd}
 exp_output_root_path: ${project_root_path}/../data/output/${data.dataset}/${model.network.module}/${experiment_name}
 

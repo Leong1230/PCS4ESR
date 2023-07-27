@@ -88,6 +88,29 @@ class ImplicitDecoder(pl.LightningModule):
             after_skip.append(nn.ReLU())
         self.after_skip = nn.Sequential(*after_skip)
         
+    def interpolation(self, voxel_latents: Tensor, coords: Tensor, index: Tensor):
+        """Interpolates voxel features for a given set of points.
+
+        The function calculates interpolated features based on the voxel latent codes and the indices 
+        of the nearest voxels for each point. The interpolation takes into account the spatial 
+        proximity of the nearest voxels to each point.
+
+        Args:
+            voxel_latents (Tensor): A tensor containing voxel latent codes. 
+                It has the shape (M, D), where M is the number of voxels and D is the dimension of the latent space.
+
+            coords (Tensor): A tensor containing the coordinates of sampled points.
+                It has the shape (N, 3), where N is the number of sampled points and each point is represented by its 3D coordinates.
+
+            index (Tensor): A tensor containing the indices of the K nearest voxels for each sampled point.
+                It has the shape (N, K), where N is the number of sampled points and K is the number of nearest voxels considered for each point.
+
+        Returns:
+            Tensor: A tensor containing the interpolated features for all sampled points.
+                The output tensor has the shape (N, D), where N is the number of sampled points and D is the dimension of the latent space.
+        """
+
+
 
     def forward(self, embeddings: Tensor, coords: Tensor, index: Tensor) -> Tensor:
         # embeddings (B, D1)
@@ -162,6 +185,7 @@ class ImplicitDecoder(pl.LightningModule):
 #         x = self.after_skip(x)
 
 #         return x.squeeze(-1)
+
 
 
 class Dense_Generator(pl.LightningModule):

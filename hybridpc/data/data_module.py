@@ -51,6 +51,7 @@ def _sparse_collate_fn(batch):
     values = []
     query_voxel_indices = []
     voxel_coords_list = []
+    voxel_features_list = []
     voxel_coords = []
     batch_ids = []
 
@@ -58,6 +59,7 @@ def _sparse_collate_fn(batch):
 
     for i, b in enumerate(batch):
         voxel_coords_list.append(b["voxel_coords"])
+        voxel_features_list.append(b["voxel_features"])
         points.append(torch.from_numpy(b["points"]))
         colors.append(torch.from_numpy(b["colors"]))
         labels.append(torch.from_numpy(b["labels"]))
@@ -79,8 +81,9 @@ def _sparse_collate_fn(batch):
     data['query_points'] = torch.cat(query_points, dim=0)
     data['values'] = torch.cat(values, dim=0)
     data['query_voxel_indices'] = torch.cat(query_voxel_indices, dim=0)
-    fake_features = [np.zeros_like(arr) for arr in voxel_coords_list]
-    data["voxel_coords"], data["fake_features"] = ME.utils.sparse_collate(voxel_coords_list, fake_features) # size: (N, 4)
+    data["voxel_coords"], data["voxel_features"] = ME.utils.sparse_collate(
+        coords=voxel_coords_list, feats=voxel_features_list
+    ) # size: (N, 4)
     data['batch_ids'] = torch.cat(batch_ids, dim=0)
 
     return data

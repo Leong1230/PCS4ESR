@@ -6,7 +6,7 @@ from hybridpc.model.module.common import ResidualBlock, UBlock
 
 
 class Backbone(pl.LightningModule):
-    def __init__(self, backbone_type, input_channel, output_channel, block_channels, block_reps):
+    def __init__(self, backbone_type, input_channel, output_channel, block_channels, block_reps, sem_classes):
         super().__init__()
 
         sp_norm = functools.partial(ME.MinkowskiBatchNorm)
@@ -34,13 +34,24 @@ class Backbone(pl.LightningModule):
 
         self.convs = nn.Sequential(*layers)
 
+        # 2.1 semantic prediction branch
+        self.semantic_branch = nn.Sequential(
+            nn.Linear(output_channel, output_channel),
+            nn.BatchNorm1d(output_channel),
+            nn.ReLU(inplace=True),
+            nn.Linear(output_channel, sem_classes)
+        )
 
-    def forward(self, voxel_features, voxel_coordinates):
+    def forward(self, voxel_features, voxel_coordinates, v2p_map):
         output_dict = {}
         x = ME.SparseTensor(features=voxel_features, coordinates=voxel_coordinates)
         if self.backbone_type == 'Conv':
-            x = self.convs(x)
-            return x
+            unet_out = self.convs(x)
         else: 
             unet_out = self.unet(x)
-            return unet_out #B, C
+        output_dict["point_features"] = unet_out.features[v2p_map]
+        output_dict["semantic_scores"] = self.semantic_branch(output_dict["point_features"])
+        output_dict["voxel_features"] = voxel_features
+
+        return output_dict
+        

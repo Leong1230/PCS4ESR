@@ -42,6 +42,7 @@ class GeneralDataset(Dataset):
             "val": cfg.data.metadata.val_list,
             "test": cfg.data.metadata.test_list
         }
+        self.label_map = self.get_semantic_mapping_file(cfg.data.metadata.combine_file)
         self.filelist = os.path.join(self.dataset_root_path, self.data_map[self.split]) # train.txt, val.txt, test.txt
         self.filenames, self.labels = self.load_filenames()
 
@@ -159,11 +160,19 @@ class GeneralDataset(Dataset):
     
     def preprocess_sample_entire_scene(self, sample):
         # Voxelize the points
-        voxel_coords, unique_map, inverse_map = MinkowskiEngine.utils.sparse_quantize(
-            sample['points'], return_index=True, return_inverse=True, quantization_size=self.voxel_size)
+        points = sample['points']
+
+        point_features = np.zeros(shape=(len(points), 0), dtype=np.float32)
+        if self.cfg.model.network.use_color:
+            point_features = np.concatenate((point_features, sample['colors']), axis=1)
+        # if self.cfg.model.network.use_normal:
+        #     point_features = np.concatenate((point_features, sample['normals']), axis=1)
+
+        point_features = np.concatenate((point_features, points), axis=1)  # add xyz to point features
+        voxel_coords, voxel_features, unique_map, inverse_map = MinkowskiEngine.utils.sparse_quantize(
+            sample['points'], point_features, return_index=True, return_inverse=True, quantization_size=self.voxel_size)
 
         voxel_center = voxel_coords * self.voxel_size + self.voxel_size / 2.0 # compute voxel_center in orginal coordinate system (torch.tensor)
-        points = sample['points']
 
         # Convert to tensor
         points_tensor = torch.tensor(np.asarray(points))
@@ -182,14 +191,36 @@ class GeneralDataset(Dataset):
             (torch.tensor(min_range), torch.tensor(max_range))
         ) # torch.tensor
 
+        # create masks to visualize
+
+        # Number of surface queries
+        num_surface_queries = num_queries_on_surface
+
+        # Number of Gaussian queries
+        num_gaussian_queries = sum(num_queries_per_std) - num_queries_per_std[-1]# Sum of all Gaussian queries
+
+        # Number of uniform queries
+        num_uniform_queries = num_queries_per_std[-1]
+
+        # Check if we have any discrepancy in the count
+        if num_uniform_queries < 0:
+            raise ValueError('The counts of queries do not match the total number of queries in `query_points`.')
+
+        # Create masks
+        mask_surface = torch.cat((torch.ones(num_surface_queries), torch.zeros(num_gaussian_queries + num_uniform_queries))).bool().cpu().numpy()
+        mask_gaussian = torch.cat((torch.zeros(num_surface_queries), torch.ones(num_gaussian_queries), torch.zeros(num_uniform_queries))).bool().cpu().numpy()
+        mask_uniform = torch.cat((torch.zeros(num_surface_queries + num_gaussian_queries), torch.ones(num_uniform_queries))).bool().cpu().numpy()
+
         # find the nearest voxel center for each query point
         device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         query_points = query_points.to(device)
         voxel_center = voxel_center.to(device)
 
         query_indices, _, _ = knn(query_points, voxel_center, 1)
+        # query_indices, _, _ = knn(query_points, voxel_center, self.cfg.data.k_neighbours)
         inverse_map = inverse_map.to(device)
         query_indices = query_indices[:, 0]
+        # query_indices = query_indices
         relative_coords = points - voxel_center[inverse_map].cpu().numpy()
         query_relative_coords = query_points.cpu().numpy() - voxel_center[query_indices].cpu().numpy()
 
@@ -213,7 +244,8 @@ class GeneralDataset(Dataset):
             "query_points": query_relative_coords,  # M, 3
             "query_voxel_indices": query_indices.cpu().numpy(),  # M,
             "values": values,  # M,
-            "voxel_coords": voxel_coords.cpu().numpy()  # K, 3
+            "voxel_coords": voxel_coords.cpu().numpy(),  # K, 3
+            "voxel_features": voxel_features.cpu().numpy()  # K, ?
         }
         # # computing voxel center coordinates
         # voxel_centers = self.voxel_size * voxel_coords[data['voxel_indices']] + self.voxel_size / 2
@@ -226,6 +258,9 @@ class GeneralDataset(Dataset):
         # query_points = data["query_points"]
         # query_voxel_centers = self.voxel_size * voxel_coords[query_voxel_indices] + self.voxel_size / 2
         # query_absolute_points = query_points + query_voxel_centers.cpu().numpy()
+        # surface_queries = query_absolute_points[mask_surface[mask]]
+        # gaussian_queries = query_absolute_points[mask_gaussian[mask]]
+        # uniform_queries = query_absolute_points[mask_uniform[mask]]
 
         # # Create Open3D point cloud for points
         # pcd = o3d.geometry.PointCloud()
@@ -233,21 +268,40 @@ class GeneralDataset(Dataset):
         # pcd.colors = o3d.utility.Vector3dVector(np.ones_like(absolute_points) * [1, 0, 0])  # red
 
         # # Create Open3D point cloud for query points
-        # query_pcd = o3d.geometry.PointCloud()
-        # query_pcd.points = o3d.utility.Vector3dVector(query_absolute_points)
-        # query_pcd.colors = o3d.utility.Vector3dVector(np.ones_like(query_absolute_points) * [0, 1, 0])  # green
+        # surface_query_pcd = o3d.geometry.PointCloud()
+        # surface_query_pcd.points = o3d.utility.Vector3dVector(surface_queries)
+        # surface_query_pcd.colors = o3d.utility.Vector3dVector(np.ones_like(surface_queries) * [0, 1, 0])  # green
+        # # Create Open3D point cloud for query points
+        # gaussian_query_pcd = o3d.geometry.PointCloud()
+        # gaussian_query_pcd.points = o3d.utility.Vector3dVector(gaussian_queries)
+        # gaussian_query_pcd.colors = o3d.utility.Vector3dVector(np.ones_like(gaussian_queries) * [0, 1, 0])
+        # # Create Open3D point cloud for query points
+        # uniform_query_pcd = o3d.geometry.PointCloud()
+        # uniform_query_pcd.points = o3d.utility.Vector3dVector(uniform_queries)
+        # uniform_query_pcd.colors = o3d.utility.Vector3dVector(np.ones_like(uniform_queries) * [0, 1, 0])
 
         # # visualize the point clouds
-        # merged_points_cloud = pcd + query_pcd
-        # o3d.visualization.draw_geometries([pcd, query_pcd])
+        # # merged_points_cloud = pcd + query_pcd
+        # # o3d.visualization.draw_geometries([pcd, query_pcd])
 
         # # Save the point clouds
-        # save_dir = os.path.join(self.cfg.exp_output_root_path, 'voxel_visualizations')
-        # o3d.io.write_point_cloud(os.path.join(save_dir, 'voxel_' + str(self.cfg.data.voxel_size) + '_merged.ply'), merged_points_cloud)
+        # save_dir = os.path.join(self.cfg.exp_output_root_path)
+        # o3d.io.write_point_cloud(os.path.join(save_dir, 'voxel_' + str(self.cfg.data.voxel_size) + '_original.ply'), pcd)
+        # o3d.io.write_point_cloud(os.path.join(save_dir, 'voxel_' + str(self.cfg.data.voxel_size) + '_surface.ply'), surface_query_pcd)
+        # o3d.io.write_point_cloud(os.path.join(save_dir, 'voxel_' + str(self.cfg.data.voxel_size) + '_gaussian.ply'), gaussian_query_pcd)
+        # o3d.io.write_point_cloud(os.path.join(save_dir, 'voxel_' + str(self.cfg.data.voxel_size) + '_uniform.ply'), uniform_query_pcd)
 
 
         return data
-
+    
+    def get_semantic_mapping_file(file_path):
+        label_mapping = {}
+        with open(file_path, "r") as f:
+            tsv_file = csv.reader(f, delimiter="\t")
+            next(tsv_file)  # skip the header
+            for line in tsv_file:
+                label_mapping[line[1]] = int(line[4])  # use nyu40 label set
+        return label_mapping
 
 
     def random_rotation_matrix(self):
@@ -279,7 +333,15 @@ class GeneralDataset(Dataset):
             color = np.stack([vtx['red'], vtx['green'], vtx['blue']], axis=1)
             output['colors'] = color.astype(np.float32)
         if self.cfg.data.has_label:
-            label = vtx['label']
+            segmantic_labels = vtx['label']
+            for label, segs in obj_name_to_segs.items():
+                for seg in segs:
+                    verts = seg_to_verts[seg]
+                    if label not in label_map or label_map[label] not in filtered_label_map:
+                        semantic_label = -1
+                    else:
+                        semantic_label = filtered_label_map[label_map[label]]
+                    semantic_labels[verts] = semantic_label
             output['labels'] = label.astype(np.int32)
 
         return output
@@ -302,66 +364,6 @@ class GeneralDataset(Dataset):
 
         return filenames[self.intake_start:self.take+self.intake_start], labels[self.intake_start:self.take+self.intake_start]
   
-    def visualize_voxel(self, output):
-
-        # Convert data to Open3D format
-        def numpy_to_open3d(data, colors):
-            pcd = o3d.geometry.PointCloud()
-            pcd.points = o3d.utility.Vector3dVector(data)
-            pcd.colors = o3d.utility.Vector3dVector(colors / 255.0)  # assuming colors are in [0, 255]
-            return pcd
-
-        # Color mapping for labels
-        cmap = cm.get_cmap("tab20")
-
-        # Normalize labels to [0, 1]
-        normalized_labels = output['labels'].astype(float) / output['labels'].max() 
-
-        # Use labels for color
-        colors = cmap(normalized_labels)[:, :3] * 255  
-
-        pcd = numpy_to_open3d(output['points'], colors)
-        # Create an array of the same length as output['query_points'], all of color green
-        green_color = np.tile(np.array([0, 255, 0]), (len(output['query_points']), 1))
-
-        query_pcd = numpy_to_open3d(output['query_points'], green_color)
-
-        # Create a voxel grid
-        min_bound = np.array([-1, -1, -1])
-        max_bound = np.array([1, 1, 1])
-        bbox = o3d.geometry.AxisAlignedBoundingBox(min_bound=min_bound, max_bound=max_bound)
-
-        # Define the eight corners of the bounding box
-        points = np.array([
-            [min_bound[0], min_bound[1], min_bound[2]],
-            [max_bound[0], min_bound[1], min_bound[2]],
-            [max_bound[0], max_bound[1], min_bound[2]],
-            [min_bound[0], max_bound[1], min_bound[2]],
-            [min_bound[0], min_bound[1], max_bound[2]],
-            [max_bound[0], min_bound[1], max_bound[2]],
-            [max_bound[0], max_bound[1], max_bound[2]],
-            [min_bound[0], max_bound[1], max_bound[2]]
-        ])
-
-        # Define the twelve edges of the bounding box
-        lines = np.array([
-            [0, 1], [1, 2], [2, 3], [3, 0],  # bottom edges
-            [4, 5], [5, 6], [6, 7], [7, 4],  # top edges
-            [0, 4], [1, 5], [2, 6], [3, 7]   # vertical edges
-        ])
-
-        # Create a LineSet and color the lines
-        line_set = o3d.geometry.LineSet(
-            points=o3d.utility.Vector3dVector(points),
-            lines=o3d.utility.Vector2iVector(lines),
-        )
-        line_set.paint_uniform_color([0, 0, 0])  # black color
-
-        # Visualize the bounding box
-        o3d.visualization.draw_geometries([line_set])
-
-        # Visualize point cloud and voxel grid
-        o3d.visualization.draw_geometries([pcd, line_set])
 
     def __len__(self):
         return len(self.data)

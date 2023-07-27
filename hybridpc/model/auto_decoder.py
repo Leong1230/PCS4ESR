@@ -13,12 +13,14 @@ import matplotlib.pyplot as plt
 import hydra
 from hybridpc.optimizer.optimizer import cosine_lr_decay
 from hybridpc.model.module import Backbone, ImplicitDecoder, Dense_Generator
+from hybridpc.model.general_model import GeneralModel
+from hybridpc.evaluation.semantic_segmentation import *
 from torch.nn import functional as F
 
-class AutoDecoder(pl.LightningModule):
+class GeneralModel(GeneralModel):
     def __init__(self, cfg):
         super().__init__()
-        self.save_hyperparameters()
+        self.save_hyperparameters(cfg)
         # Shared latent code across both decoders
         # set automatic_optimization to False
         self.automatic_optimization = False
@@ -29,12 +31,14 @@ class AutoDecoder(pl.LightningModule):
         self.functa_backbone = Backbone(
             backbone_type=cfg.model.network.backbone_type,
             input_channel=self.latent_dim, output_channel=cfg.model.network.modulation_dim, block_channels=cfg.model.network.blocks,
-            block_reps=cfg.model.network.block_reps
+            block_reps=cfg.model.network.block_reps,
+            sem_classes=cfg.data.classes
         )
         self.seg_backbone = Backbone(
             backbone_type=cfg.model.network.backbone_type,
             input_channel=self.latent_dim, output_channel=cfg.model.network.modulation_dim, block_channels=cfg.model.network.blocks,
-            block_reps=cfg.model.network.block_reps
+            block_reps=cfg.model.network.block_reps,
+            sem_classes=cfg.data.classes
         )
 
         self.seg_decoder = ImplicitDecoder(
@@ -71,8 +75,8 @@ class AutoDecoder(pl.LightningModule):
 
     def forward(self, data_dict, latent_code):
         
-        seg_modulations = self.seg_backbone(latent_code, data_dict['voxel_coords']) # B, C
-        functa_modulations = self.functa_backbone(latent_code, data_dict['voxel_coords']) # B, C
+        seg_modulations = self.seg_backbone(latent_code, data_dict['voxel_coords'], data_dict['voxel_indices']) # B, C
+        functa_modulations = self.functa_backbone(latent_code, data_dict['voxel_coords'], data_dict['voxel_indices']) # B, C
 
         # modulations = latent_code
         segmentation = self.seg_decoder(seg_modulations.F, data_dict['points'], data_dict["voxel_indices"])  # embeddings (B, C) coords (N, 3) indices (N, )
@@ -107,6 +111,7 @@ class AutoDecoder(pl.LightningModule):
 
         # Creating the optimizer for latent_code
         outer_optimizer = self.optimizers()
+        # outer_optimizer.zero_grad() 
         latent_optimizer = torch.optim.Adam([latent_code], lr=self.hparams.cfg.model.optimizer.inner_loop_lr)
 
         train_loss_list = []  # To store the value_loss for each step
@@ -140,6 +145,13 @@ class AutoDecoder(pl.LightningModule):
 
         self.log("train/value_loss", value_loss, on_step=True, on_epoch=True, sync_dist=True)
         self.log("train/loss", total_loss, on_step=True, on_epoch=True, sync_dist=True)
+        # Calculating the metrics
+        pred_labels = torch.argmax(output_dict['segmentation'], dim=-1)  # (B, N)
+        iou = jaccard_score(data_dict['labels'].view(-1).cpu().numpy(), pred_labels.view(-1).cpu().numpy(), average=None).mean()
+        acc = (pred_labels == data_dict['labels']).float().mean()
+
+        self.log("train/iou", iou, prog_bar=True, on_step=True, on_epoch=True, sync_dist=True)
+        self.log("train/acc", acc, prog_bar=True, on_step=True, on_epoch=True, sync_dist=True)
 
         return total_loss
 
@@ -162,16 +174,17 @@ class AutoDecoder(pl.LightningModule):
         value_loss_list = []  # To store the value_loss for each step
         # Inner loop
         for step in range(self.hparams.cfg.model.optimizer.inner_loop_steps):  # Perform multiple steps
+            latent_optimizer.zero_grad()
             output_dict = self.forward(data_dict, latent_code)
-            _, value_loss,  _ = self._loss(data_dict, output_dict)
-            self.manual_backward(value_loss)
+            _, udf_loss,  _ = self._loss(data_dict, output_dict)
+            self.manual_backward(udf_loss)
 
             # Step the latent optimizer and zero its gradients
             latent_optimizer.step()
             latent_optimizer.zero_grad()
-            value_loss_list.append(value_loss.item())  # Store the value_loss for this step
+            # udf_loss_list.append(udf_loss.item())  # Store the value_loss for this step
 
-        self.log("val/value_loss", value_loss, prog_bar=True, on_step=True, on_epoch=True, sync_dist=True)
+        self.log("val/udf_loss", udf_loss, prog_bar=True, on_step=True, on_epoch=True, sync_dist=True)
 
         # After the loop, plot the value_loss for each step
         # plt.plot(value_loss_list)
@@ -181,35 +194,24 @@ class AutoDecoder(pl.LightningModule):
         # No outer loop for validation
 
         # Calculating the metrics
-        pred_labels = torch.argmax(output_dict['segmentation'], dim=-1)  # (B, N)
-        iou = jaccard_score(data_dict['labels'].view(-1).cpu().numpy(), pred_labels.view(-1).cpu().numpy(), average=None).mean()
-        acc = (pred_labels == data_dict['labels']).float().mean()
+        torch.set_grad_enabled(False)
+        output_dict = self.forward(data_dict, latent_code)
+        semantic_predictions = torch.argmax(output_dict['segm_loss'], dim=-1)  # (B, N)
+        semantic_accuracy = evaluate_semantic_accuracy(semantic_predictions, data_dict["labels"], ignore_label=-1)
+        semantic_mean_iou = evaluate_semantic_miou(semantic_predictions, data_dict["labels"], ignore_label=-1)
+        self.log(
+            "val_eval/semantic_accuracy", semantic_accuracy, on_step=False, on_epoch=True, sync_dist=True, batch_size=1
+        )
+        self.log(
+            "val_eval/semantic_mean_iou", semantic_mean_iou, on_step=False, on_epoch=True, sync_dist=True, batch_size=1
+        )
+        self.val_test_step_outputs.append((semantic_accuracy, semantic_mean_iou))
+        if self.current_epoch > self.hparams.cfg.model.network.prepare_epochs:
+            if self.hparams.cfg.model.inference.visualize_udf:
+                self.udf_visualization(data_dict, output_dict, latent_code, self.current_epoch, udf_loss)
 
-        self.log("val/iou", iou, prog_bar=True, on_step=False, on_epoch=True, sync_dist=True)
-        self.log("val/acc", acc, prog_bar=True, on_step=False, on_epoch=True, sync_dist=True)
 
-        if self.current_epoch > self.hparams.cfg.model.dense_generator.prepare_epochs:
-            self.udf_visualization(data_dict, output_dict, latent_code, self.current_epoch, value_loss)
-
-
-    def udf_visualization(self, data_dict, output_dict, latent_code, current_epoch, value_loss):
-        # torch.set_grad_enabled(True)
-
-    #     # sort input values and get sorted indices
-    #     # sorted_values, sorted_indices = torch.sort(data_dict["values"])
-
-    #     # # use sorted indices to reorder output values
-    #     # sorted_output = output_dict["values"][sorted_indices]
-
-    #     # # plot
-    #     # plt.figure(figsize=(10, 5))
-    #     # plt.plot(sorted_values.cpu().numpy(), label='Input')
-    #     # plt.plot(sorted_output.cpu().numpy(), label='Output')
-    #     # plt.xlabel('Index')
-    #     # plt.ylabel('Value')
-    #     # plt.legend()
-    #     # plt.title('Input and Output Values')
-    #     # plt.show()
+    def udf_visualization(self, data_dict, output_dict, latent_code, current_epoch, udf_loss):
 
 
         modulations = self.functa_backbone(latent_code, data_dict['voxel_coords']) # B, C 
@@ -242,12 +244,14 @@ class AutoDecoder(pl.LightningModule):
         merged_points_cloud = original_points_cloud + sampled_points_cloud
 
         # visualize the point clouds
-        o3d.visualization.draw_geometries([dense_points_cloud])
-        o3d.visualization.draw_geometries([merged_points_cloud])
+        # o3d.visualization.draw_geometries([dense_points_cloud])
+        # o3d.visualization.draw_geometries([merged_points_cloud])
 
         # Save the point clouds
         save_dir = os.path.join(self.hparams.cfg.exp_output_root_path)
-        o3d.io.write_point_cloud(os.path.join(save_dir, 'voxel_' + str(self.hparams.cfg.data.voxel_size) + '_epoch_' + str(current_epoch) + 'value_loss_' + '{:.5f}'.format(value_loss.item()) + '_dense.ply'), dense_points_cloud)
-        o3d.io.write_point_cloud(os.path.join(save_dir, 'voxel_' + str(self.hparams.cfg.data.voxel_size) + '_epoch_' + str(current_epoch) + '_value_loss_' + '{:.5f}'.format(value_loss.item()) + '_merged.ply'), merged_points_cloud)
+        o3d.io.write_point_cloud(os.path.join(save_dir, 'voxel_' + str(self.hparams.cfg.data.voxel_size) + '_epoch_' + str(current_epoch) + 'udf_loss_' + '{:.5f}'.format(udf_loss.item()) + '_dense.ply'), dense_points_cloud)
+        o3d.io.write_point_cloud(os.path.join(save_dir, 'voxel_' + str(self.hparams.cfg.data.voxel_size) + '_epoch_' + str(current_epoch) + '_udf_loss_' + '{:.5f}'.format(udf_loss.item()) + '_merged.ply'), merged_points_cloud)
 
         flag = 1
+
+
