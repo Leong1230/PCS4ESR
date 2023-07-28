@@ -51,7 +51,8 @@ class Backbone(pl.LightningModule):
             unet_out = self.unet(x)
         output_dict["point_features"] = unet_out.features[v2p_map]
         output_dict["semantic_scores"] = self.semantic_branch(output_dict["point_features"])
-        output_dict["voxel_features"] = voxel_features
+        output_dict["voxel_features"] = unet_out
+        # output_dict["voxel_coords"] = voxel_coordinates
 
         return output_dict
         

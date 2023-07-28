@@ -22,7 +22,6 @@ class GeneralDataset(Dataset):
         self.split = 'train' if self.cfg.data.over_fitting else split # use only train set for overfitting
         self.dataset_root_path = cfg.data.dataset_path
         self.voxel_size = cfg.data.voxel_size
-        self.category_num = cfg.data.category_num
         self.num_point = cfg.data.num_point
         self.rotate_num = cfg.data.rotate_num
         self.take = cfg.data.take
@@ -42,135 +41,157 @@ class GeneralDataset(Dataset):
             "val": cfg.data.metadata.val_list,
             "test": cfg.data.metadata.test_list
         }
-        self.label_map = self.get_semantic_mapping_file(cfg.data.metadata.combine_file)
-        self.filelist = os.path.join(self.dataset_root_path, self.data_map[self.split]) # train.txt, val.txt, test.txt
-        self.filenames, self.labels = self.load_filenames()
-
-        if self.cfg.data.over_fitting:
-            # self.random_idx = random.randint(0, len(self.filenames) - 1)
-            self.random_idx = 0
-        
-        if self.in_memory:
-            print('Load ' + self.split + ' dataset into memory')
-            self.samples = [self.read_file(os.path.join(self.dataset_root_path, self.dataset_split, f))
-                            for f in tqdm(self.filenames, ncols=80, leave=False)]    
-            self.data = []
-            for sample in tqdm(self.samples, desc="Voxelizing and Sample points", ncols=80):
-                if self.sample_entire_scene:
-                    processed_sample = self.preprocess_sample_entire_scene(sample)
-                else:
-                    processed_sample = self.preprocess_sample(sample)
-                self.data.append(processed_sample)
-
-    def preprocess_sample(self, sample):
-        # Voxelize the points
-        voxel_coords, unique_map, inverse_map = MinkowskiEngine.utils.sparse_quantize(
-            sample['points'], return_index=True, return_inverse=True, quantization_size=self.voxel_size)
-
-        # Get unique voxel coordinates and count the number of points per voxel
-        unique_voxel_coords, counts = np.unique(inverse_map, return_counts=True, axis=0)
-        
-        # Compute the number of unique labels per voxel
-        labels_per_voxel = [np.unique(sample['labels'][inverse_map == i]) for i in range(len(unique_voxel_coords))]
-        num_labels_per_voxel = [len(labels) for labels in labels_per_voxel]
-        all_points = []
-        all_colors = []
-        all_labels = []
-        all_query_points = []
-        all_values = []
-        all_voxel_indices = []
-        all_query_voxel_indices = []
-
-        # Initialize counter for non-empty voxels
-        num_non_empty_voxels = 0
-        for voxel_idx in range(len(unique_voxel_coords)):
-            mask = (inverse_map == voxel_idx)
-
-            points_in_selected_voxel = sample['points'][mask]
-            num_points_in_voxel = len(points_in_selected_voxel)
-
-            if num_points_in_voxel == 0:  # Skip if there are no points in the voxel
-                continue
-            # Assume points_in_selected_voxel is your points tensor of shape (N, 3)
-            # and voxel_size is the size of your voxel
-
-            # Shift the points to the range [0, voxel_size]
-            points_in_selected_voxel -= np.min(points_in_selected_voxel, 0)
-
-            # Scale to the range [0, 1]
-            points_in_selected_voxel /= self.voxel_size
-
-            # Shift and scale to the range [-1, 1]
-            norm_points_in_selected_voxel = 2.0 * points_in_selected_voxel - 1.0
-
-            norm_points_in_selected_voxel_tensor = torch.tensor(np.asarray(norm_points_in_selected_voxel))
-
-            # Calculate number of queries based on the ratio and the number of points in the voxel
-            num_queries_on_surface = int(num_points_in_voxel * self.ratio_on_surface + 1)
-            num_queries_per_std = [int(num_points_in_voxel * self.ratio_per_std + 1)] * 4  # A list of 4 equal values
-
-            query_points, values = compute_udf_from_pcd(
-                norm_points_in_selected_voxel_tensor,
-                num_queries_on_surface,
-                self.queries_stds,
-                num_queries_per_std
-            )
-
-            # Convert tensors to numpy arrays:
-            query_points = query_points.cpu().numpy()
-            values = values.cpu().numpy()
-
-            # Check for NaN values:
-            nan_mask_query_points = np.isnan(query_points).any(axis=1)
-            nan_mask_values = np.isnan(values)
-
-            # Check if there are any NaNs in either query_points or values:
-            nan_mask_combined = nan_mask_query_points | nan_mask_values
-
-            # If there are any NaNs, print a warning and remove them:
-            if np.any(nan_mask_combined):
-                # print(f"Warning: found NaN in data, removing corresponding rows.")
-                query_points = query_points[~nan_mask_combined]
-                values = values[~nan_mask_combined]
-
-            if self.use_relative:
-                all_points.append(norm_points_in_selected_voxel)  # Output points in not normalized within each voxel
+        self._load_from_disk()
+        for sample in tqdm(self.scenes, desc="Voxelizing and Sample points", ncols=80):
+            if self.sample_entire_scene:
+                processed_sample = self.preprocess_sample_entire_scene(sample)
             else:
-                all_points.append(points_in_selected_voxel)  # Output points in not normalized within each voxel
-            all_colors.append(sample['colors'][mask])
-            all_labels.append(sample['labels'][mask])
-            all_query_points.append(query_points)  # Output query points in normalized within each voxel
-            all_values.append(values)
-            all_voxel_indices.append(np.full((points_in_selected_voxel.shape[0],), voxel_idx))
-            all_query_voxel_indices.append(np.full((query_points.shape[0],), voxel_idx))
+                processed_sample = self.preprocess_sample(sample)
+            self.data = []
+            self.data.append(processed_sample)
 
-        # Concatenate all the data
-        data = {
-            "points": np.concatenate(all_points, axis=0), #N, 3
-            "colors": np.concatenate(all_colors, axis=0), #N, 3
-            "labels": np.concatenate(all_labels, axis=0), #N, 
-            "voxel_indices": np.concatenate(all_voxel_indices, axis=0), #N, 
-            "query_points": np.concatenate(all_query_points, axis=0), # M, 3
-            "values": np.concatenate(all_values, axis=0), # M,
-            "query_voxel_indices": np.concatenate(all_query_voxel_indices, axis=0), # M, 3
-            "voxel_coords": voxel_coords.cpu().numpy() # K, 3
-            # "num_non_empty_voxels": num_non_empty_voxels # int
-        }
-        return data
+        # self.label_map = self.get_semantic_mapping_file(cfg.data.metadata.combine_file)
+        # self.filelist = os.path.join(self.dataset_root_path, self.data_map[self.split]) # train.txt, val.txt, test.txt
+        # self.filenames, self.labels = self.load_filenames()
+
+        # if self.cfg.data.over_fitting:
+        #     # self.random_idx = random.randint(0, len(self.filenames) - 1)
+        #     self.random_idx = 0
+        
+        # if self.in_memory:
+        #     print('Load ' + self.split + ' dataset into memory')
+        #     self.samples = [self.read_file(os.path.join(self.dataset_root_path, self.dataset_split, f))
+        #                     for f in tqdm(self.filenames, ncols=80, leave=False)]    
+        #     self.data = []
+        #     for sample in tqdm(self.samples, desc="Voxelizing and Sample points", ncols=80):
+        #         if self.sample_entire_scene:
+        #             processed_sample = self.preprocess_sample_entire_scene(sample)
+        #         else:
+        #             processed_sample = self.preprocess_sample(sample)
+        #         self.data.append(processed_sample)
+
+    def _load_from_disk(self):
+        with open(getattr(self.cfg.data.metadata, f"{self.split}_list")) as f:
+            self.scene_names = [line.strip() for line in f]
+        self.scenes = []
+        if self.cfg.data.over_fitting:
+            self.scene_names = self.scene_names[self.intake_start:self.take+self.intake_start]
+        for scene_name in tqdm(self.scene_names, desc=f"Loading {self.split} data from disk"):
+            scene_path = os.path.join(self.cfg.data.dataset_path, self.split, f"{scene_name}.pth")
+            scene = torch.load(scene_path)
+            scene["xyz"] -= scene["xyz"].mean(axis=0)
+            scene["rgb"] = scene["rgb"].astype(np.float32) / 127.5 - 1
+            self.scenes.append(scene) 
+
+    # def preprocess_sample(self, sample):
+    #     # Voxelize the points
+    #     voxel_coords, unique_map, inverse_map = MinkowskiEngine.utils.sparse_quantize(
+    #         sample['points'], return_index=True, return_inverse=True, quantization_size=self.voxel_size)
+
+    #     # Get unique voxel coordinates and count the number of points per voxel
+    #     unique_voxel_coords, counts = np.unique(inverse_map, return_counts=True, axis=0)
+        
+    #     # Compute the number of unique labels per voxel
+    #     labels_per_voxel = [np.unique(sample['labels'][inverse_map == i]) for i in range(len(unique_voxel_coords))]
+    #     num_labels_per_voxel = [len(labels) for labels in labels_per_voxel]
+    #     all_points = []
+    #     all_colors = []
+    #     all_labels = []
+    #     all_query_points = []
+    #     all_values = []
+    #     all_voxel_indices = []
+    #     all_query_voxel_indices = []
+
+    #     # Initialize counter for non-empty voxels
+    #     num_non_empty_voxels = 0
+    #     for voxel_idx in range(len(unique_voxel_coords)):
+    #         mask = (inverse_map == voxel_idx)
+
+    #         points_in_selected_voxel = sample['points'][mask]
+    #         num_points_in_voxel = len(points_in_selected_voxel)
+
+    #         if num_points_in_voxel == 0:  # Skip if there are no points in the voxel
+    #             continue
+    #         # Assume points_in_selected_voxel is your points tensor of shape (N, 3)
+    #         # and voxel_size is the size of your voxel
+
+    #         # Shift the points to the range [0, voxel_size]
+    #         points_in_selected_voxel -= np.min(points_in_selected_voxel, 0)
+
+    #         # Scale to the range [0, 1]
+    #         points_in_selected_voxel /= self.voxel_size
+
+    #         # Shift and scale to the range [-1, 1]
+    #         norm_points_in_selected_voxel = 2.0 * points_in_selected_voxel - 1.0
+
+    #         norm_points_in_selected_voxel_tensor = torch.tensor(np.asarray(norm_points_in_selected_voxel))
+
+    #         # Calculate number of queries based on the ratio and the number of points in the voxel
+    #         num_queries_on_surface = int(num_points_in_voxel * self.ratio_on_surface + 1)
+    #         num_queries_per_std = [int(num_points_in_voxel * self.ratio_per_std + 1)] * 4  # A list of 4 equal values
+
+    #         query_points, values = compute_udf_from_pcd(
+    #             norm_points_in_selected_voxel_tensor,
+    #             num_queries_on_surface,
+    #             self.queries_stds,
+    #             num_queries_per_std
+    #         )
+
+    #         # Convert tensors to numpy arrays:
+    #         query_points = query_points.cpu().numpy()
+    #         values = values.cpu().numpy()
+
+    #         # Check for NaN values:
+    #         nan_mask_query_points = np.isnan(query_points).any(axis=1)
+    #         nan_mask_values = np.isnan(values)
+
+    #         # Check if there are any NaNs in either query_points or values:
+    #         nan_mask_combined = nan_mask_query_points | nan_mask_values
+
+    #         # If there are any NaNs, print a warning and remove them:
+    #         if np.any(nan_mask_combined):
+    #             # print(f"Warning: found NaN in data, removing corresponding rows.")
+    #             query_points = query_points[~nan_mask_combined]
+    #             values = values[~nan_mask_combined]
+
+    #         if self.use_relative:
+    #             all_points.append(norm_points_in_selected_voxel)  # Output points in not normalized within each voxel
+    #         else:
+    #             all_points.append(points_in_selected_voxel)  # Output points in not normalized within each voxel
+    #         all_colors.append(sample['colors'][mask])
+    #         all_labels.append(sample['labels'][mask])
+    #         all_query_points.append(query_points)  # Output query points in normalized within each voxel
+    #         all_values.append(values)
+    #         all_voxel_indices.append(np.full((points_in_selected_voxel.shape[0],), voxel_idx))
+    #         all_query_voxel_indices.append(np.full((query_points.shape[0],), voxel_idx))
+
+    #     # Concatenate all the data
+    #     data = {
+    #         "points": np.concatenate(all_points, axis=0), #N, 3
+    #         "colors": np.concatenate(all_colors, axis=0), #N, 3
+    #         "labels": np.concatenate(all_labels, axis=0), #N, 
+    #         "voxel_indices": np.concatenate(all_voxel_indices, axis=0), #N, 
+    #         "query_points": np.concatenate(all_query_points, axis=0), # M, 3
+    #         "values": np.concatenate(all_values, axis=0), # M,
+    #         "query_voxel_indices": np.concatenate(all_query_voxel_indices, axis=0), # M, 3
+    #         "voxel_coords": voxel_coords.cpu().numpy() # K, 3
+    #         # "num_non_empty_voxels": num_non_empty_voxels # int
+    #     }
+    #     return data
     
     def preprocess_sample_entire_scene(self, sample):
         # Voxelize the points
-        points = sample['points']
+        points = sample['xyz']
 
         point_features = np.zeros(shape=(len(points), 0), dtype=np.float32)
         if self.cfg.model.network.use_color:
-            point_features = np.concatenate((point_features, sample['colors']), axis=1)
-        # if self.cfg.model.network.use_normal:
-        #     point_features = np.concatenate((point_features, sample['normals']), axis=1)
+            point_features = np.concatenate((point_features, sample['rgb']), axis=1)
+        if self.cfg.model.network.use_normal:
+            point_features = np.concatenate((point_features, sample['normal']), axis=1)
 
         point_features = np.concatenate((point_features, points), axis=1)  # add xyz to point features
         voxel_coords, voxel_features, unique_map, inverse_map = MinkowskiEngine.utils.sparse_quantize(
-            sample['points'], point_features, return_index=True, return_inverse=True, quantization_size=self.voxel_size)
+            sample['xyz'], point_features, return_index=True, return_inverse=True, quantization_size=self.voxel_size)
 
         voxel_center = voxel_coords * self.voxel_size + self.voxel_size / 2.0 # compute voxel_center in orginal coordinate system (torch.tensor)
 
@@ -238,14 +259,14 @@ class GeneralDataset(Dataset):
         # Concatenate all the data
         data = {
             "points": relative_coords,  # N, 3
-            "colors": sample['colors'],  # N, 3
-            "labels": sample['labels'],  # N,
+            "colors": sample['rgb'],  # N, 3
+            "labels": sample['sem_labels'],  # N,
             "voxel_indices": inverse_map.cpu().numpy(),  # N,
             "query_points": query_relative_coords,  # M, 3
             "query_voxel_indices": query_indices.cpu().numpy(),  # M,
             "values": values,  # M,
             "voxel_coords": voxel_coords.cpu().numpy(),  # K, 3
-            "voxel_features": voxel_features.cpu().numpy()  # K, ?
+            "voxel_features": voxel_features  # K, ?
         }
         # # computing voxel center coordinates
         # voxel_centers = self.voxel_size * voxel_coords[data['voxel_indices']] + self.voxel_size / 2

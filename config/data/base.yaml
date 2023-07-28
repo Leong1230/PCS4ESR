@@ -5,7 +5,6 @@ dataset_root_path: ${project_root_path}/../../data
 batch_size: 1
 num_workers: 1
 voxel_size: 0.1 #scannet default: 0.02
-category_num: 21
 num_point: 200
 rotate_num: 100
 use_relative: True # use relative query coordinates within each voxel
@@ -21,7 +20,7 @@ udf_queries:
   max_dist: 0.1
 in_memory: True # whether precompute voxel indices and load voxel into memory
 take: 1 # how many data to take for training and validation, -1 means all
-intake_start: 0
+intake_start: 2
 over_fitting: True # whether to use only one voxel for training and validation
 
 augmentation:

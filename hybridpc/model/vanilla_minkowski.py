@@ -49,11 +49,6 @@ class Vanilla_Minkowski(GeneralModel):
         optimizer = torch.optim.Adam(self.parameters(), lr=self.hparams.optimizer.lr)
         return optimizer
 
-    def configure_optimizers(self):
-        outer_optimizer = torch.optim.Adam(self.parameters(), lr=self.hparams.cfg.model.optimizer.lr)
-
-        return outer_optimizer
-
     
     def training_step(self, data_dict):
 
@@ -68,8 +63,8 @@ class Vanilla_Minkowski(GeneralModel):
 
     def on_train_epoch_end(self):
         cosine_lr_decay(
-            self.trainer.optimizers[0], self.hparams.cfg.model.optimizer.lr, self.current_epoch,
-            self.hparams.cfg.model.lr_decay.decay_start_epoch, self.hparams.cfg.model.trainer.max_epochs, 1e-6
+            self.trainer.optimizers[0], self.hparams.model.optimizer.lr, self.current_epoch,
+            self.hparams.model.lr_decay.decay_start_epoch, self.hparams.model.trainer.max_epochs, 1e-6
         )
 
     def validation_step(self, data_dict, idx):
@@ -78,14 +73,7 @@ class Vanilla_Minkowski(GeneralModel):
 
         self.log("val/seg_loss", seg_loss, on_step=True, on_epoch=True, sync_dist=True, batch_size=1)
 
-        # After the loop, plot the value_loss for each step
-        # plt.plot(value_loss_list)
-        # plt.xlabel('Step')
-        # plt.ylabel('Value Loss')
-        # plt.show()
-        # No outer loop for validation
-
-        # Calculating the metrics
+      # Calculating the metrics
         semantic_predictions = torch.argmax(output_dict['seg_loss'], dim=-1)  # (B, N)
         semantic_accuracy = evaluate_semantic_accuracy(semantic_predictions, data_dict["labels"], ignore_label=-1)
         semantic_mean_iou = evaluate_semantic_miou(semantic_predictions, data_dict["labels"], ignore_label=-1)

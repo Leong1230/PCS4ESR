@@ -17,9 +17,9 @@ from hybridpc.model.general_model import GeneralModel
 from hybridpc.evaluation.semantic_segmentation import *
 from torch.nn import functional as F
 
-class GeneralModel(GeneralModel):
+class AutoDecoder(GeneralModel):
     def __init__(self, cfg):
-        super().__init__()
+        super().__init__(cfg)
         self.save_hyperparameters(cfg)
         # Shared latent code across both decoders
         # set automatic_optimization to False
@@ -48,7 +48,7 @@ class GeneralModel(GeneralModel):
             cfg.model.network.seg_decoder.hidden_dim,
             cfg.model.network.seg_decoder.num_hidden_layers_before_skip,
             cfg.model.network.seg_decoder.num_hidden_layers_after_skip,
-            cfg.data.category_num
+            cfg.data.classes
         )
         self.functa_decoder = ImplicitDecoder(
             "functa",
@@ -79,14 +79,14 @@ class GeneralModel(GeneralModel):
         functa_modulations = self.functa_backbone(latent_code, data_dict['voxel_coords'], data_dict['voxel_indices']) # B, C
 
         # modulations = latent_code
-        segmentation = self.seg_decoder(seg_modulations.F, data_dict['points'], data_dict["voxel_indices"])  # embeddings (B, C) coords (N, 3) indices (N, )
-        values = self.functa_decoder(functa_modulations.F, data_dict['query_points'], data_dict["query_voxel_indices"]) # embeddings (B, D1) coords (M, 3) indices (M, )
+        segmentation = self.seg_decoder(seg_modulations['voxel_features'].F, data_dict['points'], data_dict["voxel_indices"])  # embeddings (B, C) coords (N, 3) indices (N, )
+        values = self.functa_decoder(functa_modulations['voxel_features'].F, data_dict['query_points'], data_dict["query_voxel_indices"]) # embeddings (B, D1) coords (M, 3) indices (M, )
 
         return {"segmentation": segmentation, "values": values}
 
     def _loss(self, data_dict, output_dict):
         # seg_loss = F.cross_entropy(output_dict['segmentation'].view(-1, self.hparams.cfg.data.category_num), data_dict['labels'].view(-1))
-        seg_loss = F.cross_entropy(output_dict['segmentation'], data_dict['labels'])
+        seg_loss = F.cross_entropy(output_dict['segmentation'], data_dict['labels'].long(), ignore_index=-1)
 
         value_loss = F.mse_loss(output_dict['values'], data_dict['values'])
 
@@ -100,7 +100,7 @@ class GeneralModel(GeneralModel):
     #     return optimizer
 
     def configure_optimizers(self):
-        outer_optimizer = torch.optim.Adam(self.parameters(), lr=self.hparams.cfg.model.optimizer.lr)
+        outer_optimizer = torch.optim.Adam(self.parameters(), lr=self.hparams.model.optimizer.lr)
 
         return outer_optimizer
 
@@ -112,11 +112,11 @@ class GeneralModel(GeneralModel):
         # Creating the optimizer for latent_code
         outer_optimizer = self.optimizers()
         # outer_optimizer.zero_grad() 
-        latent_optimizer = torch.optim.Adam([latent_code], lr=self.hparams.cfg.model.optimizer.inner_loop_lr)
+        latent_optimizer = torch.optim.Adam([latent_code], lr=self.hparams.model.optimizer.inner_loop_lr)
 
         train_loss_list = []  # To store the value_loss for each step
         # Inner loop
-        for _ in range(self.hparams.cfg.model.optimizer.inner_loop_steps):  # Perform multiple steps
+        for _ in range(self.hparams.model.optimizer.inner_loop_steps):  # Perform multiple steps
             output_dict = self.forward(data_dict, latent_code)
             seg_loss, value_loss, _ = self._loss(data_dict, output_dict)
             self.manual_backward(value_loss)
@@ -143,15 +143,18 @@ class GeneralModel(GeneralModel):
         outer_optimizer.step()
         outer_optimizer.zero_grad()
 
-        self.log("train/value_loss", value_loss, on_step=True, on_epoch=True, sync_dist=True)
-        self.log("train/loss", total_loss, on_step=True, on_epoch=True, sync_dist=True)
+        self.log("train/udf_loss", value_loss, on_step=True, on_epoch=True, sync_dist=True)
+        self.log("train/total_loss", total_loss, on_step=True, on_epoch=True, sync_dist=True)
         # Calculating the metrics
-        pred_labels = torch.argmax(output_dict['segmentation'], dim=-1)  # (B, N)
-        iou = jaccard_score(data_dict['labels'].view(-1).cpu().numpy(), pred_labels.view(-1).cpu().numpy(), average=None).mean()
-        acc = (pred_labels == data_dict['labels']).float().mean()
-
-        self.log("train/iou", iou, prog_bar=True, on_step=True, on_epoch=True, sync_dist=True)
-        self.log("train/acc", acc, prog_bar=True, on_step=True, on_epoch=True, sync_dist=True)
+        semantic_predictions = torch.argmax(output_dict['segmentation'], dim=-1)  # (B, N)
+        semantic_accuracy = evaluate_semantic_accuracy(semantic_predictions, data_dict["labels"], ignore_label=-1)
+        semantic_mean_iou = evaluate_semantic_miou(semantic_predictions, data_dict["labels"], ignore_label=-1)
+        self.log(
+            "train/semantic_accuracy", semantic_accuracy, on_step=False, on_epoch=True, sync_dist=True, batch_size=1
+        )
+        self.log(
+            "train/semantic_mean_iou", semantic_mean_iou, on_step=False, on_epoch=True, sync_dist=True, batch_size=1
+        )
 
         return total_loss
 
@@ -159,8 +162,8 @@ class GeneralModel(GeneralModel):
 
     def on_train_epoch_end(self):
         cosine_lr_decay(
-            self.trainer.optimizers[0], self.hparams.cfg.model.optimizer.lr, self.current_epoch,
-            self.hparams.cfg.model.lr_decay.decay_start_epoch, self.hparams.cfg.model.trainer.max_epochs, 1e-6
+            self.trainer.optimizers[0], self.hparams.model.optimizer.lr, self.current_epoch,
+            self.hparams.model.lr_decay.decay_start_epoch, self.hparams.model.trainer.max_epochs, 1e-6
         )
 
     def validation_step(self, data_dict, idx):
@@ -169,11 +172,11 @@ class GeneralModel(GeneralModel):
         latent_code = torch.rand(voxel_num, self.latent_dim, requires_grad=True, device=self.device)
 
         # Creating the optimizer for latent_code
-        latent_optimizer = torch.optim.Adam([latent_code], lr=self.hparams.cfg.model.optimizer.inner_loop_lr)
+        latent_optimizer = torch.optim.Adam([latent_code], lr=self.hparams.model.optimizer.inner_loop_lr)
         
         value_loss_list = []  # To store the value_loss for each step
         # Inner loop
-        for step in range(self.hparams.cfg.model.optimizer.inner_loop_steps):  # Perform multiple steps
+        for step in range(self.hparams.model.optimizer.inner_loop_steps):  # Perform multiple steps
             latent_optimizer.zero_grad()
             output_dict = self.forward(data_dict, latent_code)
             _, udf_loss,  _ = self._loss(data_dict, output_dict)
@@ -196,7 +199,7 @@ class GeneralModel(GeneralModel):
         # Calculating the metrics
         torch.set_grad_enabled(False)
         output_dict = self.forward(data_dict, latent_code)
-        semantic_predictions = torch.argmax(output_dict['segm_loss'], dim=-1)  # (B, N)
+        semantic_predictions = torch.argmax(output_dict['segmentation'], dim=-1)  # (B, N)
         semantic_accuracy = evaluate_semantic_accuracy(semantic_predictions, data_dict["labels"], ignore_label=-1)
         semantic_mean_iou = evaluate_semantic_miou(semantic_predictions, data_dict["labels"], ignore_label=-1)
         self.log(
@@ -206,8 +209,8 @@ class GeneralModel(GeneralModel):
             "val_eval/semantic_mean_iou", semantic_mean_iou, on_step=False, on_epoch=True, sync_dist=True, batch_size=1
         )
         self.val_test_step_outputs.append((semantic_accuracy, semantic_mean_iou))
-        if self.current_epoch > self.hparams.cfg.model.network.prepare_epochs:
-            if self.hparams.cfg.model.inference.visualize_udf:
+        if self.current_epoch > self.hparams.model.dense_generator.prepare_epochs:
+            if self.hparams.model.inference.visualize_udf:
                 self.udf_visualization(data_dict, output_dict, latent_code, self.current_epoch, udf_loss)
 
 
@@ -248,9 +251,9 @@ class GeneralModel(GeneralModel):
         # o3d.visualization.draw_geometries([merged_points_cloud])
 
         # Save the point clouds
-        save_dir = os.path.join(self.hparams.cfg.exp_output_root_path)
-        o3d.io.write_point_cloud(os.path.join(save_dir, 'voxel_' + str(self.hparams.cfg.data.voxel_size) + '_epoch_' + str(current_epoch) + 'udf_loss_' + '{:.5f}'.format(udf_loss.item()) + '_dense.ply'), dense_points_cloud)
-        o3d.io.write_point_cloud(os.path.join(save_dir, 'voxel_' + str(self.hparams.cfg.data.voxel_size) + '_epoch_' + str(current_epoch) + '_udf_loss_' + '{:.5f}'.format(udf_loss.item()) + '_merged.ply'), merged_points_cloud)
+        save_dir = os.path.join(self.hparams.exp_output_root_path)
+        o3d.io.write_point_cloud(os.path.join(save_dir, 'voxel_' + str(self.hparams.data.voxel_size) + '_epoch_' + str(current_epoch) + 'udf_loss_' + '{:.5f}'.format(udf_loss.item()) + '_dense.ply'), dense_points_cloud)
+        o3d.io.write_point_cloud(os.path.join(save_dir, 'voxel_' + str(self.hparams.data.voxel_size) + '_epoch_' + str(current_epoch) + '_udf_loss_' + '{:.5f}'.format(udf_loss.item()) + '_merged.ply'), merged_points_cloud)
 
         flag = 1
 
