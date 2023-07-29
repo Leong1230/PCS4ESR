@@ -42,12 +42,13 @@ class GeneralDataset(Dataset):
             "test": cfg.data.metadata.test_list
         }
         self._load_from_disk()
+        self.data = []
+
         for sample in tqdm(self.scenes, desc="Voxelizing and Sample points", ncols=80):
             if self.sample_entire_scene:
                 processed_sample = self.preprocess_sample_entire_scene(sample)
             else:
                 processed_sample = self.preprocess_sample(sample)
-            self.data = []
             self.data.append(processed_sample)
 
         # self.label_map = self.get_semantic_mapping_file(cfg.data.metadata.combine_file)
@@ -255,6 +256,29 @@ class GeneralDataset(Dataset):
         query_indices = query_indices[mask]
         query_relative_coords = query_relative_coords[mask]
         values = values[mask].cpu().numpy()
+
+        # crop
+        # if self.split == "train":
+        #     # HACK, in case there are few points left
+        #     max_tries = 20
+        #     valid_idxs_count = 0
+        #     valid_idxs = np.ones(shape=point_xyz.shape[0], dtype=bool)
+        #     if valid_idxs.shape[0] > self.max_num_point:
+        #         while max_tries > 0:
+        #             points_tmp, valid_idxs = crop(point_xyz_elastic, self.max_num_point, self.cfg.data.full_scale[1])
+        #             valid_idxs_count = np.count_nonzero(valid_idxs)
+        #             if valid_idxs_count >= (self.max_num_point // 2) and np.any(sem_labels[valid_idxs] != -1):
+        #                 point_xyz_elastic = points_tmp
+        #                 break
+        #             max_tries -= 1
+        #         if valid_idxs_count < (self.max_num_point // 2) or np.all(sem_labels[valid_idxs] == -1):
+        #             raise Exception("Over-cropped!")
+
+        #     point_xyz_elastic = point_xyz_elastic[valid_idxs]
+        #     point_xyz = point_xyz[valid_idxs]
+        #     normals = normals[valid_idxs]
+        #     colors = colors[valid_idxs]
+        #     sem_labels = sem_labels[valid_idxs]
 
         # Concatenate all the data
         data = {

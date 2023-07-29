@@ -10,7 +10,7 @@ defaults:
   - data: base
   - model: base
 
-experiment_name: large-unet_latent-64_voxel-0.1_backbone-2_lr-0.0015_visualization_run_2
+experiment_name: ${model.network.module}_overfit-${data.over_fitting}_${data.voxel_size}_latent-${model.network.latent_dim}_lr-${model.optimizer.lr}_blocks-${model.network.blocks}_run_1
 project_root_path: ${hydra:runtime.cwd}
 exp_output_root_path: ${project_root_path}/../data/output/${data.dataset}/${model.network.module}/${experiment_name}
 

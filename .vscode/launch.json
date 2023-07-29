@@ -14,7 +14,7 @@
             "args": [
                 "model=auto_decoder",
                 "data=scannet",
-                "model.trainer.max_epochs=800"
+                "model.trainer.max_epochs=512"
             ]
         }
     ]

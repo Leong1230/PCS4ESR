@@ -69,8 +69,6 @@ class AutoDecoder(GeneralModel):
             cfg.model.dense_generator.filter_val
         )
       # The inner loop optimizer is applied to the latent code
-        self.inner_optimizer = torch.optim.SGD([p for p in self.parameters()], lr=cfg.model.optimizer.inner_loop_lr)
-
 
 
     def forward(self, data_dict, latent_code):
@@ -217,11 +215,11 @@ class AutoDecoder(GeneralModel):
     def udf_visualization(self, data_dict, output_dict, latent_code, current_epoch, udf_loss):
 
 
-        modulations = self.functa_backbone(latent_code, data_dict['voxel_coords']) # B, C 
-        voxel_num = modulations.F.shape[0]
+        functa_modulations = self.functa_backbone(latent_code, data_dict['voxel_coords'], data_dict['voxel_indices']) # B, C
+        voxel_num = functa_modulations['voxel_features'].F.shape[0]
         voxel_id = torch.randint(0, voxel_num, (1,)).item()
 
-        dense_points, duration = self.dense_generator.generate_point_cloud(modulations.F, voxel_id)
+        dense_points, duration = self.dense_generator.generate_point_cloud(functa_modulations['voxel_features'].F, voxel_id)
 
         # Create dense point cloud
         dense_points_cloud = o3d.geometry.PointCloud()

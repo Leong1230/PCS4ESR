@@ -17,27 +17,51 @@ from hybridpc.model.general_model import GeneralModel
 from hybridpc.evaluation.semantic_segmentation import *
 from torch.nn import functional as F
 
-class Vanilla_Minkowski(GeneralModel):
+class VanillaMinkowski(GeneralModel):
     def __init__(self, cfg):
         super().__init__(cfg)
-        self.save_hyperparameters()
+        self.save_hyperparameters(cfg)
         # Shared latent code across both decoders
         # set automatic_optimization to False
-        self.automatic_optimization = False
-
+        # self.automatic_optimization = False
+        self.feature_in = cfg.model.network.feature_in # random_latent/ voxel_features
+        self.use_decoder = cfg.model.network.use_decoder # whether to use decoder
+        if self.feature_in == "random_latent":
+            input_channel = cfg.model.network.latent_dim
+        else: 
+            input_channel = 3 + cfg.model.network.use_color * 3 + cfg.model.network.use_normal * 3
         self.backbone = Backbone(
             backbone_type=cfg.model.network.backbone_type,
-            input_channel=self.latent_dim, output_channel=cfg.model.network.modulation_dim, block_channels=cfg.model.network.blocks,
+            input_channel=input_channel,
+            output_channel=cfg.model.network.modulation_dim, 
+            block_channels=cfg.model.network.blocks,
             block_reps=cfg.model.network.block_reps,
             sem_classes=cfg.data.classes
+        )
+        self.seg_decoder = ImplicitDecoder(
+            "seg",
+            cfg.model.network.modulation_dim,
+            cfg.model.network.seg_decoder.input_dim,
+            cfg.model.network.seg_decoder.hidden_dim,
+            cfg.model.network.seg_decoder.num_hidden_layers_before_skip,
+            cfg.model.network.seg_decoder.num_hidden_layers_after_skip,
+            cfg.data.classes
         )
         self.val_test_step_outputs = []
 
 
-    def forward(self, data_dict):
-        backbone_output_dict = self.backbone(
-            data_dict["voxel_features"], data_dict["voxe_coords"], data_dict["voxel_indices"]
+    def forward(self, data_dict, latent_code):
+        if self.feature_in == "random_latent":
+            backbone_output_dict = self.backbone(
+            latent_code, data_dict["voxel_coords"], data_dict["voxel_indices"]
         )
+        else:
+            backbone_output_dict = self.backbone(
+                data_dict["voxel_features"], data_dict["voxel_coords"], data_dict["voxel_indices"]
+            )
+        segmentation = self.seg_decoder(backbone_output_dict['voxel_features'].F, data_dict['points'], data_dict["voxel_indices"])  # embeddings (B, C) coords (N, 3) indices (N, )
+        if self.use_decoder:
+            backbone_output_dict['semantic_scores'] = segmentation
         return backbone_output_dict
 
     def _loss(self, data_dict, output_dict):
@@ -46,35 +70,43 @@ class Vanilla_Minkowski(GeneralModel):
         return seg_loss
 
     def configure_optimizers(self):
-        optimizer = torch.optim.Adam(self.parameters(), lr=self.hparams.optimizer.lr)
-        return optimizer
+        outer_optimizer = torch.optim.Adam(self.parameters(), lr=self.hparams.model.optimizer.lr)
+
+        return outer_optimizer
 
     
     def training_step(self, data_dict):
-
-        output_dict = self.forward(data_dict)
+        voxel_num = data_dict["voxel_coords"].shape[0] # B voxels
+        latent_code = torch.ones(voxel_num, self.hparams.model.network.latent_dim, requires_grad=True, device=self.device)
+        output_dict = self.forward(data_dict, latent_code)
         seg_loss = self._loss(data_dict, output_dict)
 
         self.log("train/seg_loss", seg_loss, on_step=True, on_epoch=True, sync_dist=True, batch_size=self.hparams.data.batch_size)
+        semantic_predictions = torch.argmax(output_dict['semantic_scores'], dim=-1)  # (B, N)
+        semantic_accuracy = evaluate_semantic_accuracy(semantic_predictions, data_dict["labels"], ignore_label=-1)
+        semantic_mean_iou = evaluate_semantic_miou(semantic_predictions, data_dict["labels"], ignore_label=-1)
+        self.log(
+            "train/semantic_accuracy", semantic_accuracy, on_step=False, on_epoch=True, sync_dist=True, batch_size=1
+        )
+        self.log(
+            "train/semantic_mean_iou", semantic_mean_iou, on_step=False, on_epoch=True, sync_dist=True, batch_size=1
+        )
+
 
         return seg_loss
 
     
 
-    def on_train_epoch_end(self):
-        cosine_lr_decay(
-            self.trainer.optimizers[0], self.hparams.model.optimizer.lr, self.current_epoch,
-            self.hparams.model.lr_decay.decay_start_epoch, self.hparams.model.trainer.max_epochs, 1e-6
-        )
-
     def validation_step(self, data_dict, idx):
-        output_dict = self.forward(data_dict)
+        voxel_num = data_dict["voxel_coords"].shape[0] # B voxels
+        latent_code = torch.ones(voxel_num, self.hparams.model.network.latent_dim, requires_grad=True, device=self.device)
+        output_dict = self.forward(data_dict, latent_code)
         seg_loss = self._loss(data_dict, output_dict)
 
         self.log("val/seg_loss", seg_loss, on_step=True, on_epoch=True, sync_dist=True, batch_size=1)
 
       # Calculating the metrics
-        semantic_predictions = torch.argmax(output_dict['seg_loss'], dim=-1)  # (B, N)
+        semantic_predictions = torch.argmax(output_dict['semantic_scores'], dim=-1)  # (B, N)
         semantic_accuracy = evaluate_semantic_accuracy(semantic_predictions, data_dict["labels"], ignore_label=-1)
         semantic_mean_iou = evaluate_semantic_miou(semantic_predictions, data_dict["labels"], ignore_label=-1)
         self.log(
@@ -83,5 +115,6 @@ class Vanilla_Minkowski(GeneralModel):
         self.log(
             "val_eval/semantic_mean_iou", semantic_mean_iou, on_step=False, on_epoch=True, sync_dist=True, batch_size=1
         )
+        self.val_test_step_outputs.append((semantic_accuracy, semantic_mean_iou))
 
 

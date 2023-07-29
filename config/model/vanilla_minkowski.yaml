@@ -16,23 +16,14 @@ trainer:
 
 optimizer:
     target_: torch.optim.Adam
-    lr: 0.0015
-    inner_loop_steps: 10
-    inner_loop_lr: 0.1
+    lr: 0.002
 
 lr_decay:
   decay_start_epoch: 250
 
-dense_generator:
-  num_steps: 10
-  threshold: 0.1
-  num_points: 900000
-  filter_val: 0.009
-  prepare_epochs: 450
-
 
 network:
-  module: AutoDecoder
+  module: VanillaMinkowski
 
   m: 16 # 16 or 32 (U-Net hidden dimension)
   backbone_type: UNet # Conv or UNet
@@ -42,11 +33,12 @@ network:
 
   use_color: True
   use_normal: False
+  feature_in: voxel_features # random_latent or voxel_features 
+  use_decoder: True
 
   positional_encoding: Fourier # Triplane
   modulation_dim: 64
   latent_dim: 64 #
-  seg_loss_weight: 0.5
 
   prepare_epochs: 100
 
@@ -54,12 +46,6 @@ network:
     embedding_dim: 32
 
   seg_decoder:
-    input_dim: 3
-    hidden_dim: 64
-    num_hidden_layers_before_skip: 2
-    num_hidden_layers_after_skip: 2
-
-  functa_decoder:
     input_dim: 3
     hidden_dim: 64
     num_hidden_layers_before_skip: 2

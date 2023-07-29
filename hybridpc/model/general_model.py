@@ -20,96 +20,17 @@ class GeneralModel(pl.LightningModule):
     def __init__(self, cfg):
         super().__init__()
         self.save_hyperparameters()
-        # Shared latent code across both decoders
-        # set automatic_optimization to False
-    #     self.automatic_optimization = False
-        
-    #     self.latent_dim = cfg.model.network.latent_dim
-    #     self.seg_loss_weight = cfg.model.network.seg_loss_weight
-
-    #     self.functa_backbone = Backbone(
-    #         backbone_type=cfg.model.network.backbone_type,
-    #         input_channel=self.latent_dim, output_channel=cfg.model.network.modulation_dim, block_channels=cfg.model.network.blocks,
-    #         block_reps=cfg.model.network.block_reps,
-    #         sem_classes=cfg.data.classes
-    #     )
-    #     self.seg_backbone = Backbone(
-    #         backbone_type=cfg.model.network.backbone_type,
-    #         input_channel=self.latent_dim, output_channel=cfg.model.network.modulation_dim, block_channels=cfg.model.network.blocks,
-    #         block_reps=cfg.model.network.block_reps,
-    #         sem_classes=cfg.data.classes
-    #     )
-
-    #     self.seg_decoder = ImplicitDecoder(
-    #         "seg",
-    #         cfg.model.network.modulation_dim,
-    #         cfg.model.network.seg_decoder.input_dim,
-    #         cfg.model.network.seg_decoder.hidden_dim,
-    #         cfg.model.network.seg_decoder.num_hidden_layers_before_skip,
-    #         cfg.model.network.seg_decoder.num_hidden_layers_after_skip,
-    #         cfg.data.classes
-    #     )
-    #     self.functa_decoder = ImplicitDecoder(
-    #         "functa",
-    #         cfg.model.network.modulation_dim,
-    #         cfg.model.network.functa_decoder.input_dim,
-    #         cfg.model.network.functa_decoder.hidden_dim,
-    #         cfg.model.network.functa_decoder.num_hidden_layers_before_skip,
-    #         cfg.model.network.functa_decoder.num_hidden_layers_after_skip,
-    #         1
-    #     )
-
-    #     self.dense_generator = Dense_Generator(
-    #         self.functa_decoder,
-    #         cfg.data.voxel_size,
-    #         cfg.model.dense_generator.num_steps,
-    #         cfg.model.dense_generator.num_points,
-    #         cfg.model.dense_generator.threshold,
-    #         cfg.model.dense_generator.filter_val
-    #     )
-    # #   # The inner loop optimizer is applied to the latent code
-    # #     self.inner_optimizer = torch.optim.SGD([p for p in self.parameters()], lr=cfg.model.optimizer.inner_loop_lr)
-    # #     # The outer loop optimizer is applied to the model parameters
         self.val_test_step_outputs = []
-
-
-
-    # def forward(self, data_dict, latent_code):
-        
-    #     seg_modulations = self.seg_backbone(latent_code, data_dict['voxel_coords']) # B, C
-    #     functa_modulations = self.functa_backbone(latent_code, data_dict['voxel_coords']) # B, C
-
-    #     # modulations = latent_code
-    #     seg_scores = self.seg_decoder(seg_modulations.F, data_dict['points'], data_dict["voxel_indices"])  # embeddings (B, C) coords (N, 3) indices (N, )
-    #     udf_values = self.functa_decoder(functa_modulations.F, data_dict['query_points'], data_dict["query_voxel_indices"]) # embeddings (B, D1) coords (M, 3) indices (M, )
-
-        # return {"seg_scores": seg_scores, "udf_values": udf_values}
-
-    # def _loss(self, data_dict, output_dict):
-    #     seg_loss = F.cross_entropy(output_dict['seg_scores'], data_dict['labels'].long(), ignore_index=-1)
-
-    #     udf_loss = F.mse_loss(output_dict['udf_values'], data_dict['udf_values'])
-
-    #     # loss_i = torch.nn.L1Loss(reduction='none')(torch.clamp(output_dict['values'], max=self.hparams.cfg.data.udf_queries.max_dist),torch.clamp(data_dict['values'], max=self.hparams.cfg.data.udf_queries.max_dist))# out = (B,num_points) by componentwise comparing vecots of size num_samples:
-    #     # value_loss = loss_i.sum(-1).mean() # loss_i summed over all #num_samples samples -> out = (B,1) and mean over batch -> out = (1)
-
-    #     return seg_loss, udf_loss, self.seg_loss_weight * seg_loss + (1 - self.seg_loss_weight) * udf_loss
-
-    # # def configure_optimizers(self):
-    # #     optimizer = torch.optim.Adam(self.parameters(), lr=self.hparams.optimizer.lr)
-    # #     return optimizer
-
-    # def configure_optimizers(self):
-    #     outer_optimizer = torch.optim.Adam(self.parameters(), lr=self.hparams.cfg.model.optimizer.lr)
-
-    #     return outer_optimizer
 
     
     def training_step(self, data_dict):
         pass 
 
     def on_train_epoch_end(self):
-        pass
+        cosine_lr_decay(
+            self.trainer.optimizers[0], self.hparams.model.optimizer.lr, self.current_epoch,
+            self.hparams.model.lr_decay.decay_start_epoch, self.hparams.model.trainer.max_epochs, 1e-6
+        )
 
     def validation_step(self, data_dict, idx):
         pass
