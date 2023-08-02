@@ -7,7 +7,7 @@ defaults:
 # log:
 #   WandbLogger:
 #     project: HybridPC
-#     name: hybridpc
+#     name: ${experiment_name}
 #   TensorBoardLogger:
 #     name: HybrdPC
 
@@ -27,13 +27,13 @@ network:
 
   m: 16 # 16 or 32 (U-Net hidden dimension)
   backbone_type: UNet # Conv or UNet
-  blocks: [1, 2, 3, 4, 5, 6, 7]
+  blocks: [1, 2, 3, 4, 5]
   cluster_blocks: [1, 2]
   block_reps: 2
 
   use_color: True
-  use_normal: False
-  feature_in: voxel_features # random_latent or voxel_features 
+  use_normal: True
+  feature_in: random_latent # random_latent or voxel_features 
   use_decoder: True
 
   positional_encoding: Fourier # Triplane

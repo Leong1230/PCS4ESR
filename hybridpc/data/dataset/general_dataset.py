@@ -14,6 +14,8 @@ import open3d as o3d
 import matplotlib.cm as cm
 from plyfile import PlyData
 from pycarus.geometry.pcd import compute_udf_from_pcd, knn, compute_sdf_from_pcd
+from hybridpc.util.transform import jitter, flip, rotz, elastic, crop
+
 
 
 class GeneralDataset(Dataset):
@@ -27,6 +29,7 @@ class GeneralDataset(Dataset):
         self.take = cfg.data.take
         self.intake_start = cfg.data.intake_start
         self.use_relative = cfg.data.use_relative
+        self.max_num_point = cfg.data.max_num_point
         self.sample_entire_scene = cfg.data.udf_queries.sample_entire_scene
         self.num_queries_on_surface = cfg.data.udf_queries.num_queries_on_surface
         self.queries_stds = cfg.data.udf_queries.queries_stds
@@ -44,12 +47,13 @@ class GeneralDataset(Dataset):
         self._load_from_disk()
         self.data = []
 
-        for sample in tqdm(self.scenes, desc="Voxelizing and Sample points", ncols=80):
+        for idx, sample in tqdm(enumerate(self.scenes), desc="Voxelizing and Sample points", ncols=80):
             if self.sample_entire_scene:
-                processed_sample = self.preprocess_sample_entire_scene(sample)
+                processed_sample = self.preprocess_sample_entire_scene(sample, idx)
             else:
                 processed_sample = self.preprocess_sample(sample)
             self.data.append(processed_sample)
+
 
         # self.label_map = self.get_semantic_mapping_file(cfg.data.metadata.combine_file)
         # self.filelist = os.path.join(self.dataset_root_path, self.data_map[self.split]) # train.txt, val.txt, test.txt
@@ -180,9 +184,11 @@ class GeneralDataset(Dataset):
     #     }
     #     return data
     
-    def preprocess_sample_entire_scene(self, sample):
+    def preprocess_sample_entire_scene(self, sample, idx):
         # Voxelize the points
         points = sample['xyz']
+        point_xyz = points
+        sem_labels = sample['sem_labels']
 
         point_features = np.zeros(shape=(len(points), 0), dtype=np.float32)
         if self.cfg.model.network.use_color:
@@ -257,12 +263,24 @@ class GeneralDataset(Dataset):
         query_relative_coords = query_relative_coords[mask]
         values = values[mask].cpu().numpy()
 
-        # crop
+        # elastic
+        scale = (1 / self.cfg.data.voxel_size)
+        if self.split == "train" and self.cfg.data.augmentation.elastic:
+            point_xyz_elastic = elastic(point_xyz * scale, 6 * scale // 50, 40 * scale / 50)
+            point_xyz_elastic = elastic(point_xyz_elastic, 20 * scale // 50, 160 * scale / 50)
+        else:
+            point_xyz_elastic = point_xyz * scale
+
+        point_xyz_elastic -= point_xyz_elastic.min(axis=0)
+
+        #crop
+        if all(label == -1 for label in sample['sem_labels']):
+            flag = idx
         # if self.split == "train":
         #     # HACK, in case there are few points left
         #     max_tries = 20
         #     valid_idxs_count = 0
-        #     valid_idxs = np.ones(shape=point_xyz.shape[0], dtype=bool)
+        #     valid_idxs = np.ones(shape=points.shape[0], dtype=bool)
         #     if valid_idxs.shape[0] > self.max_num_point:
         #         while max_tries > 0:
         #             points_tmp, valid_idxs = crop(point_xyz_elastic, self.max_num_point, self.cfg.data.full_scale[1])
@@ -274,10 +292,10 @@ class GeneralDataset(Dataset):
         #         if valid_idxs_count < (self.max_num_point // 2) or np.all(sem_labels[valid_idxs] == -1):
         #             raise Exception("Over-cropped!")
 
-        #     point_xyz_elastic = point_xyz_elastic[valid_idxs]
+        #     # point_xyz_elastic = point_xyz_elastic[valid_idxs]
         #     point_xyz = point_xyz[valid_idxs]
-        #     normals = normals[valid_idxs]
-        #     colors = colors[valid_idxs]
+        #     # normals = normals[valid_idxs]
+        #     # colors = colors[valid_idxs]
         #     sem_labels = sem_labels[valid_idxs]
 
         # Concatenate all the data

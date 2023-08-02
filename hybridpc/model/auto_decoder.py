@@ -109,19 +109,19 @@ class AutoDecoder(GeneralModel):
 
         # Creating the optimizer for latent_code
         outer_optimizer = self.optimizers()
-        # outer_optimizer.zero_grad() 
         latent_optimizer = torch.optim.Adam([latent_code], lr=self.hparams.model.optimizer.inner_loop_lr)
+        latent_optimizer.zero_grad()
 
         train_loss_list = []  # To store the value_loss for each step
         # Inner loop
         for _ in range(self.hparams.model.optimizer.inner_loop_steps):  # Perform multiple steps
             output_dict = self.forward(data_dict, latent_code)
             seg_loss, value_loss, _ = self._loss(data_dict, output_dict)
-            self.manual_backward(value_loss)
-            
+            latent_optimizer.zero_grad()
+            self.manual_backward(value_loss)         
             # Step the latent optimizer and zero its gradients
             latent_optimizer.step()
-            latent_optimizer.zero_grad()
+
             train_loss_list.append(value_loss.item())  # Store the value_loss for this step
 
         
@@ -137,9 +137,9 @@ class AutoDecoder(GeneralModel):
         # Outer loop
         output_dict = self.forward(data_dict, latent_code)
         seg_loss, value_loss, total_loss = self._loss(data_dict, output_dict)
+        outer_optimizer.zero_grad() 
         self.manual_backward(total_loss)
         outer_optimizer.step()
-        outer_optimizer.zero_grad()
 
         self.log("train/udf_loss", value_loss, on_step=True, on_epoch=True, sync_dist=True)
         self.log("train/total_loss", total_loss, on_step=True, on_epoch=True, sync_dist=True)
@@ -175,14 +175,13 @@ class AutoDecoder(GeneralModel):
         value_loss_list = []  # To store the value_loss for each step
         # Inner loop
         for step in range(self.hparams.model.optimizer.inner_loop_steps):  # Perform multiple steps
-            latent_optimizer.zero_grad()
             output_dict = self.forward(data_dict, latent_code)
             _, udf_loss,  _ = self._loss(data_dict, output_dict)
+            latent_optimizer.zero_grad()
             self.manual_backward(udf_loss)
 
             # Step the latent optimizer and zero its gradients
             latent_optimizer.step()
-            latent_optimizer.zero_grad()
             # udf_loss_list.append(udf_loss.item())  # Store the value_loss for this step
 
         self.log("val/udf_loss", udf_loss, prog_bar=True, on_step=True, on_epoch=True, sync_dist=True)
@@ -210,6 +209,68 @@ class AutoDecoder(GeneralModel):
         if self.current_epoch > self.hparams.model.dense_generator.prepare_epochs:
             if self.hparams.model.inference.visualize_udf:
                 self.udf_visualization(data_dict, output_dict, latent_code, self.current_epoch, udf_loss)
+
+
+    def test_step(self, data_dict, idx):
+        torch.set_grad_enabled(True)
+        voxel_num = data_dict["voxel_coords"].shape[0]  # K voxels
+        latent_code = torch.rand(voxel_num, self.latent_dim, requires_grad=True, device=self.device)
+
+        # Creating the optimizer for latent_code
+        latent_optimizer = torch.optim.Adam([latent_code], lr=self.hparams.model.optimizer.inner_loop_lr)
+        
+        value_loss_list = []  # To store the value_loss for each step
+        # Inner loop
+        for step in range(self.hparams.model.optimizer.inner_loop_steps):  # Perform multiple steps
+            output_dict = self.forward(data_dict, latent_code)
+            _, udf_loss,  _ = self._loss(data_dict, output_dict)
+            latent_optimizer.zero_grad()
+            self.manual_backward(udf_loss)
+
+            # Step the latent optimizer and zero its gradients
+            latent_optimizer.step()
+
+        self.log("test/udf_loss", udf_loss, prog_bar=True, on_step=True, on_epoch=True, sync_dist=True)
+        # Calculating the metrics
+        torch.set_grad_enabled(False)
+        output_dict = self.forward(data_dict, latent_code)
+
+        semantic_accuracy = None
+        semantic_mean_iou = None
+        if self.hparams.cfg.model.inference.evaluate:
+            semantic_predictions = torch.argmax(output_dict['segmentation'], dim=-1)  # (B, N)
+            semantic_accuracy = evaluate_semantic_accuracy(semantic_predictions, data_dict["labels"], ignore_label=-1)
+            semantic_mean_iou = evaluate_semantic_miou(semantic_predictions, data_dict["labels"], ignore_label=-1)
+            self.log(
+                "val_eval/semantic_accuracy", semantic_accuracy, on_step=False, on_epoch=True, sync_dist=True, batch_size=1
+            )
+            self.log(
+                "val_eval/semantic_mean_iou", semantic_mean_iou, on_step=False, on_epoch=True, sync_dist=True, batch_size=1
+            )
+
+        if self.current_epoch > self.hparams.cfg.model.network.prepare_epochs:
+            point_xyz_cpu = data_dict["point_xyz"].cpu().numpy()
+            instance_ids_cpu = data_dict["instance_ids"].cpu()
+            sem_labels = data_dict["sem_labels"].cpu()
+
+            pred_instances = self._get_pred_instances(data_dict["scan_ids"][0],
+                                                      point_xyz_cpu,
+                                                      output_dict["proposal_scores"][0].cpu(),
+                                                      output_dict["proposal_scores"][1].cpu(),
+                                                      output_dict["proposal_scores"][2].size(0) - 1,
+                                                      output_dict["semantic_scores"].cpu(),
+                                                      len(self.hparams.cfg.data.ignore_classes))
+            gt_instances = None
+            gt_instances_bbox = None
+            if self.hparams.cfg.model.inference.evaluate:
+                gt_instances = get_gt_instances(
+                    data_dict["sem_labels"].cpu(), instance_ids_cpu.numpy(), self.hparams.cfg.data.ignore_classes
+                )
+                gt_instances_bbox = get_gt_bbox(point_xyz_cpu,
+                                                instance_ids_cpu.numpy(),
+                                                sem_labels.numpy(), -1,
+                                                self.hparams.cfg.data.ignore_classes)
+            self.val_test_step_outputs.append((semantic_accuracy, semantic_mean_iou))
 
 
     def udf_visualization(self, data_dict, output_dict, latent_code, current_epoch, udf_loss):
@@ -254,5 +315,3 @@ class AutoDecoder(GeneralModel):
         o3d.io.write_point_cloud(os.path.join(save_dir, 'voxel_' + str(self.hparams.data.voxel_size) + '_epoch_' + str(current_epoch) + '_udf_loss_' + '{:.5f}'.format(udf_loss.item()) + '_merged.ply'), merged_points_cloud)
 
         flag = 1
-
-

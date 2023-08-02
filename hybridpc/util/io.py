@@ -4,8 +4,6 @@ import struct
 import open3d as o3d
 import numpy as np
 from tqdm import tqdm
-from hybridpc.evaluation.gravity_aligned_obb import gravity_aligned_mobb
-from hybridpc.evaluation.visualization import get_directions, o3d_render
 
 
 def save_prediction(save_path, all_pred_obbs, class_names):
