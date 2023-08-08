@@ -86,6 +86,7 @@ class GeneralDataset(Dataset):
             scene = torch.load(scene_path)
             scene["xyz"] -= scene["xyz"].mean(axis=0)
             scene["rgb"] = scene["rgb"].astype(np.float32) / 127.5 - 1
+            scene['scene_name'] = scene_name
             self.scenes.append(scene) 
 
     # def preprocess_sample(self, sample):
@@ -308,7 +309,8 @@ class GeneralDataset(Dataset):
             "query_voxel_indices": query_indices.cpu().numpy(),  # M,
             "values": values,  # M,
             "voxel_coords": voxel_coords.cpu().numpy(),  # K, 3
-            "voxel_features": voxel_features  # K, ?
+            "voxel_features": voxel_features,  # K, ?
+            "scene_name": sample['scene_name']
         }
         # # computing voxel center coordinates
         # voxel_centers = self.voxel_size * voxel_coords[data['voxel_indices']] + self.voxel_size / 2

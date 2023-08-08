@@ -17,17 +17,19 @@ trainer:
 optimizer:
     target_: torch.optim.Adam
     lr: 0.002
+    inner_loop_steps: 3
 
 lr_decay:
-  decay_start_epoch: 250
+  decay_start_epoch: 350
 
+training_stage: 0
 
 network:
   module: VanillaMinkowski
 
-  m: 16 # 16 or 32 (U-Net hidden dimension)
+  # m: 16 # 16 or 32 (U-Net hidden dimension)
   backbone_type: UNet # Conv or UNet
-  blocks: [1, 2, 3, 4, 5]
+  blocks: [1]
   cluster_blocks: [1, 2]
   block_reps: 2
 
@@ -40,7 +42,7 @@ network:
   modulation_dim: 64
   latent_dim: 64 #
 
-  prepare_epochs: 100
+  prepare_epochs: 300
 
   fourier_encoder:
     embedding_dim: 32
@@ -48,5 +50,5 @@ network:
   seg_decoder:
     input_dim: 3
     hidden_dim: 64
-    num_hidden_layers_before_skip: 2
-    num_hidden_layers_after_skip: 2
+    num_hidden_layers_before_skip: 1
+    num_hidden_layers_after_skip: 1

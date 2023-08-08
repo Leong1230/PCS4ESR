@@ -4,12 +4,6 @@
 defaults:
   - base
 
-
-stage1_ckpt_path: None
-# stage1_ckpt_path: 
-stage2_ckpt_path: 
-
-
 # log:
 #   WandbLogger:
 #   project: HybridPC
@@ -23,13 +17,11 @@ trainer:
 optimizer:
     target_: torch.optim.Adam
     lr: 0.002
-    inner_loop_steps: 300
+    inner_loop_steps: 10
     inner_loop_lr: 0.001
-    latent_lr: 0.001
-    decreased_by: 10
 
 lr_decay:
-  decay_start_epoch: 350
+  decay_start_epoch: 250
 
 dense_generator:
   num_steps: 10
@@ -38,18 +30,15 @@ dense_generator:
   filter_val: 0.009
   prepare_epochs: 450
 
-training_stage: 1
 
 network:
-  module: AutoDecoder
+  module: MetaDecoder
 
   # m: 16 # 16 or 32 (U-Net hidden dimension)
   backbone_type: UNet # Conv or UNet
-  seg_blocks: [1, 2, 3]
-  functa_blocks: [1, 2, 3]
+  blocks: [1, 2, 3]
   cluster_blocks: [1, 2]
-  seg_block_reps: 2
-  functa_block_reps: 2
+  block_reps: 2
 
   use_color: True
   use_normal: False
@@ -59,7 +48,7 @@ network:
   latent_dim: 64 #
   seg_loss_weight: 0.5
 
-  prepare_epochs: 200
+  prepare_epochs: 100
 
   fourier_encoder:
     embedding_dim: 32
@@ -67,8 +56,8 @@ network:
   seg_decoder:
     input_dim: 3
     hidden_dim: 64
-    num_hidden_layers_before_skip: 1
-    num_hidden_layers_after_skip: 1
+    num_hidden_layers_before_skip: 2
+    num_hidden_layers_after_skip: 2
 
   functa_decoder:
     input_dim: 3

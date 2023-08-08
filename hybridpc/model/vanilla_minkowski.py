@@ -95,7 +95,12 @@ class VanillaMinkowski(GeneralModel):
 
         return seg_loss
 
-    
+    def on_train_epoch_end(self):
+        # Update the learning rates for both optimizers
+        cosine_lr_decay(
+            self.trainer.optimizers[0], self.hparams.model.optimizer.lr, self.current_epoch,
+            self.hparams.model.lr_decay.decay_start_epoch, self.hparams.model.trainer.max_epochs, 1e-6
+        )
 
     def validation_step(self, data_dict, idx):
         voxel_num = data_dict["voxel_coords"].shape[0] # B voxels

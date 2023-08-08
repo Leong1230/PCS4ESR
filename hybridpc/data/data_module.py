@@ -54,10 +54,14 @@ def _sparse_collate_fn(batch):
     voxel_features_list = []
     voxel_coords = []
     batch_ids = []
+    scene_names_list = []
 
     cumulative_voxel_coords_len = 0  # Keep track of the cumulative length
+    voxel_nums_list = []
 
     for i, b in enumerate(batch):
+        scene_names_list.append(b["scene_name"])
+        voxel_nums_list.append(b["voxel_coords"].shape[0])
         voxel_coords_list.append(b["voxel_coords"])
         voxel_features_list.append(b["voxel_features"])
         points.append(torch.from_numpy(b["points"]))
@@ -85,6 +89,8 @@ def _sparse_collate_fn(batch):
         coords=voxel_coords_list, feats=voxel_features_list
     ) # size: (N, 4)
     data['batch_ids'] = torch.cat(batch_ids, dim=0)
+    data['scene_names'] = scene_names_list
+    data['voxel_nums'] = voxel_nums_list
 
     return data
 

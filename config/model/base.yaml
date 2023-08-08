@@ -1,6 +1,6 @@
 # Managed by Hydra
 
-ckpt_path: null
+ckpt_path: 
 
 logger:
   # https://pytorch-lightning.readthedocs.io/en/stable/extensions/generated/pytorch_lightning.loggers.WandbLogger.html
@@ -15,15 +15,15 @@ trainer:
   strategy: ddp_find_unused_parameters_true
   num_nodes: 1
   max_epochs: 800
-  num_sanity_val_steps: 8
-  check_val_every_n_epoch: 8
+  num_sanity_val_steps: 10
+  check_val_every_n_epoch: 10
   profiler: simple
 
 # https://pytorch-lightning.readthedocs.io/en/stable/api/pytorch_lightning.callbacks.ModelCheckpoint.html
 checkpoint_monitor:
   _target_: pytorch_lightning.callbacks.ModelCheckpoint
   save_top_k: -1
-  every_n_epochs: 100
+  every_n_epochs: 10
   filename: "{epoch}"
   dirpath: ${exp_output_root_path}/training
 

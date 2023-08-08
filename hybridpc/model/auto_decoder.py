@@ -4,6 +4,7 @@ import torch
 import time
 import os
 import torch.nn as nn
+from tqdm import tqdm
 import numpy as np
 import math
 import torchmetrics
@@ -11,7 +12,7 @@ import open3d as o3d
 import pytorch_lightning as pl
 import matplotlib.pyplot as plt
 import hydra
-from hybridpc.optimizer.optimizer import cosine_lr_decay
+from hybridpc.optimizer.optimizer import cosine_lr_decay, adjust_learning_rate
 from hybridpc.model.module import Backbone, ImplicitDecoder, Dense_Generator
 from hybridpc.model.general_model import GeneralModel
 from hybridpc.evaluation.semantic_segmentation import *
@@ -24,20 +25,31 @@ class AutoDecoder(GeneralModel):
         # Shared latent code across both decoders
         # set automatic_optimization to False
         self.automatic_optimization = False
+        self.training_stage = cfg.model.training_stage
         
         self.latent_dim = cfg.model.network.latent_dim
         self.seg_loss_weight = cfg.model.network.seg_loss_weight
 
         self.functa_backbone = Backbone(
             backbone_type=cfg.model.network.backbone_type,
-            input_channel=self.latent_dim, output_channel=cfg.model.network.modulation_dim, block_channels=cfg.model.network.blocks,
-            block_reps=cfg.model.network.block_reps,
+            input_channel=self.latent_dim, output_channel=cfg.model.network.modulation_dim, block_channels=cfg.model.network.functa_blocks,
+            block_reps=cfg.model.network.functa_block_reps,
             sem_classes=cfg.data.classes
         )
+        self.functa_decoder = ImplicitDecoder(
+            "functa",
+            cfg.model.network.modulation_dim,
+            cfg.model.network.functa_decoder.input_dim,
+            cfg.model.network.functa_decoder.hidden_dim,
+            cfg.model.network.functa_decoder.num_hidden_layers_before_skip,
+            cfg.model.network.functa_decoder.num_hidden_layers_after_skip,
+            1
+        )
+
         self.seg_backbone = Backbone(
             backbone_type=cfg.model.network.backbone_type,
-            input_channel=self.latent_dim, output_channel=cfg.model.network.modulation_dim, block_channels=cfg.model.network.blocks,
-            block_reps=cfg.model.network.block_reps,
+            input_channel=self.latent_dim, output_channel=cfg.model.network.modulation_dim, block_channels=cfg.model.network.seg_blocks,
+            block_reps=cfg.model.network.seg_block_reps,
             sem_classes=cfg.data.classes
         )
 
@@ -50,15 +62,7 @@ class AutoDecoder(GeneralModel):
             cfg.model.network.seg_decoder.num_hidden_layers_after_skip,
             cfg.data.classes
         )
-        self.functa_decoder = ImplicitDecoder(
-            "functa",
-            cfg.model.network.modulation_dim,
-            cfg.model.network.functa_decoder.input_dim,
-            cfg.model.network.functa_decoder.hidden_dim,
-            cfg.model.network.functa_decoder.num_hidden_layers_before_skip,
-            cfg.model.network.functa_decoder.num_hidden_layers_after_skip,
-            1
-        )
+
 
         self.dense_generator = Dense_Generator(
             self.functa_decoder,
@@ -68,17 +72,45 @@ class AutoDecoder(GeneralModel):
             cfg.model.dense_generator.threshold,
             cfg.model.dense_generator.filter_val
         )
+
+        # Initialize an empty dictionary to store the latent codes
+        self.latent_codes = {}
+        self.latent_optimizers = {}
+        # self.inner_optimizer = torch.optim.Adam([torch.zeros(1)], lr=self.hparams.model.optimizer.inner_loop_lr)
+        if self.training_stage ==2:
+            for param in self.functa_backbone.parameters():
+                param.requires_grad = False
+
+            for param in self.functa_decoder.parameters():
+                param.requires_grad = False   
+                 
+    @classmethod
+    def load_from_checkpoint(cls, checkpoint_path, cfg, map_location=None):
+        checkpoint = torch.load(checkpoint_path, map_location=map_location)
+
+        # Create a new model instance
+        model = cls(cfg)
+
+        # Load the model weights selectively
+        functa_backbone_state_dict = {k[len("functa_backbone."):]: v for k, v in checkpoint['state_dict'].items() if k.startswith("functa_backbone.")}
+        model.functa_backbone.load_state_dict(functa_backbone_state_dict)
+
+        functa_decoder_state_dict = {k[len("functa_decoder."):]: v for k, v in checkpoint['state_dict'].items() if k.startswith("functa_decoder.")}
+        model.functa_decoder.load_state_dict(functa_decoder_state_dict)
+
+        return model
       # The inner loop optimizer is applied to the latent code
 
 
     def forward(self, data_dict, latent_code):
-        
         seg_modulations = self.seg_backbone(latent_code, data_dict['voxel_coords'], data_dict['voxel_indices']) # B, C
         functa_modulations = self.functa_backbone(latent_code, data_dict['voxel_coords'], data_dict['voxel_indices']) # B, C
 
         # modulations = latent_code
         segmentation = self.seg_decoder(seg_modulations['voxel_features'].F, data_dict['points'], data_dict["voxel_indices"])  # embeddings (B, C) coords (N, 3) indices (N, )
         values = self.functa_decoder(functa_modulations['voxel_features'].F, data_dict['query_points'], data_dict["query_voxel_indices"]) # embeddings (B, D1) coords (M, 3) indices (M, )
+        # values = self.functa_decoder(latent_code, data_dict['query_points'], data_dict["query_voxel_indices"]) # embeddings (B, D1) coords (M, 3) indices (M, )
+
 
         return {"segmentation": segmentation, "values": values}
 
@@ -91,153 +123,269 @@ class AutoDecoder(GeneralModel):
         # loss_i = torch.nn.L1Loss(reduction='none')(torch.clamp(output_dict['values'], max=self.hparams.cfg.data.udf_queries.max_dist),torch.clamp(data_dict['values'], max=self.hparams.cfg.data.udf_queries.max_dist))# out = (B,num_points) by componentwise comparing vecots of size num_samples:
         # value_loss = loss_i.sum(-1).mean() # loss_i summed over all #num_samples samples -> out = (B,1) and mean over batch -> out = (1)
 
-        return seg_loss, value_loss, self.seg_loss_weight * seg_loss + (1 - self.seg_loss_weight) * value_loss
+        # if self.training_stage == 1:
+        #     return value_loss
+        # else:
+        #     return seg_loss
+        return seg_loss, value_loss
 
     # def configure_optimizers(self):
     #     optimizer = torch.optim.Adam(self.parameters(), lr=self.hparams.optimizer.lr)
     #     return optimizer
 
     def configure_optimizers(self):
-        outer_optimizer = torch.optim.Adam(self.parameters(), lr=self.hparams.model.optimizer.lr)
-
+        if self.training_stage == 1:
+            params_to_optimize = list(self.functa_backbone.parameters()) + list(self.functa_decoder.parameters())
+        elif self.training_stage == 2:
+            params_to_optimize = list(self.seg_backbone.parameters()) + list(self.seg_decoder.parameters())
+        else:
+            raise ValueError(f"Invalid training stage: {self.training_stage}")
+        
+        outer_optimizer = torch.optim.Adam(params_to_optimize, lr=self.hparams.model.optimizer.lr)
         return outer_optimizer
 
     
+    # def update_inner_optimizer_params(self, latent_code):
+    #     # Replace the parameters handled by the inner optimizer
+    #     self.inner_optimizer.param_groups[0]['params'] = [latent_code]
+    
     def training_step(self, data_dict):
-        voxel_num = data_dict["voxel_coords"].shape[0] # B voxels
-        latent_code = torch.rand(voxel_num, self.latent_dim, requires_grad=True, device=self.device)
+        if self.training_stage == 1:
+            """ auto-decoder training stage """
 
-        # Creating the optimizer for latent_code
-        outer_optimizer = self.optimizers()
-        latent_optimizer = torch.optim.Adam([latent_code], lr=self.hparams.model.optimizer.inner_loop_lr)
-        latent_optimizer.zero_grad()
+            scene_names = data_dict['scene_names']  # Assume scene_names is a list of strings
+            voxel_nums = data_dict["voxel_nums"]    # Assume voxel_nums is a list of ints
+            batch_size = len(scene_names)
 
-        train_loss_list = []  # To store the value_loss for each step
-        # Inner loop
-        for _ in range(self.hparams.model.optimizer.inner_loop_steps):  # Perform multiple steps
-            output_dict = self.forward(data_dict, latent_code)
-            seg_loss, value_loss, _ = self._loss(data_dict, output_dict)
-            latent_optimizer.zero_grad()
-            self.manual_backward(value_loss)         
-            # Step the latent optimizer and zero its gradients
-            latent_optimizer.step()
+            # Retrieve or initialize the latent codes
+            latent_codes = []
+            for idx in range(batch_size):
+                if scene_names[idx] in self.latent_codes:
+                    latent_code = self.latent_codes[scene_names[idx]]
+                else:
+                    latent_code = torch.rand(voxel_nums[idx], self.latent_dim,requires_grad=True, device=self.device)
+                    latent_optimizer = torch.optim.Adam([latent_code], lr=self.hparams.model.optimizer.latent_lr)
+                    self.latent_optimizers[scene_names[idx]] = latent_optimizer
+                    self.latent_codes[scene_names[idx]] = latent_code
+                self.latent_optimizers[scene_names[idx]].zero_grad() # zero grads for all latent_optimizers
+                latent_codes.append(latent_code)
 
-            train_loss_list.append(value_loss.item())  # Store the value_loss for this step
-
+            # Stack the latent codes into a batch
+            latent_code = torch.cat(latent_codes, dim=0)
         
-        # After the loop, plot the value_loss for each step
-        # plt.plot(train_loss_list)
-        # plt.xlabel('Step')
-        # plt.ylabel('Value Loss')
-        # plt.show()
-        # plt.clf()  # Clear the current figure
+            # voxel_num = data_dict["voxel_coords"].shape[0] # B voxels
+            # latent_code = torch.rand(voxel_num, self.latent_dim, requires_grad=True, device=self.device)
 
-        # self.log("train/value_loss", value_loss, on_step=True, on_epoch=False)
+            # Creating the optimizer for latent_code
+            outer_optimizer = self.optimizers()
+            outer_optimizer.zero_grad()
 
-        # Outer loop
-        output_dict = self.forward(data_dict, latent_code)
-        seg_loss, value_loss, total_loss = self._loss(data_dict, output_dict)
-        outer_optimizer.zero_grad() 
-        self.manual_backward(total_loss)
-        outer_optimizer.step()
+            output_dict = self.forward(data_dict, latent_code)
+            _, value_loss = self._loss(data_dict, output_dict)
+            # latent_optimizer.zero_grad()
+            self.manual_backward(value_loss)  
+            # latent_code = latent_code.detach().requires_grad_()       
+            outer_optimizer.step()
+            for idx in range(batch_size):
+                self.latent_optimizers[scene_names[idx]].step()
+            # self.latent_codes[scene_names[0]] = latent_code  # Detach to avoid tracking its history
 
-        self.log("train/udf_loss", value_loss, on_step=True, on_epoch=True, sync_dist=True)
-        self.log("train/total_loss", total_loss, on_step=True, on_epoch=True, sync_dist=True)
-        # Calculating the metrics
-        semantic_predictions = torch.argmax(output_dict['segmentation'], dim=-1)  # (B, N)
-        semantic_accuracy = evaluate_semantic_accuracy(semantic_predictions, data_dict["labels"], ignore_label=-1)
-        semantic_mean_iou = evaluate_semantic_miou(semantic_predictions, data_dict["labels"], ignore_label=-1)
-        self.log(
-            "train/semantic_accuracy", semantic_accuracy, on_step=False, on_epoch=True, sync_dist=True, batch_size=1
-        )
-        self.log(
-            "train/semantic_mean_iou", semantic_mean_iou, on_step=False, on_epoch=True, sync_dist=True, batch_size=1
-        )
+            self.log("train/udf_loss", value_loss, on_step=True, on_epoch=True, sync_dist=True, batch_size=batch_size)
 
-        return total_loss
+            return value_loss
+        
+        else:
+            """ segmentation training stage """
 
+            scene_names = data_dict['scene_names']  # Assume scene_names is a list of strings
+            voxel_nums = data_dict["voxel_nums"]    # Assume voxel_nums is a list of ints
+            batch_size = len(scene_names)
+
+            # Retrieve or initialize the latent codes
+            latent_codes = []
+            for idx in range(batch_size):
+                if scene_names[idx] in self.latent_codes:
+                    latent_code = self.latent_codes[scene_names[idx]]
+                else:
+                    latent_code = torch.rand(voxel_nums[idx], self.latent_dim,requires_grad=True, device=self.device)
+                    latent_optimizer = torch.optim.Adam([latent_code], lr=self.hparams.model.optimizer.inner_loop_lr)
+                    # Create a progress bar
+                    for iter in tqdm(range(self.hparams.model.optimizer.inner_loop_steps), desc='Optimization Progress'):  # Perform multiple steps
+                        # Adjust learning rate
+                        adjust_learning_rate(self.hparams.model.optimizer.inner_loop_lr, latent_optimizer, iter, self.hparams.model.optimizer.inner_loop_steps, self.hparams.model.optimizer.decreased_by)
+
+                        output_dict = self.forward(data_dict, latent_code)
+                        _, value_loss = self._loss(data_dict, output_dict)
+                        latent_optimizer.zero_grad()
+                        self.manual_backward(value_loss)         
+                        # Step the latent optimizer and zero its gradients
+                        latent_optimizer.step()
+                    latent_code = latent_code.detach()
+                    self.latent_codes[scene_names[idx]] = latent_code
+                    print(f"Train UDF Loss: {value_loss.item()}")
+     
+                latent_codes.append(latent_code)
+
+            # Stack the latent codes into a batch
+            latent_code = torch.cat(latent_codes, dim=0)
+            output_dict = self.forward(data_dict, latent_code)
+            seg_loss, _ = self._loss(data_dict, output_dict)
+            outer_optimizer = self.optimizers()
+            outer_optimizer.zero_grad() 
+            self.manual_backward(seg_loss)
+            outer_optimizer.step()
+
+            self.log("train/seg_loss", seg_loss, on_step=True, on_epoch=True, sync_dist=True, batch_size=batch_size)
+            # Calculating the metrics
+            semantic_predictions = torch.argmax(output_dict['segmentation'], dim=-1)  # (B, N)
+            semantic_accuracy = evaluate_semantic_accuracy(semantic_predictions, data_dict["labels"], ignore_label=-1)
+            semantic_mean_iou = evaluate_semantic_miou(semantic_predictions, data_dict["labels"], ignore_label=-1)
+            self.log(
+                "train/semantic_accuracy", semantic_accuracy, on_step=False, on_epoch=True, sync_dist=True, batch_size=batch_size
+            )         
+            self.log(
+                "train/semantic_mean_iou", semantic_mean_iou, on_step=False, on_epoch=True, sync_dist=True, batch_size=batch_size
+            )
+        
+            return seg_loss
+
+        # self.update_inner_optimizer_params(latent_code)
+        # latent_optimizer = self.inner_optimizer
+        # latent_optimizer = torch.optim.Adam([latent_code], lr=self.hparams.model.optimizer.latent_lr)
+
+        # latent_optimizer.zero_grad()
+
+        # train_loss_list = []  # To store the value_loss for each step
+        # # Inner loop
+        # if self.training_stage == 2:
+        #     if self.current_epoch == 0:
+        #         for _ in range(self.hparams.model.optimizer.inner_loop_steps):  # Perform multiple steps
+        #             output_dict = self.forward(data_dict, latent_code)
+        #             _, value_loss = self._loss(data_dict, output_dict)
+        #             latent_optimizer.zero_grad()
+        #             self.manual_backward(value_loss)         
+        #             # Step the latent optimizer and zero its gradients
+        #             latent_optimizer.step()
+        #             # Print the loss for this step
+        #             print(f"Step {_}, Loss: {value_loss.item()}")
+
+        #     # Outer loop
+        #     output_dict = self.forward(data_dict, latent_code)
+        #     seg_loss, _ = self._loss(data_dict, output_dict)
+        #     outer_optimizer.zero_grad() 
+        #     self.manual_backward(seg_loss)
+        #     outer_optimizer.step()
+
+        #     # self.log("train/udf_loss", value_loss, on_step=True, on_epoch=True, sync_dist=True)
+        #     self.log("train/seg_loss", seg_loss, on_step=True, on_epoch=True, sync_dist=True)
+        #     # Calculating the metrics
+        #     semantic_predictions = torch.argmax(output_dict['segmentation'], dim=-1)  # (B, N)
+        #     semantic_accuracy = evaluate_semantic_accuracy(semantic_predictions, data_dict["labels"], ignore_label=-1)
+        #     semantic_mean_iou = evaluate_semantic_miou(semantic_predictions, data_dict["labels"], ignore_label=-1)
+        #     self.log(
+        #         "train/semantic_accuracy", semantic_accuracy, on_step=False, on_epoch=True, sync_dist=True, batch_size=1
+        #     )         
+        #     self.log(
+        #         "train/semantic_mean_iou", semantic_mean_iou, on_step=False, on_epoch=True, sync_dist=True, batch_size=1
+        #     )
+        
+        #     return seg_loss
+        
+        # else:
     
 
     def on_train_epoch_end(self):
+        # Update the learning rates for both optimizers
         cosine_lr_decay(
             self.trainer.optimizers[0], self.hparams.model.optimizer.lr, self.current_epoch,
             self.hparams.model.lr_decay.decay_start_epoch, self.hparams.model.trainer.max_epochs, 1e-6
         )
 
+        if self.training_stage == 1:
+            # Update the learning rates for all latent optimizers
+            for scene_name, optimizer in self.latent_optimizers.items():
+                cosine_lr_decay(
+                    optimizer, self.hparams.model.optimizer.latent_lr, self.current_epoch,
+                    self.hparams.model.lr_decay.decay_start_epoch, self.hparams.model.trainer.max_epochs, 1e-6
+                )
+
     def validation_step(self, data_dict, idx):
         torch.set_grad_enabled(True)
-        voxel_num = data_dict["voxel_coords"].shape[0]  # K voxels
-        latent_code = torch.rand(voxel_num, self.latent_dim, requires_grad=True, device=self.device)
+        scene_name = data_dict['scene_names'][0]  # Assume scene_names is a list of strings
+        voxel_num = data_dict["voxel_nums"][0]    # Assume voxel_nums is a list of ints
 
-        # Creating the optimizer for latent_code
-        latent_optimizer = torch.optim.Adam([latent_code], lr=self.hparams.model.optimizer.inner_loop_lr)
+
         
-        value_loss_list = []  # To store the value_loss for each step
         # Inner loop
-        for step in range(self.hparams.model.optimizer.inner_loop_steps):  # Perform multiple steps
+        if self.training_stage == 1:
+            if self.current_epoch > self.hparams.model.network.prepare_epochs:
+                # voxel_nums = data_dict["voxel_nums"]    # Assume voxel_nums is a list of ints
+
+                latent_code = torch.rand(voxel_num, self.latent_dim,requires_grad=True, device=self.device)
+                latent_optimizer = torch.optim.Adam([latent_code], lr=self.hparams.model.optimizer.inner_loop_lr)
+                # Create a progress bar
+                pbar = tqdm(range(self.hparams.model.optimizer.inner_loop_steps), desc='Optimization Progress')
+
+                for iter in pbar:  # Perform multiple steps
+                    # Adjust learning rate
+                    adjust_learning_rate(
+                        self.hparams.model.optimizer.inner_loop_lr, latent_optimizer, 
+                        iter, self.hparams.model.optimizer.inner_loop_steps, 
+                        self.hparams.model.optimizer.decreased_by
+                    )
+
+                    output_dict = self.forward(data_dict, latent_code)
+                    _, value_loss = self._loss(data_dict, output_dict)
+                    # print(f"Step {iter}, Loss: {value_loss.item()}")
+
+                    latent_optimizer.zero_grad()
+                    self.manual_backward(value_loss)         
+                    # Step the latent optimizer and zero its gradients
+                    latent_optimizer.step()
+
+                    # Update the postfix of the progress bar with the current loss
+                    pbar.set_postfix({'udf_loss': value_loss.item()})
+
+
+                self.log("val/udf_loss", value_loss, prog_bar=True, on_step=True, on_epoch=True, sync_dist=True, batch_size=1)
+
+            # After the loop, plot the value_loss for each step
+            # plt.plot(value_loss_list)
+            # plt.xlabel('Step')
+            # plt.ylabel('Value Loss')
+            # plt.show()
+            # No outer loop for validation
+
+            # Calculating the metrics
+        else: 
+            # scene_names = data_dict['scene_names']  # Assume scene_names is a list of strings
+            # voxel_nums = data_dict["voxel_nums"]    # Assume voxel_nums is a list of ints
+            # batch_size = len(scene_names)
+
+            # Retrieve or initialize the latent codes
+            if scene_name in self.latent_codes:
+                latent_code = self.latent_codes[scene_name]
+            else:
+                latent_code = torch.rand(voxel_num, self.latent_dim,requires_grad=True, device=self.device)
+                latent_optimizer = torch.optim.Adam([latent_code], lr=self.hparams.model.optimizer.inner_loop_lr)
+
+                for iter in tqdm(range(self.hparams.model.optimizer.inner_loop_steps), desc='Optimization Progress'):  # Perform multiple steps
+                    # Adjust learning rate
+                    adjust_learning_rate(self.hparams.model.optimizer.inner_loop_lr, latent_optimizer, iter, self.hparams.model.optimizer.inner_loop_steps, self.hparams.model.optimizer.decreased_by)
+
+                    output_dict = self.forward(data_dict, latent_code)
+                    _, value_loss = self._loss(data_dict, output_dict)
+                    latent_optimizer.zero_grad()
+                    self.manual_backward(value_loss)         
+                    # Step the latent optimizer and zero its gradients
+                    latent_optimizer.step()
+                # Print the loss for this step
+                print(f"Val UDF Loss: {value_loss.item()}")
+                latent_code = latent_code.detach()
+                self.latent_codes[scene_name] = latent_code
+
+            torch.set_grad_enabled(False)
             output_dict = self.forward(data_dict, latent_code)
-            _, udf_loss,  _ = self._loss(data_dict, output_dict)
-            latent_optimizer.zero_grad()
-            self.manual_backward(udf_loss)
-
-            # Step the latent optimizer and zero its gradients
-            latent_optimizer.step()
-            # udf_loss_list.append(udf_loss.item())  # Store the value_loss for this step
-
-        self.log("val/udf_loss", udf_loss, prog_bar=True, on_step=True, on_epoch=True, sync_dist=True)
-
-        # After the loop, plot the value_loss for each step
-        # plt.plot(value_loss_list)
-        # plt.xlabel('Step')
-        # plt.ylabel('Value Loss')
-        # plt.show()
-        # No outer loop for validation
-
-        # Calculating the metrics
-        torch.set_grad_enabled(False)
-        output_dict = self.forward(data_dict, latent_code)
-        semantic_predictions = torch.argmax(output_dict['segmentation'], dim=-1)  # (B, N)
-        semantic_accuracy = evaluate_semantic_accuracy(semantic_predictions, data_dict["labels"], ignore_label=-1)
-        semantic_mean_iou = evaluate_semantic_miou(semantic_predictions, data_dict["labels"], ignore_label=-1)
-        self.log(
-            "val_eval/semantic_accuracy", semantic_accuracy, on_step=False, on_epoch=True, sync_dist=True, batch_size=1
-        )
-        self.log(
-            "val_eval/semantic_mean_iou", semantic_mean_iou, on_step=False, on_epoch=True, sync_dist=True, batch_size=1
-        )
-        self.val_test_step_outputs.append((semantic_accuracy, semantic_mean_iou))
-        if self.current_epoch > self.hparams.model.dense_generator.prepare_epochs:
-            if self.hparams.model.inference.visualize_udf:
-                self.udf_visualization(data_dict, output_dict, latent_code, self.current_epoch, udf_loss)
-
-
-    def test_step(self, data_dict, idx):
-        torch.set_grad_enabled(True)
-        voxel_num = data_dict["voxel_coords"].shape[0]  # K voxels
-        latent_code = torch.rand(voxel_num, self.latent_dim, requires_grad=True, device=self.device)
-
-        # Creating the optimizer for latent_code
-        latent_optimizer = torch.optim.Adam([latent_code], lr=self.hparams.model.optimizer.inner_loop_lr)
-        
-        value_loss_list = []  # To store the value_loss for each step
-        # Inner loop
-        for step in range(self.hparams.model.optimizer.inner_loop_steps):  # Perform multiple steps
-            output_dict = self.forward(data_dict, latent_code)
-            _, udf_loss,  _ = self._loss(data_dict, output_dict)
-            latent_optimizer.zero_grad()
-            self.manual_backward(udf_loss)
-
-            # Step the latent optimizer and zero its gradients
-            latent_optimizer.step()
-
-        self.log("test/udf_loss", udf_loss, prog_bar=True, on_step=True, on_epoch=True, sync_dist=True)
-        # Calculating the metrics
-        torch.set_grad_enabled(False)
-        output_dict = self.forward(data_dict, latent_code)
-
-        semantic_accuracy = None
-        semantic_mean_iou = None
-        if self.hparams.cfg.model.inference.evaluate:
             semantic_predictions = torch.argmax(output_dict['segmentation'], dim=-1)  # (B, N)
             semantic_accuracy = evaluate_semantic_accuracy(semantic_predictions, data_dict["labels"], ignore_label=-1)
             semantic_mean_iou = evaluate_semantic_miou(semantic_predictions, data_dict["labels"], ignore_label=-1)
@@ -247,30 +395,73 @@ class AutoDecoder(GeneralModel):
             self.log(
                 "val_eval/semantic_mean_iou", semantic_mean_iou, on_step=False, on_epoch=True, sync_dist=True, batch_size=1
             )
-
-        if self.current_epoch > self.hparams.cfg.model.network.prepare_epochs:
-            point_xyz_cpu = data_dict["point_xyz"].cpu().numpy()
-            instance_ids_cpu = data_dict["instance_ids"].cpu()
-            sem_labels = data_dict["sem_labels"].cpu()
-
-            pred_instances = self._get_pred_instances(data_dict["scan_ids"][0],
-                                                      point_xyz_cpu,
-                                                      output_dict["proposal_scores"][0].cpu(),
-                                                      output_dict["proposal_scores"][1].cpu(),
-                                                      output_dict["proposal_scores"][2].size(0) - 1,
-                                                      output_dict["semantic_scores"].cpu(),
-                                                      len(self.hparams.cfg.data.ignore_classes))
-            gt_instances = None
-            gt_instances_bbox = None
-            if self.hparams.cfg.model.inference.evaluate:
-                gt_instances = get_gt_instances(
-                    data_dict["sem_labels"].cpu(), instance_ids_cpu.numpy(), self.hparams.cfg.data.ignore_classes
-                )
-                gt_instances_bbox = get_gt_bbox(point_xyz_cpu,
-                                                instance_ids_cpu.numpy(),
-                                                sem_labels.numpy(), -1,
-                                                self.hparams.cfg.data.ignore_classes)
             self.val_test_step_outputs.append((semantic_accuracy, semantic_mean_iou))
+            if self.current_epoch > self.hparams.model.dense_generator.prepare_epochs:
+                if self.hparams.model.inference.visualize_udf:
+                    self.udf_visualization(data_dict, output_dict, latent_code, self.current_epoch, udf_loss)
+
+
+
+    # def test_step(self, data_dict, idx):
+    #     torch.set_grad_enabled(True)
+    #     voxel_num = data_dict["voxel_coords"].shape[0]  # K voxels
+    #     latent_code = torch.rand(voxel_num, self.latent_dim, requires_grad=True, device=self.device)
+
+    #     # Creating the optimizer for latent_code
+    #     latent_optimizer = torch.optim.Adam([latent_code], lr=self.hparams.model.optimizer.inner_loop_lr)
+        
+    #     value_loss_list = []  # To store the value_loss for each step
+    #     # Inner loop
+    #     for step in range(self.hparams.model.optimizer.inner_loop_steps):  # Perform multiple steps
+    #         output_dict = self.forward(data_dict, latent_code)
+    #         _, udf_loss,  _ = self._loss(data_dict, output_dict)
+    #         latent_optimizer.zero_grad()
+    #         self.manual_backward(udf_loss)
+
+    #         # Step the latent optimizer and zero its gradients
+    #         latent_optimizer.step()
+
+    #     self.log("test/udf_loss", udf_loss, prog_bar=True, on_step=True, on_epoch=True, sync_dist=True)
+    #     # Calculating the metrics
+    #     torch.set_grad_enabled(False)
+    #     output_dict = self.forward(data_dict, latent_code)
+
+    #     semantic_accuracy = None
+    #     semantic_mean_iou = None
+    #     if self.hparams.cfg.model.inference.evaluate:
+    #         semantic_predictions = torch.argmax(output_dict['segmentation'], dim=-1)  # (B, N)
+    #         semantic_accuracy = evaluate_semantic_accuracy(semantic_predictions, data_dict["labels"], ignore_label=-1)
+    #         semantic_mean_iou = evaluate_semantic_miou(semantic_predictions, data_dict["labels"], ignore_label=-1)
+    #         self.log(
+    #             "val_eval/semantic_accuracy", semantic_accuracy, on_step=False, on_epoch=True, sync_dist=True, batch_size=1
+    #         )
+    #         self.log(
+    #             "val_eval/semantic_mean_iou", semantic_mean_iou, on_step=False, on_epoch=True, sync_dist=True, batch_size=1
+    #         )
+
+    #     if self.current_epoch > self.hparams.cfg.model.network.prepare_epochs:
+    #         point_xyz_cpu = data_dict["point_xyz"].cpu().numpy()
+    #         instance_ids_cpu = data_dict["instance_ids"].cpu()
+    #         sem_labels = data_dict["sem_labels"].cpu()
+
+    #         pred_instances = self._get_pred_instances(data_dict["scan_ids"][0],
+    #                                                   point_xyz_cpu,
+    #                                                   output_dict["proposal_scores"][0].cpu(),
+    #                                                   output_dict["proposal_scores"][1].cpu(),
+    #                                                   output_dict["proposal_scores"][2].size(0) - 1,
+    #                                                   output_dict["semantic_scores"].cpu(),
+    #                                                   len(self.hparams.cfg.data.ignore_classes))
+    #         gt_instances = None
+    #         gt_instances_bbox = None
+    #         if self.hparams.cfg.model.inference.evaluate:
+    #             gt_instances = get_gt_instances(
+    #                 data_dict["sem_labels"].cpu(), instance_ids_cpu.numpy(), self.hparams.cfg.data.ignore_classes
+    #             )
+    #             gt_instances_bbox = get_gt_bbox(point_xyz_cpu,
+    #                                             instance_ids_cpu.numpy(),
+    #                                             sem_labels.numpy(), -1,
+    #                                             self.hparams.cfg.data.ignore_classes)
+    #         self.val_test_step_outputs.append((semantic_accuracy, semantic_mean_iou))
 
 
     def udf_visualization(self, data_dict, output_dict, latent_code, current_epoch, udf_loss):
