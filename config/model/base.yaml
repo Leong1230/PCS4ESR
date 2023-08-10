@@ -1,6 +1,6 @@
 # Managed by Hydra
 
-ckpt_path: 
+ckpt_path: /localhome/zla247/projects/data/output/Scannet/AutoDecoder/stage-1_AutoDecoder_overfit-True_intake-10_0.5_latent-64_inner-steps-300_lr-0.002-0.001-0.001_blocks-[1, 2, 3]-[1, 2, 3]_run_1/training/epoch=509.ckpt
 
 logger:
   # https://pytorch-lightning.readthedocs.io/en/stable/extensions/generated/pytorch_lightning.loggers.WandbLogger.html
@@ -16,7 +16,7 @@ trainer:
   num_nodes: 1
   max_epochs: 800
   num_sanity_val_steps: 10
-  check_val_every_n_epoch: 10
+  check_val_every_n_epoch: 1
   profiler: simple
 
 # https://pytorch-lightning.readthedocs.io/en/stable/api/pytorch_lightning.callbacks.ModelCheckpoint.html

@@ -184,7 +184,7 @@ class MetaDecoder(GeneralModel):
             latent_optimizer.step()
             # udf_loss_list.append(udf_loss.item())  # Store the value_loss for this step
 
-        self.log("val/udf_loss", udf_loss, prog_bar=True, on_step=True, on_epoch=True, sync_dist=True)
+        self.log("val/udf_loss", udf_loss, prog_bar=True, on_step=True, on_epoch=True, sync_dist=True, batch_size=1)
 
         # After the loop, plot the value_loss for each step
         # plt.plot(value_loss_list)
@@ -230,7 +230,7 @@ class MetaDecoder(GeneralModel):
             # Step the latent optimizer and zero its gradients
             latent_optimizer.step()
 
-        self.log("test/udf_loss", udf_loss, prog_bar=True, on_step=True, on_epoch=True, sync_dist=True)
+        self.log("test/udf_loss", udf_loss, prog_bar=True, on_step=True, on_epoch=True, sync_dist=True, batch_size=1)
         # Calculating the metrics
         torch.set_grad_enabled(False)
         output_dict = self.forward(data_dict, latent_code)

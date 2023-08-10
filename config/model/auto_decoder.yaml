@@ -5,8 +5,8 @@ defaults:
   - base
 
 
+# stage1_ckpt_path: /localhome/zla247/projects/data/output/Scannet/AutoDecoder/stage-1_AutoDecoder_overfit-True_intake-10_0.5_latent-64_inner-steps-300_lr-0.002-0.001-0.001_blocks-[1, 2, 3]-[1, 2, 3]_run_1/training/epoch=509.ckpt
 stage1_ckpt_path: None
-# stage1_ckpt_path: 
 stage2_ckpt_path: 
 
 
@@ -18,13 +18,13 @@ stage2_ckpt_path:
 #     name: HybrdPC
 
 trainer:
-  max_epochs: 512
+  max_epochs: 700
 
 optimizer:
     target_: torch.optim.Adam
     lr: 0.002
     inner_loop_steps: 300
-    inner_loop_lr: 0.001
+    inner_loop_lr: 0.005
     latent_lr: 0.001
     decreased_by: 10
 
@@ -36,12 +36,15 @@ dense_generator:
   threshold: 0.1
   num_points: 900000
   filter_val: 0.009
-  prepare_epochs: 450
+  prepare_epochs: 0
 
 training_stage: 1
 
 network:
   module: AutoDecoder
+
+  use_modulation: True # whether to use modulation as latent code
+  auto_encoder: True # whether to use auto_encoder
 
   # m: 16 # 16 or 32 (U-Net hidden dimension)
   backbone_type: UNet # Conv or UNet
@@ -59,7 +62,7 @@ network:
   latent_dim: 64 #
   seg_loss_weight: 0.5
 
-  prepare_epochs: 200
+  prepare_epochs: 100
 
   fourier_encoder:
     embedding_dim: 32

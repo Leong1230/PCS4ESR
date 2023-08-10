@@ -103,12 +103,15 @@ class AutoDecoder(GeneralModel):
 
 
     def forward(self, data_dict, latent_code):
-        seg_modulations = self.seg_backbone(latent_code, data_dict['voxel_coords'], data_dict['voxel_indices']) # B, C
         functa_modulations = self.functa_backbone(latent_code, data_dict['voxel_coords'], data_dict['voxel_indices']) # B, C
+        seg_modulations = self.seg_backbone(latent_code, data_dict['voxel_coords'], data_dict['voxel_indices']) # B, C
 
         # modulations = latent_code
         segmentation = self.seg_decoder(seg_modulations['voxel_features'].F, data_dict['points'], data_dict["voxel_indices"])  # embeddings (B, C) coords (N, 3) indices (N, )
-        values = self.functa_decoder(functa_modulations['voxel_features'].F, data_dict['query_points'], data_dict["query_voxel_indices"]) # embeddings (B, D1) coords (M, 3) indices (M, )
+        if self.hparams.model.network.auto_encoder: # use auto encoder by passing the latent code to the functa backbone
+            values = self.functa_decoder(functa_modulations['voxel_features'].F, data_dict['query_points'], data_dict["query_voxel_indices"]) # embeddings (B, D1) coords (M, 3) indices (M, )
+        else:
+            values = self.functa_decoder(latent_code, data_dict['query_points'], data_dict["query_voxel_indices"])
         # values = self.functa_decoder(latent_code, data_dict['query_points'], data_dict["query_voxel_indices"]) # embeddings (B, D1) coords (M, 3) indices (M, )
 
 
@@ -178,6 +181,7 @@ class AutoDecoder(GeneralModel):
 
             # Creating the optimizer for latent_code
             outer_optimizer = self.optimizers()
+            # outer_optimizer.param_groups[0]['capturable'] = True
             outer_optimizer.zero_grad()
 
             output_dict = self.forward(data_dict, latent_code)
@@ -187,6 +191,7 @@ class AutoDecoder(GeneralModel):
             # latent_code = latent_code.detach().requires_grad_()       
             outer_optimizer.step()
             for idx in range(batch_size):
+                # self.latent_optimizers[scene_names[idx]].param_groups[0]['capturable'] = True
                 self.latent_optimizers[scene_names[idx]].step()
             # self.latent_codes[scene_names[0]] = latent_code  # Detach to avoid tracking its history
 
@@ -203,34 +208,48 @@ class AutoDecoder(GeneralModel):
 
             # Retrieve or initialize the latent codes
             latent_codes = []
+            latent_optimizers = []
+            need_updates = False
             for idx in range(batch_size):
                 if scene_names[idx] in self.latent_codes:
                     latent_code = self.latent_codes[scene_names[idx]]
+                    latent_codes.append(latent_code)
                 else:
-                    latent_code = torch.rand(voxel_nums[idx], self.latent_dim,requires_grad=True, device=self.device)
-                    latent_optimizer = torch.optim.Adam([latent_code], lr=self.hparams.model.optimizer.inner_loop_lr)
-                    # Create a progress bar
-                    for iter in tqdm(range(self.hparams.model.optimizer.inner_loop_steps), desc='Optimization Progress'):  # Perform multiple steps
-                        # Adjust learning rate
-                        adjust_learning_rate(self.hparams.model.optimizer.inner_loop_lr, latent_optimizer, iter, self.hparams.model.optimizer.inner_loop_steps, self.hparams.model.optimizer.decreased_by)
+                    need_updates = True
+                    latent_codes[idx] = torch.rand(voxel_nums[idx], self.latent_dim,requires_grad=True, device=self.device)
+                    latent_optimizers[idx] = torch.optim.Adam([latent_codes[idx]], lr=self.hparams.model.optimizer.inner_loop_lr)
+                    latent_optimizers[idx].zero_grad()
 
-                        output_dict = self.forward(data_dict, latent_code)
-                        _, value_loss = self._loss(data_dict, output_dict)
-                        latent_optimizer.zero_grad()
-                        self.manual_backward(value_loss)         
-                        # Step the latent optimizer and zero its gradients
-                        latent_optimizer.step()
-                    latent_code = latent_code.detach()
-                    self.latent_codes[scene_names[idx]] = latent_code
-                    print(f"Train UDF Loss: {value_loss.item()}")
-     
-                latent_codes.append(latent_code)
+            
+            # Create a progress bar
+            if need_updates:
+                for iter in tqdm(range(self.hparams.model.optimizer.inner_loop_steps), desc='Optimization Progress'):  # Perform multiple steps
+                    # Adjust learning rate
+                    adjust_learning_rate(self.hparams.model.optimizer.inner_loop_lr, latent_optimizer, iter, self.hparams.model.optimizer.inner_loop_steps, self.hparams.model.optimizer.decreased_by)
+                    latent_code = torch.cat(latent_codes, dim=0)
+                    output_dict = self.forward(data_dict, latent_code)
+                    _, value_loss = self._loss(data_dict, output_dict)
+                    for idx in range(batch_size):
+                        latent_optimizers[idx].zero_grad()
+                    self.manual_backward( value_loss + 1e-5*torch.mean(latent_code.pow(2)))       
+                    # Step the latent optimizer and zero its gradients
+                    for idx in range(batch_size):
+                        latent_optimizers[idx].step()
+                    
+                for idx in range(batch_size):
+                    if self.hparams.model.network.use_modulation:
+                        functa_modulations = self.functa_backbone(latent_code[idx], data_dict['voxel_coords'], data_dict['voxel_indices']) # B, C
+                        self.latent_codes[scene_names[idx]] = functa_modulations['voxel_features'].F.detach()
+                    else:
+                        self.latent_codes[scene_names[idx]] = latent_code[idx].detach()
+                print(f"Train UDF Loss: {value_loss.item()}")
 
             # Stack the latent codes into a batch
             latent_code = torch.cat(latent_codes, dim=0)
             output_dict = self.forward(data_dict, latent_code)
             seg_loss, _ = self._loss(data_dict, output_dict)
             outer_optimizer = self.optimizers()
+            # outer_optimizer.param_groups[0]['capturable'] = True
             outer_optimizer.zero_grad() 
             self.manual_backward(seg_loss)
             outer_optimizer.step()
@@ -310,7 +329,6 @@ class AutoDecoder(GeneralModel):
                 )
 
     def validation_step(self, data_dict, idx):
-        torch.set_grad_enabled(True)
         scene_name = data_dict['scene_names'][0]  # Assume scene_names is a list of strings
         voxel_num = data_dict["voxel_nums"][0]    # Assume voxel_nums is a list of ints
 
@@ -319,12 +337,18 @@ class AutoDecoder(GeneralModel):
         # Inner loop
         if self.training_stage == 1:
             if self.current_epoch > self.hparams.model.network.prepare_epochs:
+                torch.set_grad_enabled(True)
+
                 # voxel_nums = data_dict["voxel_nums"]    # Assume voxel_nums is a list of ints
 
                 latent_code = torch.rand(voxel_num, self.latent_dim,requires_grad=True, device=self.device)
                 latent_optimizer = torch.optim.Adam([latent_code], lr=self.hparams.model.optimizer.inner_loop_lr)
                 # Create a progress bar
-                pbar = tqdm(range(self.hparams.model.optimizer.inner_loop_steps), desc='Optimization Progress')
+                use_tqdm = False
+                if use_tqdm:
+                    pbar = tqdm(range(self.hparams.model.optimizer.inner_loop_steps), desc='Optimization Progress')
+                else:
+                    pbar = range(self.hparams.model.optimizer.inner_loop_steps)
 
                 for iter in pbar:  # Perform multiple steps
                     # Adjust learning rate
@@ -344,7 +368,8 @@ class AutoDecoder(GeneralModel):
                     latent_optimizer.step()
 
                     # Update the postfix of the progress bar with the current loss
-                    pbar.set_postfix({'udf_loss': value_loss.item()})
+                    if use_tqdm:
+                        pbar.set_postfix({'udf_loss': value_loss.item()})
 
 
                 self.log("val/udf_loss", value_loss, prog_bar=True, on_step=True, on_epoch=True, sync_dist=True, batch_size=1)
@@ -363,9 +388,11 @@ class AutoDecoder(GeneralModel):
             # batch_size = len(scene_names)
 
             # Retrieve or initialize the latent codes
+            udf_loss = 0
             if scene_name in self.latent_codes:
                 latent_code = self.latent_codes[scene_name]
             else:
+                torch.set_grad_enabled(True)
                 latent_code = torch.rand(voxel_num, self.latent_dim,requires_grad=True, device=self.device)
                 latent_optimizer = torch.optim.Adam([latent_code], lr=self.hparams.model.optimizer.inner_loop_lr)
 
@@ -376,13 +403,17 @@ class AutoDecoder(GeneralModel):
                     output_dict = self.forward(data_dict, latent_code)
                     _, value_loss = self._loss(data_dict, output_dict)
                     latent_optimizer.zero_grad()
-                    self.manual_backward(value_loss)         
+                    self.manual_backward(value_loss + 1e-3 * torch.mean(latent_code.pow(2)))         
                     # Step the latent optimizer and zero its gradients
                     latent_optimizer.step()
+                udf_loss = value_loss
                 # Print the loss for this step
                 print(f"Val UDF Loss: {value_loss.item()}")
-                latent_code = latent_code.detach()
-                self.latent_codes[scene_name] = latent_code
+                if self.hparams.model.network.use_modulation:
+                    functa_modulations = self.functa_backbone(latent_code, data_dict['voxel_coords'], data_dict['voxel_indices']) # B, C
+                    self.latent_codes[scene_name] = functa_modulations['voxel_features'].F.detach()
+                else:
+                    self.latent_codes[scene_name] = latent_code.detach()
 
             torch.set_grad_enabled(False)
             output_dict = self.forward(data_dict, latent_code)
@@ -396,7 +427,8 @@ class AutoDecoder(GeneralModel):
                 "val_eval/semantic_mean_iou", semantic_mean_iou, on_step=False, on_epoch=True, sync_dist=True, batch_size=1
             )
             self.val_test_step_outputs.append((semantic_accuracy, semantic_mean_iou))
-            if self.current_epoch > self.hparams.model.dense_generator.prepare_epochs:
+            torch.set_grad_enabled(True)
+            if self.current_epoch >= self.hparams.model.dense_generator.prepare_epochs:
                 if self.hparams.model.inference.visualize_udf:
                     self.udf_visualization(data_dict, output_dict, latent_code, self.current_epoch, udf_loss)
 
@@ -497,12 +529,12 @@ class AutoDecoder(GeneralModel):
         merged_points_cloud = original_points_cloud + sampled_points_cloud
 
         # visualize the point clouds
-        # o3d.visualization.draw_geometries([dense_points_cloud])
-        # o3d.visualization.draw_geometries([merged_points_cloud])
+        o3d.visualization.draw_geometries([dense_points_cloud])
+        o3d.visualization.draw_geometries([merged_points_cloud])
 
         # Save the point clouds
         save_dir = os.path.join(self.hparams.exp_output_root_path)
-        o3d.io.write_point_cloud(os.path.join(save_dir, 'voxel_' + str(self.hparams.data.voxel_size) + '_epoch_' + str(current_epoch) + 'udf_loss_' + '{:.5f}'.format(udf_loss.item()) + '_dense.ply'), dense_points_cloud)
-        o3d.io.write_point_cloud(os.path.join(save_dir, 'voxel_' + str(self.hparams.data.voxel_size) + '_epoch_' + str(current_epoch) + '_udf_loss_' + '{:.5f}'.format(udf_loss.item()) + '_merged.ply'), merged_points_cloud)
+        o3d.io.write_point_cloud(os.path.join(save_dir, 'voxel_' + str(self.hparams.data.voxel_size) + '_epoch_' + str(current_epoch) + 'udf_loss_' + '{:.5f}'.format(udf_loss) + '_dense.ply'), dense_points_cloud)
+        o3d.io.write_point_cloud(os.path.join(save_dir, 'voxel_' + str(self.hparams.data.voxel_size) + '_epoch_' + str(current_epoch) + '_udf_loss_' + '{:.5f}'.format(udf_loss) + '_merged.ply'), merged_points_cloud)
 
         flag = 1

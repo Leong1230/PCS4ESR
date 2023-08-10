@@ -4,6 +4,9 @@
 defaults:
   - base
 
+stage1_ckpt_path: None
+# stage1_ckpt_path: 
+stage2_ckpt_path: None
 # log:
 #   WandbLogger:
 #   project: HybridPC
@@ -14,14 +17,18 @@ defaults:
 trainer:
   max_epochs: 512
 
+training_stage: 0
+
 optimizer:
     target_: torch.optim.Adam
     lr: 0.002
     inner_loop_steps: 10
     inner_loop_lr: 0.001
+    latent_lr: 0.001
+    decreased_by: 10
 
 lr_decay:
-  decay_start_epoch: 250
+  decay_start_epoch: 350
 
 dense_generator:
   num_steps: 10
@@ -39,6 +46,10 @@ network:
   blocks: [1, 2, 3]
   cluster_blocks: [1, 2]
   block_reps: 2
+  seg_blocks: [1, 2, 3]
+  functa_blocks: [1, 2, 3]
+  seg_block_reps: 2
+  functa_block_reps: 2
 
   use_color: True
   use_normal: False
