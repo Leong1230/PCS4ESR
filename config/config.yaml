@@ -10,7 +10,7 @@ defaults:
   - data: base
   - model: base
 
-experiment_name: stage-${model.training_stage}_${model.network.module}_overfit-${data.over_fitting}_intake-${data.take}_${data.voxel_size}_latent-${model.network.latent_dim}_inner-steps-${model.optimizer.inner_loop_steps}_lr-${model.optimizer.lr}-${model.optimizer.latent_lr}-${model.optimizer.inner_loop_lr}_blocks-${model.network.functa_blocks}-${model.network.seg_blocks}_continue_1
+experiment_name: stage-${model.training_stage}_${model.network.module}_overfit-${data.over_fitting}_intake-${data.take}_${data.voxel_size}_latent-${model.network.latent_dim}_norm-initial_inner-steps-${model.optimizer.inner_loop_steps}_lr-${model.optimizer.lr}-${model.optimizer.latent_lr}-${model.optimizer.inner_loop_lr}_reg-${model.loss.use_reg}_reg-lambda-${model.loss.code_reg_lambda}_${model.loss.loss_type}-blocks-${model.network.functa_blocks}-${model.network.seg_blocks}_run_1
 # experiment_name: stage-${model.training_stage}_${model.network.module}_overfit-${data.over_fitting}_intake-${data.take}_${data.voxel_size}_latent-${model.network.latent_dim}_lr-${model.optimizer.lr}_blocks-${model.network.blocks}_run_1
 # experiment_name: debug
 project_root_path: ${hydra:runtime.cwd}

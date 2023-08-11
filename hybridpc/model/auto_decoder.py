@@ -46,22 +46,23 @@ class AutoDecoder(GeneralModel):
             1
         )
 
-        self.seg_backbone = Backbone(
-            backbone_type=cfg.model.network.backbone_type,
-            input_channel=self.latent_dim, output_channel=cfg.model.network.modulation_dim, block_channels=cfg.model.network.seg_blocks,
-            block_reps=cfg.model.network.seg_block_reps,
-            sem_classes=cfg.data.classes
-        )
+        if self.training_stage == "2":
+            self.seg_backbone = Backbone(
+                backbone_type=cfg.model.network.backbone_type,
+                input_channel=self.latent_dim, output_channel=cfg.model.network.modulation_dim, block_channels=cfg.model.network.seg_blocks,
+                block_reps=cfg.model.network.seg_block_reps,
+                sem_classes=cfg.data.classes
+            )
 
-        self.seg_decoder = ImplicitDecoder(
-            "seg",
-            cfg.model.network.modulation_dim,
-            cfg.model.network.seg_decoder.input_dim,
-            cfg.model.network.seg_decoder.hidden_dim,
-            cfg.model.network.seg_decoder.num_hidden_layers_before_skip,
-            cfg.model.network.seg_decoder.num_hidden_layers_after_skip,
-            cfg.data.classes
-        )
+            self.seg_decoder = ImplicitDecoder(
+                "seg",
+                cfg.model.network.modulation_dim,
+                cfg.model.network.seg_decoder.input_dim,
+                cfg.model.network.seg_decoder.hidden_dim,
+                cfg.model.network.seg_decoder.num_hidden_layers_before_skip,
+                cfg.model.network.seg_decoder.num_hidden_layers_after_skip,
+                cfg.data.classes
+            )
 
 
         self.dense_generator = Dense_Generator(
@@ -104,10 +105,10 @@ class AutoDecoder(GeneralModel):
 
     def forward(self, data_dict, latent_code):
         functa_modulations = self.functa_backbone(latent_code, data_dict['voxel_coords'], data_dict['voxel_indices']) # B, C
-        seg_modulations = self.seg_backbone(latent_code, data_dict['voxel_coords'], data_dict['voxel_indices']) # B, C
-
-        # modulations = latent_code
-        segmentation = self.seg_decoder(seg_modulations['voxel_features'].F, data_dict['points'], data_dict["voxel_indices"])  # embeddings (B, C) coords (N, 3) indices (N, )
+        segmentation = None
+        if self.training_stage == "2":
+            seg_modulations = self.seg_backbone(latent_code, data_dict['voxel_coords'], data_dict['voxel_indices']) # B, C
+            segmentation = self.seg_decoder(seg_modulations['voxel_features'].F, data_dict['points'], data_dict["voxel_indices"])  # embeddings (B, C) coords (N, 3) indices (N, )
         if self.hparams.model.network.auto_encoder: # use auto encoder by passing the latent code to the functa backbone
             values = self.functa_decoder(functa_modulations['voxel_features'].F, data_dict['query_points'], data_dict["query_voxel_indices"]) # embeddings (B, D1) coords (M, 3) indices (M, )
         else:
@@ -117,20 +118,26 @@ class AutoDecoder(GeneralModel):
 
         return {"segmentation": segmentation, "values": values}
 
-    def _loss(self, data_dict, output_dict):
-        # seg_loss = F.cross_entropy(output_dict['segmentation'].view(-1, self.hparams.cfg.data.category_num), data_dict['labels'].view(-1))
-        seg_loss = F.cross_entropy(output_dict['segmentation'], data_dict['labels'].long(), ignore_index=-1)
+    def _loss(self, data_dict, output_dict, latent_code, stage):
+        seg_loss = 0
+        if self.training_stage == "2":
+            seg_loss = F.cross_entropy(output_dict['segmentation'], data_dict['labels'].long(), ignore_index=-1)
+        reg_loss = torch.mean(latent_code.pow(2))
 
-        value_loss = F.mse_loss(output_dict['values'], data_dict['values'])
+        if stage == "Auto_Decoder":
+            reg_loss = reg_loss * self.hparams.model.loss.code_reg_lambda * min(1, self.current_epoch / 100)
+        else:
+            reg_loss = reg_loss * self.hparams.model.loss.code_reg_lambda 
 
-        # loss_i = torch.nn.L1Loss(reduction='none')(torch.clamp(output_dict['values'], max=self.hparams.cfg.data.udf_queries.max_dist),torch.clamp(data_dict['values'], max=self.hparams.cfg.data.udf_queries.max_dist))# out = (B,num_points) by componentwise comparing vecots of size num_samples:
-        # value_loss = loss_i.sum(-1).mean() # loss_i summed over all #num_samples samples -> out = (B,1) and mean over batch -> out = (1)
-
-        # if self.training_stage == 1:
-        #     return value_loss
-        # else:
-        #     return seg_loss
-        return seg_loss, value_loss
+        if self.hparams.model.loss.loss_type == "L1":
+            value_loss = torch.nn.L1Loss(reduction='mean')(torch.clamp(output_dict['values'], max=self.hparams.data.udf_queries.max_dist), torch.clamp(data_dict['values'], max=self.hparams.data.udf_queries.max_dist))
+        else:
+            value_loss = F.mse_loss(output_dict['values'], data_dict['values'])
+        
+        if self.hparams.model.loss.use_reg:
+            return seg_loss, value_loss + reg_loss
+        else:
+            return seg_loss, value_loss
 
     # def configure_optimizers(self):
     #     optimizer = torch.optim.Adam(self.parameters(), lr=self.hparams.optimizer.lr)
@@ -166,7 +173,14 @@ class AutoDecoder(GeneralModel):
                 if scene_names[idx] in self.latent_codes:
                     latent_code = self.latent_codes[scene_names[idx]]
                 else:
-                    latent_code = torch.rand(voxel_nums[idx], self.latent_dim,requires_grad=True, device=self.device)
+                    if self.hparams.model.loss.norm_initialization:
+                        std_dev = 0.01
+                        latent_code = torch.randn(voxel_nums[idx], self.latent_dim, device=self.device) * std_dev
+                        latent_code.requires_grad_()
+
+                    else:
+                        latent_code = torch.rand(voxel_nums[idx], self.latent_dim,requires_grad=True, device=self.device)
+
                     latent_optimizer = torch.optim.Adam([latent_code], lr=self.hparams.model.optimizer.latent_lr)
                     self.latent_optimizers[scene_names[idx]] = latent_optimizer
                     self.latent_codes[scene_names[idx]] = latent_code
@@ -175,9 +189,6 @@ class AutoDecoder(GeneralModel):
 
             # Stack the latent codes into a batch
             latent_code = torch.cat(latent_codes, dim=0)
-        
-            # voxel_num = data_dict["voxel_coords"].shape[0] # B voxels
-            # latent_code = torch.rand(voxel_num, self.latent_dim, requires_grad=True, device=self.device)
 
             # Creating the optimizer for latent_code
             outer_optimizer = self.optimizers()
@@ -185,7 +196,7 @@ class AutoDecoder(GeneralModel):
             outer_optimizer.zero_grad()
 
             output_dict = self.forward(data_dict, latent_code)
-            _, value_loss = self._loss(data_dict, output_dict)
+            _, value_loss = self._loss(data_dict, output_dict, latent_code, "Auto_Decoder")
             # latent_optimizer.zero_grad()
             self.manual_backward(value_loss)  
             # latent_code = latent_code.detach().requires_grad_()       
@@ -216,40 +227,49 @@ class AutoDecoder(GeneralModel):
                     latent_codes.append(latent_code)
                 else:
                     need_updates = True
-                    latent_codes[idx] = torch.rand(voxel_nums[idx], self.latent_dim,requires_grad=True, device=self.device)
-                    latent_optimizers[idx] = torch.optim.Adam([latent_codes[idx]], lr=self.hparams.model.optimizer.inner_loop_lr)
+                    if self.hparams.model.loss.norm_initialization:
+                        std_dev = 0.01
+                        latent_code = torch.randn(voxel_nums[idx], self.latent_dim, device=self.device) * std_dev
+                        latent_code.requires_grad_()
+                    else:
+                        latent_code = torch.rand(voxel_nums[idx], self.latent_dim,requires_grad=True, device=self.device)
+                    latent_optimizers.append(torch.optim.Adam([latent_codes[idx]], lr=self.hparams.model.optimizer.inner_loop_lr))
                     latent_optimizers[idx].zero_grad()
 
             
             # Create a progress bar
             if need_updates:
                 for iter in tqdm(range(self.hparams.model.optimizer.inner_loop_steps), desc='Optimization Progress'):  # Perform multiple steps
-                    # Adjust learning rate
-                    adjust_learning_rate(self.hparams.model.optimizer.inner_loop_lr, latent_optimizer, iter, self.hparams.model.optimizer.inner_loop_steps, self.hparams.model.optimizer.decreased_by)
                     latent_code = torch.cat(latent_codes, dim=0)
                     output_dict = self.forward(data_dict, latent_code)
-                    _, value_loss = self._loss(data_dict, output_dict)
+                    _, value_loss = self._loss(data_dict, output_dict, latent_code, "Optimization")
                     for idx in range(batch_size):
+                        # Adjust learning rate
+                        adjust_learning_rate(self.hparams.model.optimizer.inner_loop_lr, latent_optimizers[idx], iter, self.hparams.model.optimizer.inner_loop_steps, self.hparams.model.optimizer.decreased_by)
                         latent_optimizers[idx].zero_grad()
-                    self.manual_backward( value_loss + 1e-5*torch.mean(latent_code.pow(2)))       
+                    self.manual_backward(value_loss)       
                     # Step the latent optimizer and zero its gradients
                     for idx in range(batch_size):
                         latent_optimizers[idx].step()
                     
-                for idx in range(batch_size):
-                    if self.hparams.model.network.use_modulation:
-                        functa_modulations = self.functa_backbone(latent_code[idx], data_dict['voxel_coords'], data_dict['voxel_indices']) # B, C
-                        self.latent_codes[scene_names[idx]] = functa_modulations['voxel_features'].F.detach()
-                    else:
-                        self.latent_codes[scene_names[idx]] = latent_code[idx].detach()
+                if self.hparams.model.network.use_modulation:
+                    start_idx = 0
+                    functa_modulations = self.functa_backbone(latent_code, data_dict['voxel_coords'], data_dict['voxel_indices']) # B, C
+                    for idx in range(batch_size):
+                        end_idx = start_idx + data_dict['voxel_nums'][idx]
+                        latent = functa_modulations['voxel_features'].F[start_idx:end_idx].detach()
+                        self.latent_codes[scene_names[idx]] = latent
+                        start_idx = end_idx
+                else:
+                    for idx in range(batch_size):
+                        self.latent_codes[scene_names[idx]] = latent_codes[idx].detach()
                 print(f"Train UDF Loss: {value_loss.item()}")
 
             # Stack the latent codes into a batch
             latent_code = torch.cat(latent_codes, dim=0)
             output_dict = self.forward(data_dict, latent_code)
-            seg_loss, _ = self._loss(data_dict, output_dict)
+            seg_loss, _ = self._loss(data_dict, output_dict, latent_code, "Optimization")
             outer_optimizer = self.optimizers()
-            # outer_optimizer.param_groups[0]['capturable'] = True
             outer_optimizer.zero_grad() 
             self.manual_backward(seg_loss)
             outer_optimizer.step()
@@ -267,50 +287,6 @@ class AutoDecoder(GeneralModel):
             )
         
             return seg_loss
-
-        # self.update_inner_optimizer_params(latent_code)
-        # latent_optimizer = self.inner_optimizer
-        # latent_optimizer = torch.optim.Adam([latent_code], lr=self.hparams.model.optimizer.latent_lr)
-
-        # latent_optimizer.zero_grad()
-
-        # train_loss_list = []  # To store the value_loss for each step
-        # # Inner loop
-        # if self.training_stage == 2:
-        #     if self.current_epoch == 0:
-        #         for _ in range(self.hparams.model.optimizer.inner_loop_steps):  # Perform multiple steps
-        #             output_dict = self.forward(data_dict, latent_code)
-        #             _, value_loss = self._loss(data_dict, output_dict)
-        #             latent_optimizer.zero_grad()
-        #             self.manual_backward(value_loss)         
-        #             # Step the latent optimizer and zero its gradients
-        #             latent_optimizer.step()
-        #             # Print the loss for this step
-        #             print(f"Step {_}, Loss: {value_loss.item()}")
-
-        #     # Outer loop
-        #     output_dict = self.forward(data_dict, latent_code)
-        #     seg_loss, _ = self._loss(data_dict, output_dict)
-        #     outer_optimizer.zero_grad() 
-        #     self.manual_backward(seg_loss)
-        #     outer_optimizer.step()
-
-        #     # self.log("train/udf_loss", value_loss, on_step=True, on_epoch=True, sync_dist=True)
-        #     self.log("train/seg_loss", seg_loss, on_step=True, on_epoch=True, sync_dist=True)
-        #     # Calculating the metrics
-        #     semantic_predictions = torch.argmax(output_dict['segmentation'], dim=-1)  # (B, N)
-        #     semantic_accuracy = evaluate_semantic_accuracy(semantic_predictions, data_dict["labels"], ignore_label=-1)
-        #     semantic_mean_iou = evaluate_semantic_miou(semantic_predictions, data_dict["labels"], ignore_label=-1)
-        #     self.log(
-        #         "train/semantic_accuracy", semantic_accuracy, on_step=False, on_epoch=True, sync_dist=True, batch_size=1
-        #     )         
-        #     self.log(
-        #         "train/semantic_mean_iou", semantic_mean_iou, on_step=False, on_epoch=True, sync_dist=True, batch_size=1
-        #     )
-        
-        #     return seg_loss
-        
-        # else:
     
 
     def on_train_epoch_end(self):
@@ -341,7 +317,12 @@ class AutoDecoder(GeneralModel):
 
                 # voxel_nums = data_dict["voxel_nums"]    # Assume voxel_nums is a list of ints
 
-                latent_code = torch.rand(voxel_num, self.latent_dim,requires_grad=True, device=self.device)
+                if self.hparams.model.loss.norm_initialization:
+                    std_dev = 0.01
+                    latent_code = torch.randn(voxel_num, self.latent_dim, device=self.device) * std_dev
+                    latent_code.requires_grad_()
+                else:
+                    latent_code = torch.rand(voxel_num, self.latent_dim,requires_grad=True, device=self.device)
                 latent_optimizer = torch.optim.Adam([latent_code], lr=self.hparams.model.optimizer.inner_loop_lr)
                 # Create a progress bar
                 use_tqdm = False
@@ -359,7 +340,7 @@ class AutoDecoder(GeneralModel):
                     )
 
                     output_dict = self.forward(data_dict, latent_code)
-                    _, value_loss = self._loss(data_dict, output_dict)
+                    _, value_loss = self._loss(data_dict, output_dict, latent_code, "Optimization ")
                     # print(f"Step {iter}, Loss: {value_loss.item()}")
 
                     latent_optimizer.zero_grad()
@@ -393,7 +374,12 @@ class AutoDecoder(GeneralModel):
                 latent_code = self.latent_codes[scene_name]
             else:
                 torch.set_grad_enabled(True)
-                latent_code = torch.rand(voxel_num, self.latent_dim,requires_grad=True, device=self.device)
+                if self.hparams.model.loss.norm_initialization:
+                    std_dev = 0.01
+                    latent_code = torch.randn(voxel_num, self.latent_dim, device=self.device) * std_dev
+                    latent_code.requires_grad_()
+                else:
+                    latent_code = torch.rand(voxel_num, self.latent_dim,requires_grad=True, device=self.device)
                 latent_optimizer = torch.optim.Adam([latent_code], lr=self.hparams.model.optimizer.inner_loop_lr)
 
                 for iter in tqdm(range(self.hparams.model.optimizer.inner_loop_steps), desc='Optimization Progress'):  # Perform multiple steps
@@ -401,9 +387,9 @@ class AutoDecoder(GeneralModel):
                     adjust_learning_rate(self.hparams.model.optimizer.inner_loop_lr, latent_optimizer, iter, self.hparams.model.optimizer.inner_loop_steps, self.hparams.model.optimizer.decreased_by)
 
                     output_dict = self.forward(data_dict, latent_code)
-                    _, value_loss = self._loss(data_dict, output_dict)
+                    _, value_loss = self._loss(data_dict, output_dict, latent_code, "Optimization")
                     latent_optimizer.zero_grad()
-                    self.manual_backward(value_loss + 1e-3 * torch.mean(latent_code.pow(2)))         
+                    self.manual_backward(value_loss)         
                     # Step the latent optimizer and zero its gradients
                     latent_optimizer.step()
                 udf_loss = value_loss

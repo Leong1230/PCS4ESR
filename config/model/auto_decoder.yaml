@@ -9,14 +9,6 @@ defaults:
 stage1_ckpt_path: None
 stage2_ckpt_path: 
 
-
-# log:
-#   WandbLogger:
-#   project: HybridPC
-#   name: ${experiment_name}
-#   TensorBoardLogger:
-#     name: HybrdPC
-
 trainer:
   max_epochs: 700
 
@@ -27,6 +19,12 @@ optimizer:
     inner_loop_lr: 0.005
     latent_lr: 0.001
     decreased_by: 10
+
+loss:
+  norm_initialization: True # initialize latent code by norm distirbution
+  loss_type: L1 # L1 or L2
+  use_reg: True # whether to use regularization
+  code_reg_lambda: 1e-4 # regularization lambda
 
 lr_decay:
   decay_start_epoch: 350
@@ -62,7 +60,7 @@ network:
   latent_dim: 64 #
   seg_loss_weight: 0.5
 
-  prepare_epochs: 100
+  prepare_epochs: 20
 
   fourier_encoder:
     embedding_dim: 32
