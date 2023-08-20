@@ -6,6 +6,7 @@ import os
 import torch.nn as nn
 from tqdm import tqdm
 import numpy as np
+import imageio
 import math
 import torchmetrics
 import open3d as o3d
@@ -46,7 +47,7 @@ class AutoDecoder(GeneralModel):
             1
         )
 
-        if self.training_stage == "2":
+        if self.training_stage == 2:
             self.seg_backbone = Backbone(
                 backbone_type=cfg.model.network.backbone_type,
                 input_channel=self.latent_dim, output_channel=cfg.model.network.modulation_dim, block_channels=cfg.model.network.seg_blocks,
@@ -71,14 +72,15 @@ class AutoDecoder(GeneralModel):
             cfg.model.dense_generator.num_steps,
             cfg.model.dense_generator.num_points,
             cfg.model.dense_generator.threshold,
-            cfg.model.dense_generator.filter_val
+            cfg.model.dense_generator.filter_val,
+            cfg.model.dense_generator.type
         )
 
         # Initialize an empty dictionary to store the latent codes
         self.latent_codes = {}
         self.latent_optimizers = {}
         # self.inner_optimizer = torch.optim.Adam([torch.zeros(1)], lr=self.hparams.model.optimizer.inner_loop_lr)
-        if self.training_stage ==2:
+        if self.training_stage == 2:
             for param in self.functa_backbone.parameters():
                 param.requires_grad = False
 
@@ -106,9 +108,10 @@ class AutoDecoder(GeneralModel):
     def forward(self, data_dict, latent_code):
         functa_modulations = self.functa_backbone(latent_code, data_dict['voxel_coords'], data_dict['voxel_indices']) # B, C
         segmentation = None
-        if self.training_stage == "2":
+        if self.training_stage == 2:
             seg_modulations = self.seg_backbone(latent_code, data_dict['voxel_coords'], data_dict['voxel_indices']) # B, C
             segmentation = self.seg_decoder(seg_modulations['voxel_features'].F, data_dict['points'], data_dict["voxel_indices"])  # embeddings (B, C) coords (N, 3) indices (N, )
+
         if self.hparams.model.network.auto_encoder: # use auto encoder by passing the latent code to the functa backbone
             values = self.functa_decoder(functa_modulations['voxel_features'].F, data_dict['query_points'], data_dict["query_voxel_indices"]) # embeddings (B, D1) coords (M, 3) indices (M, )
         else:
@@ -120,7 +123,7 @@ class AutoDecoder(GeneralModel):
 
     def _loss(self, data_dict, output_dict, latent_code, stage):
         seg_loss = 0
-        if self.training_stage == "2":
+        if self.training_stage == 2:
             seg_loss = F.cross_entropy(output_dict['segmentation'], data_dict['labels'].long(), ignore_index=-1)
         reg_loss = torch.mean(latent_code.pow(2))
 
@@ -233,6 +236,7 @@ class AutoDecoder(GeneralModel):
                         latent_code.requires_grad_()
                     else:
                         latent_code = torch.rand(voxel_nums[idx], self.latent_dim,requires_grad=True, device=self.device)
+                    latent_codes.append(latent_code)
                     latent_optimizers.append(torch.optim.Adam([latent_codes[idx]], lr=self.hparams.model.optimizer.inner_loop_lr))
                     latent_optimizers[idx].zero_grad()
 
@@ -308,8 +312,6 @@ class AutoDecoder(GeneralModel):
         scene_name = data_dict['scene_names'][0]  # Assume scene_names is a list of strings
         voxel_num = data_dict["voxel_nums"][0]    # Assume voxel_nums is a list of ints
 
-
-        
         # Inner loop
         if self.training_stage == 1:
             if self.current_epoch > self.hparams.model.network.prepare_epochs:
@@ -355,19 +357,8 @@ class AutoDecoder(GeneralModel):
 
                 self.log("val/udf_loss", value_loss, prog_bar=True, on_step=True, on_epoch=True, sync_dist=True, batch_size=1)
 
-            # After the loop, plot the value_loss for each step
-            # plt.plot(value_loss_list)
-            # plt.xlabel('Step')
-            # plt.ylabel('Value Loss')
-            # plt.show()
-            # No outer loop for validation
-
             # Calculating the metrics
         else: 
-            # scene_names = data_dict['scene_names']  # Assume scene_names is a list of strings
-            # voxel_nums = data_dict["voxel_nums"]    # Assume voxel_nums is a list of ints
-            # batch_size = len(scene_names)
-
             # Retrieve or initialize the latent codes
             udf_loss = 0
             if scene_name in self.latent_codes:
@@ -382,7 +373,13 @@ class AutoDecoder(GeneralModel):
                     latent_code = torch.rand(voxel_num, self.latent_dim,requires_grad=True, device=self.device)
                 latent_optimizer = torch.optim.Adam([latent_code], lr=self.hparams.model.optimizer.inner_loop_lr)
 
-                for iter in tqdm(range(self.hparams.model.optimizer.inner_loop_steps), desc='Optimization Progress'):  # Perform multiple steps
+                use_tqdm = True
+                if use_tqdm:
+                    pbar = tqdm(range(self.hparams.model.optimizer.inner_loop_steps), desc='Optimization Progress')
+                else:
+                    pbar = range(self.hparams.model.optimizer.inner_loop_steps)
+
+                for iter in pbar:  # Perform multiple steps
                     # Adjust learning rate
                     adjust_learning_rate(self.hparams.model.optimizer.inner_loop_lr, latent_optimizer, iter, self.hparams.model.optimizer.inner_loop_steps, self.hparams.model.optimizer.decreased_by)
 
@@ -392,9 +389,14 @@ class AutoDecoder(GeneralModel):
                     self.manual_backward(value_loss)         
                     # Step the latent optimizer and zero its gradients
                     latent_optimizer.step()
+                    # Update the postfix of the progress bar with the current loss
+                    if use_tqdm:
+                        pbar.set_postfix({'udf_loss': value_loss.item()})
+
                 udf_loss = value_loss
                 # Print the loss for this step
-                print(f"Val UDF Loss: {value_loss.item()}")
+                print(f"Scene: {scene_name}, Val UDF Loss: {value_loss.item()}")
+                
                 if self.hparams.model.network.use_modulation:
                     functa_modulations = self.functa_backbone(latent_code, data_dict['voxel_coords'], data_dict['voxel_indices']) # B, C
                     self.latent_codes[scene_name] = functa_modulations['voxel_features'].F.detach()
@@ -415,112 +417,223 @@ class AutoDecoder(GeneralModel):
             self.val_test_step_outputs.append((semantic_accuracy, semantic_mean_iou))
             torch.set_grad_enabled(True)
             if self.current_epoch >= self.hparams.model.dense_generator.prepare_epochs:
-                if self.hparams.model.inference.visualize_udf:
+                if self.hparams.model.inference.visualization:
                     self.udf_visualization(data_dict, output_dict, latent_code, self.current_epoch, udf_loss)
 
 
 
-    # def test_step(self, data_dict, idx):
-    #     torch.set_grad_enabled(True)
-    #     voxel_num = data_dict["voxel_coords"].shape[0]  # K voxels
-    #     latent_code = torch.rand(voxel_num, self.latent_dim, requires_grad=True, device=self.device)
+    def test_step(self, data_dict, idx):
+        scene_name = data_dict['scene_names'][0]  # Assume scene_names is a list of strings
+        voxel_num = data_dict["voxel_nums"][0]    # Assume voxel_nums is a list of ints
 
-    #     # Creating the optimizer for latent_code
-    #     latent_optimizer = torch.optim.Adam([latent_code], lr=self.hparams.model.optimizer.inner_loop_lr)
-        
-    #     value_loss_list = []  # To store the value_loss for each step
-    #     # Inner loop
-    #     for step in range(self.hparams.model.optimizer.inner_loop_steps):  # Perform multiple steps
-    #         output_dict = self.forward(data_dict, latent_code)
-    #         _, udf_loss,  _ = self._loss(data_dict, output_dict)
-    #         latent_optimizer.zero_grad()
-    #         self.manual_backward(udf_loss)
+        # Inner loop
+        if self.hparams.model.inference.term == "UDF":
+           # Initialize the latent codes
+            torch.set_grad_enabled(True)
+            if self.hparams.model.loss.norm_initialization:
+                std_dev = 0.01
+                latent_code = torch.randn(voxel_num, self.latent_dim, device=self.device) * std_dev
+                latent_code.requires_grad_()
+            else:
+                latent_code = torch.rand(voxel_num, self.latent_dim,requires_grad=True, device=self.device)
+            latent_optimizer = torch.optim.Adam([latent_code], lr=self.hparams.model.optimizer.inner_loop_lr)
 
-    #         # Step the latent optimizer and zero its gradients
-    #         latent_optimizer.step()
+            pbar = tqdm(range(self.hparams.model.optimizer.inner_loop_steps), desc='Optimization Progress')
+            for iter in pbar:  # Perform multiple steps
+                # Adjust learning rate
+                adjust_learning_rate(self.hparams.model.optimizer.inner_loop_lr, latent_optimizer, iter, self.hparams.model.optimizer.inner_loop_steps, self.hparams.model.optimizer.decreased_by)
 
-    #     self.log("test/udf_loss", udf_loss, prog_bar=True, on_step=True, on_epoch=True, sync_dist=True)
-    #     # Calculating the metrics
-    #     torch.set_grad_enabled(False)
-    #     output_dict = self.forward(data_dict, latent_code)
+                output_dict = self.forward(data_dict, latent_code)
+                _, value_loss = self._loss(data_dict, output_dict, latent_code, "Optimization")
+                
+                latent_optimizer.zero_grad()
+                self.manual_backward(value_loss)         
+                # Step the latent optimizer and zero its gradients
+                latent_optimizer.step()
+                pbar.set_postfix({'udf_loss': value_loss.item()})
 
-    #     semantic_accuracy = None
-    #     semantic_mean_iou = None
-    #     if self.hparams.cfg.model.inference.evaluate:
-    #         semantic_predictions = torch.argmax(output_dict['segmentation'], dim=-1)  # (B, N)
-    #         semantic_accuracy = evaluate_semantic_accuracy(semantic_predictions, data_dict["labels"], ignore_label=-1)
-    #         semantic_mean_iou = evaluate_semantic_miou(semantic_predictions, data_dict["labels"], ignore_label=-1)
-    #         self.log(
-    #             "val_eval/semantic_accuracy", semantic_accuracy, on_step=False, on_epoch=True, sync_dist=True, batch_size=1
+            udf_loss = value_loss
+            # Print the loss for this step
+            print(f"Scene: {scene_name}, Test UDF Loss: {value_loss.item()}")
+
+            if self.current_epoch >= self.hparams.model.dense_generator.prepare_epochs:
+                if self.hparams.model.inference.visualization:
+                    self.udf_visualization(data_dict, output_dict, latent_code, self.current_epoch, udf_loss)
+            # Calculating the metrics
+
+    # def udf_visualization(self, data_dict, output_dict, latent_code, current_epoch, udf_loss):
+
+    #     functa_modulations = self.functa_backbone(latent_code, data_dict['voxel_coords'], data_dict['voxel_indices']) # B, C
+    #     voxel_num = functa_modulations['voxel_features'].F.shape[0]
+    #     # voxel_id = torch.randint(0, voxel_num, (1,)).item()
+    #     scene_name = data_dict['scene_names'][0]
+    #     loss_type = self.hparams.model.loss.loss_type
+
+    #     if self.hparams.model.dense_generator.type == 'voxel':
+    #         original_points = data_dict["points"][data_dict['voxel_indices'] == voxel_id].cpu().numpy()
+    #     else:
+    #         original_points = data_dict["xyz"].cpu().numpy()
+
+    #     # create point cloud for original points
+    #     original_points_cloud = o3d.geometry.PointCloud()
+    #     original_points_cloud.points = o3d.utility.Vector3dVector(original_points)
+    #     # original_points_cloud.paint_uniform_color([1, 0, 0])  # red color
+
+    #     if self.hparams.model.dense_generator.type == 'voxel': 
+    #         dense_points, duration = self.dense_generator.generate_point_cloud(data_dict, functa_modulations['voxel_features'].F, voxel_id)
+    #         # Create dense point cloud
+    #         dense_points_cloud = o3d.geometry.PointCloud()
+    #         dense_points_cloud.points = o3d.utility.Vector3dVector(dense_points)
+    #         # Translate the dense point cloud along z-axis by 1 unit to avoid overlap
+
+    #     else: 
+    #         dense_points, duration = self.dense_generator.generate_all_voxel_point_clouds(data_dict, functa_modulations['voxel_features'].F)
+    #         # Create dense point cloud
+    #         dense_points_cloud = o3d.geometry.PointCloud()
+    #         dense_points_cloud.points = o3d.utility.Vector3dVector(dense_points)
+    #         # dense_points_cloud.paint_uniform_color([0.5, 0.5, 0.5])  # gray color
+
+    #     # visualize the point clouds
+    #     if self.hparams.model.inference.show_visualizations:
+    #         o3d.visualization.draw_geometries([dense_points_cloud])
+    #         o3d.visualization.draw_geometries([original_points_cloud]) # show the original point cloud for scene visualization
+
+    #     # Save the point clouds
+    #     if self.hparams.model.inference.save_predictions:
+    #         save_dir = os.path.join(
+    #             self.hparams.exp_output_root_path, 'inference', self.hparams.model.inference.split,
+    #             'udf_visualizations'
     #         )
-    #         self.log(
-    #             "val_eval/semantic_mean_iou", semantic_mean_iou, on_step=False, on_epoch=True, sync_dist=True, batch_size=1
-    #         )
-
-    #     if self.current_epoch > self.hparams.cfg.model.network.prepare_epochs:
-    #         point_xyz_cpu = data_dict["point_xyz"].cpu().numpy()
-    #         instance_ids_cpu = data_dict["instance_ids"].cpu()
-    #         sem_labels = data_dict["sem_labels"].cpu()
-
-    #         pred_instances = self._get_pred_instances(data_dict["scan_ids"][0],
-    #                                                   point_xyz_cpu,
-    #                                                   output_dict["proposal_scores"][0].cpu(),
-    #                                                   output_dict["proposal_scores"][1].cpu(),
-    #                                                   output_dict["proposal_scores"][2].size(0) - 1,
-    #                                                   output_dict["semantic_scores"].cpu(),
-    #                                                   len(self.hparams.cfg.data.ignore_classes))
-    #         gt_instances = None
-    #         gt_instances_bbox = None
-    #         if self.hparams.cfg.model.inference.evaluate:
-    #             gt_instances = get_gt_instances(
-    #                 data_dict["sem_labels"].cpu(), instance_ids_cpu.numpy(), self.hparams.cfg.data.ignore_classes
-    #             )
-    #             gt_instances_bbox = get_gt_bbox(point_xyz_cpu,
-    #                                             instance_ids_cpu.numpy(),
-    #                                             sem_labels.numpy(), -1,
-    #                                             self.hparams.cfg.data.ignore_classes)
-    #         self.val_test_step_outputs.append((semantic_accuracy, semantic_mean_iou))
-
+    #         if self.hparams.model.dense_generator.type == 'voxel':
+    #             o3d.io.write_point_cloud(os.path.join(save_dir, 'Single_voxel_' + str(self.hparams.data.voxel_size) + '_from_' + scene_name + '_' + loss_type + 'udf_loss_' + '{:.5f}'.format(udf_loss) + '_dense.ply'), dense_points_cloud)
+    #             self.save_rotating_video_from_object(dense_points_cloud, os.path.join(save_dir, 'Single_voxel_' + str(self.hparams.data.voxel_size) + '_from_' + scene_name + '_' + loss_type + 'udf_loss_' + '{:.5f}'.format(udf_loss) + '_dense.mp4'))
+    #             o3d.io.write_point_cloud(os.path.join(save_dir, 'Single_voxel_' + str(self.hparams.data.voxel_size) + '_from_' + scene_name + '_' + loss_type + '_udf_loss_' + '{:.5f}'.format(udf_loss) + '_origin.ply'), original_points_cloud)
+    #             self.save_rotating_video_from_object(original_points_cloud, os.path.join(save_dir, 'Single_voxel_' + str(self.hparams.data.voxel_size) + '_from_' + scene_name + '_' + loss_type + '_udf_loss_' + '{:.5f}'.format(udf_loss) + '_origin.mp4'))
+    #         else:
+    #             o3d.io.write_point_cloud(os.path.join(save_dir, scene_name + '_voxel_' + str(self.hparams.data.voxel_size) + '_' + loss_type + '_udf_loss_' + '{:.5f}'.format(udf_loss) + '_dense.ply'), dense_points_cloud)
+    #             o3d.io.write_point_cloud(os.path.join(save_dir, scene_name + '_voxel_' + str(self.hparams.data.voxel_size) + '_' +  loss_type + '_udf_loss_' + '{:.5f}'.format(udf_loss) + '_origin.ply'), original_points_cloud)            
+    #         self.print(f"\nPredictions saved at {os.path.abspath(save_dir)}")
 
     def udf_visualization(self, data_dict, output_dict, latent_code, current_epoch, udf_loss):
-
-
         functa_modulations = self.functa_backbone(latent_code, data_dict['voxel_coords'], data_dict['voxel_indices']) # B, C
         voxel_num = functa_modulations['voxel_features'].F.shape[0]
-        voxel_id = torch.randint(0, voxel_num, (1,)).item()
+        scene_name = data_dict['scene_names'][0]
+        loss_type = self.hparams.model.loss.loss_type
 
-        dense_points, duration = self.dense_generator.generate_point_cloud(functa_modulations['voxel_features'].F, voxel_id)
+        save_dir = os.path.join(
+            self.hparams.exp_output_root_path, 'inference', self.hparams.model.inference.split,
+            'udf_visualizations'
+        )
 
-        # Create dense point cloud
-        dense_points_cloud = o3d.geometry.PointCloud()
-        dense_points_cloud.points = o3d.utility.Vector3dVector(dense_points)
+        if self.hparams.model.dense_generator.type == 'voxel':
+            for voxel_id in range(voxel_num):
+                original_points = data_dict["points"][data_dict['voxel_indices'] == voxel_id].cpu().numpy()
+                original_points_cloud = o3d.geometry.PointCloud()
+                original_points_cloud.points = o3d.utility.Vector3dVector(original_points)
 
-        # Translate the dense point cloud along z-axis by 1 unit to avoid overlap
-        dense_points_cloud.translate([0, 0, 1], relative=False)
+                dense_points, duration = self.dense_generator.generate_point_cloud(data_dict, functa_modulations['voxel_features'].F, voxel_id)
+                dense_points_cloud = o3d.geometry.PointCloud()
+                dense_points_cloud.points = o3d.utility.Vector3dVector(dense_points)
 
-        original_points = data_dict["points"][data_dict['voxel_indices'] == voxel_id].cpu().numpy()
-        sampled_points = data_dict["query_points"][data_dict['query_voxel_indices'] == voxel_id].cpu().numpy()
+                if self.hparams.model.inference.show_visualizations:
+                    o3d.visualization.draw_geometries([dense_points_cloud])
+                    o3d.visualization.draw_geometries([original_points_cloud])
 
-        # create point cloud for original points
-        original_points_cloud = o3d.geometry.PointCloud()
-        original_points_cloud.points = o3d.utility.Vector3dVector(original_points)
-        original_points_cloud.paint_uniform_color([1, 0, 0])  # red color
+                if self.hparams.model.inference.save_predictions:
+                    filename_base = f'Single_voxel_{self.hparams.data.voxel_size}_from_{scene_name}_voxelid_{voxel_id}_{loss_type}_udf_loss_{udf_loss:.5f}'
+                    o3d.io.write_point_cloud(os.path.join(save_dir, f'{filename_base}_dense.ply'), dense_points_cloud)
+                    self.save_rotating_video_from_object(dense_points_cloud, os.path.join(save_dir, f'{filename_base}_dense.mp4'))
+                    o3d.io.write_point_cloud(os.path.join(save_dir, f'{filename_base}_origin.ply'), original_points_cloud)
+                    self.save_rotating_video_from_object(original_points_cloud, os.path.join(save_dir, f'{filename_base}_origin.mp4'))
+                    
+        else:
+            original_points = data_dict["xyz"].cpu().numpy()
+            original_points_cloud = o3d.geometry.PointCloud()
+            original_points_cloud.points = o3d.utility.Vector3dVector(original_points)
 
-        # create point cloud for sampled points
-        sampled_points_cloud = o3d.geometry.PointCloud()
-        sampled_points_cloud.points = o3d.utility.Vector3dVector(sampled_points)
-        sampled_points_cloud.paint_uniform_color([0, 1, 0])  # green color
+            # dense_points, duration = self.dense_generator.generate_all_voxel_point_clouds(data_dict, functa_modulations['voxel_features'].F)
+            dense_points, duration = self.dense_generator.generate_point_cloud(data_dict, functa_modulations['voxel_features'].F, 0)
 
-        # Merge original and sampled point clouds
-        merged_points_cloud = original_points_cloud + sampled_points_cloud
+            dense_points_cloud = o3d.geometry.PointCloud()
+            dense_points_cloud.points = o3d.utility.Vector3dVector(dense_points)
 
-        # visualize the point clouds
-        o3d.visualization.draw_geometries([dense_points_cloud])
-        o3d.visualization.draw_geometries([merged_points_cloud])
+            if self.hparams.model.inference.show_visualizations:
+                o3d.visualization.draw_geometries([dense_points_cloud])
+                o3d.visualization.draw_geometries([original_points_cloud])
 
-        # Save the point clouds
-        save_dir = os.path.join(self.hparams.exp_output_root_path)
-        o3d.io.write_point_cloud(os.path.join(save_dir, 'voxel_' + str(self.hparams.data.voxel_size) + '_epoch_' + str(current_epoch) + 'udf_loss_' + '{:.5f}'.format(udf_loss) + '_dense.ply'), dense_points_cloud)
-        o3d.io.write_point_cloud(os.path.join(save_dir, 'voxel_' + str(self.hparams.data.voxel_size) + '_epoch_' + str(current_epoch) + '_udf_loss_' + '{:.5f}'.format(udf_loss) + '_merged.ply'), merged_points_cloud)
+            if self.hparams.model.inference.save_predictions:
+                o3d.io.write_point_cloud(os.path.join(save_dir, f'{scene_name}_voxel_{self.hparams.data.voxel_size}_{loss_type}_udf_loss_{udf_loss:.5f}_dense.ply'), dense_points_cloud)
+                o3d.io.write_point_cloud(os.path.join(save_dir, f'{scene_name}_voxel_{self.hparams.data.voxel_size}_{loss_type}_udf_loss_{udf_loss:.5f}_origin.ply'), original_points_cloud)            
 
-        flag = 1
+        self.print(f"\nPredictions saved at {os.path.abspath(save_dir)}")
+
+
+
+    def save_rotating_video_from_object(self, obj: o3d.geometry.Geometry3D, save_dir: str):
+        """
+        Generates a rotating video from an Open3D object.
+
+        Parameters:
+        - obj: The Open3D object to visualize.
+        - save_dir: The directory (including filename) to save the video.
+        """
+        # Create a visualizer
+        vis = o3d.visualization.Visualizer()
+        vis.create_window(visible=True)  # invisible window for offscreen rendering
+        vis.add_geometry(obj)
+        
+        # Rotate the view every frame and capture frames
+        frames = []
+        for i in range(360):  # 360 frames for a complete rotation
+            ctr = vis.get_view_control()
+            ctr.rotate(5.0, 0.0)  # rotate 5 degrees around z-axis
+            vis.poll_events()
+            vis.update_renderer()
+            frame = vis.capture_screen_float_buffer(False)
+            frames.append((np.asarray(frame) * 255).astype(np.uint8))
+        
+        # Save the frames as a video using imageio
+        imageio.mimsave(save_dir, frames, fps=30)
+        
+        vis.destroy_window()
+
+    # def save_rotating_video_from_object(self, obj: o3d.geometry.Geometry3D, save_dir: str):
+    #     """
+    #     Generates a rotating video from an Open3D object.
+
+    #     Parameters:
+    #     - obj: The Open3D object to visualize.
+    #     - save_dir: The directory (including filename) to save the video.
+    #     """
+    #     # Create a visualizer
+    #     vis = o3d.visualization.Visualizer()
+    #     vis.create_window(visible=True)  # visible window for offscreen rendering
+    #     vis.add_geometry(obj)
+        
+    #     frames = []
+        
+    #     def rotate_view(vis):
+    #         ctr = vis.get_view_control()
+    #         ctr.rotate(5.0, 0.0)  # rotate 5 degrees around z-axis
+            
+    #         frame = vis.capture_screen_float_buffer(True)
+    #         frames.append((np.asarray(frame) * 255).astype(np.uint8))
+            
+    #         # Save in intervals to not hold too much in memory
+    #         if len(frames) == 360:  # Save after capturing 360 frames, i.e., every 12 seconds at 30fps
+    #             imageio.mimsave(save_dir, frames, fps=30)
+    #             frames.clear()  # Clear the frames list
+            
+    #         return False
+        
+    #     # Set the callback function to be called before rendering
+    #     vis.register_animation_callback(rotate_view)
+        
+    #     # Run the visualizer
+    #     vis.run()
+        
+    #     # After the window is closed
+    #     if frames:  # Save any remaining frames
+    #         imageio.mimsave(save_dir, frames, fps=30)
+        
+    #     vis.destroy_window()

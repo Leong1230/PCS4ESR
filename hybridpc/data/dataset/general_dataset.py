@@ -13,15 +13,28 @@ from torch.utils.data import Dataset
 import open3d as o3d
 import matplotlib.cm as cm
 from plyfile import PlyData
+import hybridpc.data.dataset.augmentation as t
+from hybridpc.data.dataset.voxelizer import Voxelizer
 from pycarus.geometry.pcd import compute_udf_from_pcd, knn, compute_sdf_from_pcd
 from hybridpc.util.transform import jitter, flip, rotz, elastic, crop
 
 
 
 class GeneralDataset(Dataset):
+    # Augmentation arguments
+    SCALE_AUGMENTATION_BOUND = (0.9, 1.1)
+    ROTATION_AUGMENTATION_BOUND = ((-np.pi / 64, np.pi / 64), (-np.pi / 64, np.pi / 64), (-np.pi,
+                                                                                          np.pi))
+    TRANSLATION_AUGMENTATION_RATIO_BOUND = ((-0.2, 0.2), (-0.2, 0.2), (0, 0))
+    ELASTIC_DISTORT_PARAMS = ((0.2, 0.4), (0.8, 1.6))
+
+    ROTATION_AXIS = 'z'
+    LOCFEAT_IDX = 2
+
     def __init__(self, cfg, split):
         self.cfg = cfg
         self.split = 'train' if self.cfg.data.over_fitting else split # use only train set for overfitting
+        # self.split = split
         self.dataset_root_path = cfg.data.dataset_path
         self.voxel_size = cfg.data.voxel_size
         self.num_point = cfg.data.num_point
@@ -44,15 +57,37 @@ class GeneralDataset(Dataset):
             "val": cfg.data.metadata.val_list,
             "test": cfg.data.metadata.test_list
         }
-        self._load_from_disk()
-        self.data = []
+        self.voxelizer = Voxelizer(
+            voxel_size=self.voxel_size,
+            clip_bound=None,
+            use_augmentation=True,
+            scale_augmentation_bound=self.SCALE_AUGMENTATION_BOUND,
+            rotation_augmentation_bound=self.ROTATION_AUGMENTATION_BOUND,
+            translation_augmentation_ratio_bound=self.TRANSLATION_AUGMENTATION_RATIO_BOUND)
 
-        for idx, sample in tqdm(enumerate(self.scenes), desc="Voxelizing and Sample points", ncols=80):
+        if cfg.data.augmentation.use_aug:
+            prevoxel_transform_train = [
+                t.ElasticDistortion(self.ELASTIC_DISTORT_PARAMS)]
+            self.prevoxel_transforms = t.Compose(prevoxel_transform_train)
+            input_transforms = [
+                # t.RandomDropout(0.2),
+                t.RandomHorizontalFlip(self.ROTATION_AXIS, is_temporal=False),
+                t.ChromaticAutoContrast(),
+                t.ChromaticTranslation(cfg.data.augmentation.color_trans_ratio),
+                t.ChromaticJitter(cfg.data.augmentation.color_jitter_std),
+                t.HueSaturationTranslation(
+                    cfg.data.augmentation.hue_max, cfg.data.augmentation.saturation_max),
+            ]
+            self.input_transforms = t.Compose(input_transforms)
+        self._load_from_disk()
+        self.scenes = []
+
+        for idx, sample in tqdm(enumerate(self.scenes_in), desc="Voxelizing and Sample points", ncols=80):
             if self.sample_entire_scene:
                 processed_sample = self.preprocess_sample_entire_scene(sample, idx)
             else:
                 processed_sample = self.preprocess_sample(sample)
-            self.data.append(processed_sample)
+            self.scenes.append(processed_sample)
 
 
         # self.label_map = self.get_semantic_mapping_file(cfg.data.metadata.combine_file)
@@ -78,7 +113,7 @@ class GeneralDataset(Dataset):
     def _load_from_disk(self):
         with open(getattr(self.cfg.data.metadata, f"{self.split}_list")) as f:
             self.scene_names = [line.strip() for line in f]
-        self.scenes = []
+        self.scenes_in = []
         if self.cfg.data.over_fitting:
             self.scene_names = self.scene_names[self.intake_start:self.take+self.intake_start]
         for scene_name in tqdm(self.scene_names, desc=f"Loading {self.split} data from disk"):
@@ -87,7 +122,7 @@ class GeneralDataset(Dataset):
             scene["xyz"] -= scene["xyz"].mean(axis=0)
             scene["rgb"] = scene["rgb"].astype(np.float32) / 127.5 - 1
             scene['scene_name'] = scene_name
-            self.scenes.append(scene) 
+            self.scenes_in.append(scene) 
 
     # def preprocess_sample(self, sample):
     #     # Voxelize the points
@@ -187,30 +222,25 @@ class GeneralDataset(Dataset):
     
     def preprocess_sample_entire_scene(self, sample, idx):
         # Voxelize the points
-        points = sample['xyz']
-        point_xyz = points
+        xyz = sample['xyz']
         sem_labels = sample['sem_labels']
 
-        point_features = np.zeros(shape=(len(points), 0), dtype=np.float32)
+        point_features = np.zeros(shape=(len(xyz), 0), dtype=np.float32)
         if self.cfg.model.network.use_color:
             point_features = np.concatenate((point_features, sample['rgb']), axis=1)
         if self.cfg.model.network.use_normal:
             point_features = np.concatenate((point_features, sample['normal']), axis=1)
 
-        point_features = np.concatenate((point_features, points), axis=1)  # add xyz to point features
-        voxel_coords, voxel_features, unique_map, inverse_map = MinkowskiEngine.utils.sparse_quantize(
-            sample['xyz'], point_features, return_index=True, return_inverse=True, quantization_size=self.voxel_size)
-
-        voxel_center = voxel_coords * self.voxel_size + self.voxel_size / 2.0 # compute voxel_center in orginal coordinate system (torch.tensor)
+        point_features = np.concatenate((point_features, xyz), axis=1)  # add xyz to point features
 
         # Convert to tensor
-        points_tensor = torch.tensor(np.asarray(points))
+        points_tensor = torch.tensor(np.asarray(xyz))
 
         # Calculate number of queries based on the ratio and the number of points
-        num_queries_on_surface = int(len(points) * self.ratio_on_surface + 1)
-        num_queries_per_std = [int(len(points) * self.ratio_per_std + 1)] * 4  # A list of 4 equal values
-        min_range = np.min(points, axis=0)
-        max_range = np.max(points, axis=0)
+        num_queries_on_surface = int(len(xyz) * self.ratio_on_surface + 1)
+        num_queries_per_std = [int(len(xyz) * self.ratio_per_std + 1)] * 4  # A list of 4 equal values
+        min_range = np.min(xyz, axis=0)
+        max_range = np.max(xyz, axis=0)
 
         query_points, values = compute_udf_from_pcd(
             points_tensor,
@@ -220,96 +250,44 @@ class GeneralDataset(Dataset):
             (torch.tensor(min_range), torch.tensor(max_range))
         ) # torch.tensor
 
-        # create masks to visualize
-
-        # Number of surface queries
-        num_surface_queries = num_queries_on_surface
-
-        # Number of Gaussian queries
-        num_gaussian_queries = sum(num_queries_per_std) - num_queries_per_std[-1]# Sum of all Gaussian queries
-
-        # Number of uniform queries
-        num_uniform_queries = num_queries_per_std[-1]
-
-        # Check if we have any discrepancy in the count
-        if num_uniform_queries < 0:
-            raise ValueError('The counts of queries do not match the total number of queries in `query_points`.')
+        # num_surface_queries = num_queries_on_surface # number of surface queries
+        # num_gaussian_queries = sum(num_queries_per_std) - num_queries_per_std[-1]# number of all Gaussian queries
+        # num_uniform_queries = num_queries_per_std[-1] # Number of uniform queries
+        # if num_uniform_queries < 0: # Check if we have any discrepancy in the count
+        #     raise ValueError('The counts of queries do not match the total number of queries in `query_points`.')
 
         # Create masks
-        mask_surface = torch.cat((torch.ones(num_surface_queries), torch.zeros(num_gaussian_queries + num_uniform_queries))).bool().cpu().numpy()
-        mask_gaussian = torch.cat((torch.zeros(num_surface_queries), torch.ones(num_gaussian_queries), torch.zeros(num_uniform_queries))).bool().cpu().numpy()
-        mask_uniform = torch.cat((torch.zeros(num_surface_queries + num_gaussian_queries), torch.ones(num_uniform_queries))).bool().cpu().numpy()
+        # mask_surface = torch.cat((torch.ones(num_surface_queries), torch.zeros(num_gaussian_queries + num_uniform_queries))).bool().cpu().numpy()
+        # mask_gaussian = torch.cat((torch.zeros(num_surface_queries), torch.ones(num_gaussian_queries), torch.zeros(num_uniform_queries))).bool().cpu().numpy()
+        # mask_uniform = torch.cat((torch.zeros(num_surface_queries + num_gaussian_queries), torch.ones(num_uniform_queries))).bool().cpu().numpy()
 
         # find the nearest voxel center for each query point
-        device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-        query_points = query_points.to(device)
-        voxel_center = voxel_center.to(device)
 
-        query_indices, _, _ = knn(query_points, voxel_center, 1)
-        # query_indices, _, _ = knn(query_points, voxel_center, self.cfg.data.k_neighbours)
-        inverse_map = inverse_map.to(device)
-        query_indices = query_indices[:, 0]
-        # query_indices = query_indices
-        relative_coords = points - voxel_center[inverse_map].cpu().numpy()
-        query_relative_coords = query_points.cpu().numpy() - voxel_center[query_indices].cpu().numpy()
-
-        # remove query_points outside the voxel
-        lower_bound = -self.voxel_size / 2
-        upper_bound = self.voxel_size / 2
-        # Create a mask
-        mask = (query_relative_coords >= lower_bound) & (query_relative_coords <= upper_bound)
-        # Reduce across the last dimension to get a (N, ) mask
-        mask = np.all(mask,-1)
-        query_indices = query_indices[mask]
-        query_relative_coords = query_relative_coords[mask]
-        values = values[mask].cpu().numpy()
-
-        # elastic
-        scale = (1 / self.cfg.data.voxel_size)
-        if self.split == "train" and self.cfg.data.augmentation.elastic:
-            point_xyz_elastic = elastic(point_xyz * scale, 6 * scale // 50, 40 * scale / 50)
-            point_xyz_elastic = elastic(point_xyz_elastic, 20 * scale // 50, 160 * scale / 50)
-        else:
-            point_xyz_elastic = point_xyz * scale
-
-        point_xyz_elastic -= point_xyz_elastic.min(axis=0)
 
         #crop
         if all(label == -1 for label in sample['sem_labels']):
             flag = idx
-        # if self.split == "train":
-        #     # HACK, in case there are few points left
-        #     max_tries = 20
-        #     valid_idxs_count = 0
-        #     valid_idxs = np.ones(shape=points.shape[0], dtype=bool)
-        #     if valid_idxs.shape[0] > self.max_num_point:
-        #         while max_tries > 0:
-        #             points_tmp, valid_idxs = crop(point_xyz_elastic, self.max_num_point, self.cfg.data.full_scale[1])
-        #             valid_idxs_count = np.count_nonzero(valid_idxs)
-        #             if valid_idxs_count >= (self.max_num_point // 2) and np.any(sem_labels[valid_idxs] != -1):
-        #                 point_xyz_elastic = points_tmp
-        #                 break
-        #             max_tries -= 1
-        #         if valid_idxs_count < (self.max_num_point // 2) or np.all(sem_labels[valid_idxs] == -1):
-        #             raise Exception("Over-cropped!")
-
-        #     # point_xyz_elastic = point_xyz_elastic[valid_idxs]
-        #     point_xyz = point_xyz[valid_idxs]
-        #     # normals = normals[valid_idxs]
-        #     # colors = colors[valid_idxs]
-        #     sem_labels = sem_labels[valid_idxs]
 
         # Concatenate all the data
+        # data = {
+        #     "xyz": xyz,  # N, 3
+        #     "points": relative_coords,  # N, 3
+        #     "colors": sample['rgb'],  # N, 3
+        #     "labels": sample['sem_labels'],  # N,
+        #     "voxel_indices": inverse_map.cpu().numpy(),  # N,
+        #     "query_points": query_relative_coords,  # M, 3
+        #     "query_voxel_indices": query_indices.cpu().numpy(),  # M,
+        #     "values": values,  # M,
+        #     "voxel_coords": voxel_coords.cpu().numpy(),  # K, 3
+        #     "voxel_features": voxel_features,  # K, ?
+        #     "scene_name": sample['scene_name']
+        # }
         data = {
-            "points": relative_coords,  # N, 3
-            "colors": sample['rgb'],  # N, 3
+            "xyz": xyz,  # N, 3
+            "features": point_features,  # N, 3
             "labels": sample['sem_labels'],  # N,
-            "voxel_indices": inverse_map.cpu().numpy(),  # N,
-            "query_points": query_relative_coords,  # M, 3
-            "query_voxel_indices": query_indices.cpu().numpy(),  # M,
-            "values": values,  # M,
-            "voxel_coords": voxel_coords.cpu().numpy(),  # K, 3
-            "voxel_features": voxel_features,  # K, ?
+            "query_points": query_points.cpu().numpy(),  # M, 3
+            "values": values.cpu().numpy(),  # M,
             "scene_name": sample['scene_name']
         }
         # # computing voxel center coordinates
@@ -431,8 +409,83 @@ class GeneralDataset(Dataset):
   
 
     def __len__(self):
-        return len(self.data)
+        return len(self.scenes)
+
+    # def __getitem__(self, idx):
+
+    #     return self.data[idx]
 
     def __getitem__(self, idx):
 
-        return self.data[idx]
+        # index = index_long % len(self.data_paths)
+        # if self.use_shm:
+        #     locs_in = SA.attach("shm://%s_%s_%06d_locs_%08d" %
+        #                         (self.dataset_name, self.split, self.identifier, index)).copy()
+        #     feats_in = SA.attach("shm://%s_%s_%06d_feats_%08d" %
+        #                          (self.dataset_name, self.split, self.identifier, index)).copy()
+        #     labels_in = SA.attach("shm://%s_%s_%06d_labels_%08d" %
+        #                           (self.dataset_name, self.split, self.identifier, index)).copy()
+        # else:
+            # locs_in, feats_in, labels_in = torch.load(self.data_paths[index])
+            # labels_in[labels_in == -100] = 255
+            # labels_in = labels_in.astype(np.uint8)
+            # # no color in the input point cloud, e.g nuscenes
+            # if np.isscalar(feats_in) and feats_in == 0:
+            #     feats_in = np.zeros_like(locs_in)
+            # feats_in = (feats_in + 1.) * 127.5
+        scene = self.scenes[idx]
+        locs_in = scene['xyz']
+        feats_in = scene['features']
+        labels_in = scene['labels']
+        query_points = scene['query_points']
+        values = scene['values']
+        scene_name = scene['scene_name']
+        if self.split == "train" and self.cfg.data.augmentation.use_aug:
+            locs = self.prevoxel_transforms(locs_in)
+            locs, feats, labels, inds_reconstruct = self.voxelizer.voxelize(locs, feats_in, labels_in)
+            locs, feats, labels = self.input_transforms(locs, feats, labels)
+            voxel_coords = locs
+            # coords = np.hstack([np.ones([coords.shape[0], 1], dtype=np.int), coords])
+        else:
+            locs, feats, labels, inds_reconstruct = self.voxelizer.voxelize(locs_in, feats_in, labels_in)
+            voxel_coords = locs
+
+        # # compute query indices and relative coordinates
+        # voxel_coords = torch.from_numpy(locs).int()
+        # # coords = torch.cat((torch.ones(coords.shape[0], 1, dtype=torch.int), coords), dim=1)
+        # voxel_center = voxel_coords * self.voxel_size + self.voxel_size / 2.0 # compute voxel_center in orginal coordinate system (torch.tensor)
+        # device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        # # query_points = torch.from_numpy(query_points).to(device)
+        # # voxel_center = voxel_center.to(device)
+        # query_indices, _, _ = knn(query_points, voxel_center, 1)
+        # query_indices = query_indices[:, 0]
+        # relative_coords = locs - voxel_center[inds_reconstruct].cpu().numpy()
+        # query_relative_coords = query_points.cpu().numpy() - voxel_center[query_indices].cpu().numpy()
+
+        # # remove query_points outside the voxel
+        # lower_bound = -self.voxel_size / 2
+        # upper_bound = self.voxel_size / 2
+        # # Create a mask
+        # mask = (query_relative_coords >= lower_bound) & (query_relative_coords <= upper_bound)
+        # # Reduce across the last dimension to get a (N, ) mask
+        # mask = np.all(mask,-1)
+        # query_indices = query_indices[mask]
+        # query_relative_coords = query_relative_coords[mask]
+        # values = values[mask].cpu().numpy()
+        # # feats = torch.ones(coords.shape[0], 3)
+
+        data = {
+            "xyz": locs,  # N, 3
+            # "points": relative_coords,  # N, 3
+            "labels": labels_in,  # N,
+            "voxel_indices": inds_reconstruct,  # N,
+            # "query_points": query_relative_coords,  # M, 3
+            # "query_voxel_indices": query_indices.cpu().numpy(),  # M,
+            "values": values,  # M,
+            "voxel_coords": voxel_coords,  # K, 3
+            "voxel_features": feats,  # K, ?
+            "scene_name": scene_name
+        }
+
+        return data
+

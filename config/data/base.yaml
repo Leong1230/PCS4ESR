@@ -2,9 +2,9 @@
 
 dataset_root_path: ${project_root_path}/../../data
 
-batch_size: 1
-num_workers: 1
-voxel_size: 0.5 #scannet default: 0.02
+batch_size: 2
+num_workers: 2
+voxel_size: 0.02 #scannet default: 0.02
 num_point: 200
 full_scale: [128, 512]
 max_num_point: 250000
@@ -15,14 +15,14 @@ k_neighbors: 10
 udf_queries:
   sample_entire_scene: True
   num_queries_on_surface: 100
-  queries_ratio_on_surface: 2
+  queries_ratio_on_surface: 0.5
   queries_stds: [0.001, 0.01, 0.1]
   num_queries_per_std: [400, 320, 400, 400]
-  queries_ratio_per_std: 2
+  queries_ratio_per_std: 0.5
   max_dist: 0.1
 in_memory: True # whether precompute voxel indices and load voxel into memory
 take: 10 # how many data to take for training and validation, -1 means all
-intake_start: 2
+intake_start: 10
 over_fitting: True # whether to use only one voxel for training and validation
 
 augmentation:
@@ -31,7 +31,11 @@ augmentation:
   rotation: True
   elastic: False
   jitter_rgb: True
-
+  use_aug: False
+  color_trans_ratio: 0.1
+  color_jitter_std: 0.05
+  hue_max: 0.5
+  saturation_max: 0.5
 has_normal: True
 has_color: True
 has_label: True

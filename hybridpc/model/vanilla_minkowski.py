@@ -30,6 +30,14 @@ class VanillaMinkowski(GeneralModel):
             input_channel = cfg.model.network.latent_dim
         else: 
             input_channel = 3 + cfg.model.network.use_color * 3 + cfg.model.network.use_normal * 3
+        # self.backbone = Backbone(
+        #     backbone_type=cfg.model.network.backbone_type,
+        #     input_channel=input_channel,
+        #     output_channel=cfg.model.network.modulation_dim, 
+        #     block_channels=cfg.model.network.blocks,
+        #     block_reps=cfg.model.network.block_reps,
+        #     sem_classes=cfg.data.classes
+        # )
         self.backbone = Backbone(
             backbone_type=cfg.model.network.backbone_type,
             input_channel=input_channel,
@@ -59,9 +67,11 @@ class VanillaMinkowski(GeneralModel):
             backbone_output_dict = self.backbone(
                 data_dict["voxel_features"], data_dict["voxel_coords"], data_dict["voxel_indices"]
             )
-        segmentation = self.seg_decoder(backbone_output_dict['voxel_features'].F, data_dict['points'], data_dict["voxel_indices"])  # embeddings (B, C) coords (N, 3) indices (N, )
+
         if self.use_decoder:
-            backbone_output_dict['semantic_scores'] = segmentation
+            backbone_output_dict['semantic_scores'] = self.seg_decoder(backbone_output_dict['voxel_features'].F, data_dict['points'], data_dict["voxel_indices"])  # embeddings (B, C) coords (N, 3) indices (N, )
+        else:
+            backbone_output_dict['semantic_scores'] = backbone_output_dict['point_features'] # use the point features as the semantic scores
         return backbone_output_dict
 
     def _loss(self, data_dict, output_dict):

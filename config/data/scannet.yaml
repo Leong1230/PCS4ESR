@@ -14,7 +14,7 @@ metadata:
   combine_file: ${data.metadata.metadata_path}/scannetv2-labels.combined.tsv
 
 classes: 20
-ignore_classes: [ 1, 2 ]
+# ignore_classes: [ 1, 2 ]
 class_names: [ 'floor', 'wall', 'cabinet', 'bed', 'chair', 'sofa', 'table', 'door', 'window', 'bookshelf', 'picture',
                'counter', 'desk', 'curtain', 'refrigerator', 'shower curtain', 'toilet', 'sink',
                'bathtub', 'otherfurniture' ]

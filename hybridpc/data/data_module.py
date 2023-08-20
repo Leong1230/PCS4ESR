@@ -44,6 +44,7 @@ class DataModule(pl.LightningDataModule):
 def _sparse_collate_fn(batch):
     data = {}
     points = []
+    xyz = []
     colors = []
     labels = []
     voxel_indices = []
@@ -64,33 +65,33 @@ def _sparse_collate_fn(batch):
         voxel_nums_list.append(b["voxel_coords"].shape[0])
         voxel_coords_list.append(b["voxel_coords"])
         voxel_features_list.append(b["voxel_features"])
-        points.append(torch.from_numpy(b["points"]))
-        colors.append(torch.from_numpy(b["colors"]))
+        # points.append(torch.from_numpy(b["points"]))
+        xyz.append(torch.from_numpy(b["xyz"]))
         labels.append(torch.from_numpy(b["labels"]))
         voxel_indices.append(torch.from_numpy(b["voxel_indices"] + cumulative_voxel_coords_len))
-        query_points.append(torch.from_numpy(b["query_points"]))
-        values.append(torch.from_numpy(b["values"]))
-        query_voxel_indices.append(torch.from_numpy(b["query_voxel_indices"] + cumulative_voxel_coords_len))
+        # query_points.append(torch.from_numpy(b["query_points"]))
+        # values.append(torch.from_numpy(b["values"]))
+        # query_voxel_indices.append(torch.from_numpy(b["query_voxel_indices"] + cumulative_voxel_coords_len))
 
         # Create a batch ID for each point and query point in the batch
-        batch_ids.append(torch.full((b["points"].shape[0],), fill_value=i, dtype=torch.int32))
+        # batch_ids.append(torch.full((b["points"].shape[0],), fill_value=i, dtype=torch.int32))
 
         # Update the cumulative length for the next iteration
         cumulative_voxel_coords_len += len(b["voxel_coords"])
 
-    data['points'] = torch.cat(points, dim=0)
-    data['colors'] = torch.cat(colors, dim=0)
+    data['xyz'] = torch.cat(xyz, dim=0)
+    # data['points'] = torch.cat(points, dim=0)
     data['labels'] = torch.cat(labels, dim=0).long()
     data['voxel_indices'] = torch.cat(voxel_indices, dim=0)
-    data['query_points'] = torch.cat(query_points, dim=0)
-    data['values'] = torch.cat(values, dim=0)
-    data['query_voxel_indices'] = torch.cat(query_voxel_indices, dim=0)
+    # data['query_points'] = torch.cat(query_points, dim=0)
+    # data['values'] = torch.cat(values, dim=0)
+    # data['query_voxel_indices'] = torch.cat(query_voxel_indices, dim=0)
     data["voxel_coords"], data["voxel_features"] = ME.utils.sparse_collate(
         coords=voxel_coords_list, feats=voxel_features_list
     ) # size: (N, 4)
-    data['batch_ids'] = torch.cat(batch_ids, dim=0)
+    # data['batch_ids'] = torch.cat(batch_ids, dim=0)
     data['scene_names'] = scene_names_list
-    data['voxel_nums'] = voxel_nums_list
+    # data['voxel_nums'] = voxel_nums_list
 
     return data
 

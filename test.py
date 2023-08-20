@@ -1,5 +1,6 @@
 import os
 import hydra
+import torch
 from importlib import import_module
 import pytorch_lightning as pl
 from hybridpc.data.data_module import DataModule
@@ -19,18 +20,18 @@ def main(cfg):
     print("=> initializing trainer...")
     trainer = pl.Trainer(accelerator="gpu", devices=1, max_epochs=1, logger=False)
 
-    output_path = os.path.join(cfg.exp_output_root_path, cfg.data.dataset, cfg.model.model.module,
-                               cfg.model.model.experiment_name, "inference", cfg.model.inference.split)
-    cfg.model.inference.output_dir = os.path.join(output_path, "predictions")
-    os.makedirs(cfg.model.inference.output_dir, exist_ok=True)
+    output_path = os.path.join(cfg.exp_output_root_path, "inference", cfg.model.inference.split, "udf_visualizations")
+    os.makedirs(output_path, exist_ok=True)
 
     print("==> initializing data ...")
     data_module = DataModule(cfg)
 
     print("=> initializing model...")
-    model = init_model(cfg)
+    model = getattr(import_module("hybridpc.model"), cfg.model.network.module)(cfg)
 
     print("=> start inference...")
+    checkpoint = torch.load(cfg.model.ckpt_path)
+    # trainer.fit_loop.epoch_progress.current.completed = checkpoint["epoch"]  # TODO
     trainer.test(model=model, datamodule=data_module, ckpt_path=cfg.model.ckpt_path)
 
 

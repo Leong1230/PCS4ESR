@@ -6,8 +6,14 @@ defaults:
 
 
 # stage1_ckpt_path: /localhome/zla247/projects/data/output/Scannet/AutoDecoder/stage-1_AutoDecoder_overfit-True_intake-10_0.5_latent-64_inner-steps-300_lr-0.002-0.001-0.001_blocks-[1, 2, 3]-[1, 2, 3]_run_1/training/epoch=509.ckpt
-stage1_ckpt_path: None
-stage2_ckpt_path: 
+# stage1_ckpt_path: /localhome/zla247/projects/data/output/Scannet/AutoDecoder/stage-1_AutoDecoder_overfit-True_intake-10_0.5_latent-64_norm-initial_inner-steps-300_lr-0.002-0.001-0.005_reg-True_reg-lambda-0.0001_L1-blocks-[1, 2, 3]-[1, 2, 3]_run_1/training/epoch=499.ckpt
+# stage1_ckpt_path: /localhome/zla247/projects/data/output/Scannet/AutoDecoder/stage-1_AutoDecoder_overfit-True_intake-10_2_latent-64_norm-initial_inner-steps-300_lr-0.002-0.001-0.005_reg-True_reg-lambda-0.0001_L1-blocks-[1, 2]-[1, 2, 3]_test_1/training/epoch=499.ckpt
+# stage1_ckpt_path: /localhome/zla247/projects/data/output/Scannet/CC_checkpoints/voxel-0.5_latent-64_reg_epoch=299.ckpt 
+
+
+# stage1_ckpt_path: None
+
+training_stage: 0
 
 trainer:
   max_epochs: 700
@@ -29,15 +35,6 @@ loss:
 lr_decay:
   decay_start_epoch: 350
 
-dense_generator:
-  num_steps: 10
-  threshold: 0.1
-  num_points: 900000
-  filter_val: 0.009
-  prepare_epochs: 0
-
-training_stage: 1
-
 network:
   module: AutoDecoder
 
@@ -45,8 +42,8 @@ network:
   auto_encoder: True # whether to use auto_encoder
 
   # m: 16 # 16 or 32 (U-Net hidden dimension)
-  backbone_type: UNet # Conv or UNet
-  seg_blocks: [1, 2, 3]
+  backbone_type: MinkUNet34C # Conv or UNet or MinkUNet34C
+  seg_blocks: [1, 2, 3, 4, 5, 6, 7]
   functa_blocks: [1, 2, 3]
   cluster_blocks: [1, 2]
   seg_block_reps: 2
@@ -68,11 +65,27 @@ network:
   seg_decoder:
     input_dim: 3
     hidden_dim: 64
-    num_hidden_layers_before_skip: 1
-    num_hidden_layers_after_skip: 1
+    num_hidden_layers_before_skip: 2
+    num_hidden_layers_after_skip: 2
 
   functa_decoder:
     input_dim: 3
     hidden_dim: 64
     num_hidden_layers_before_skip: 2
     num_hidden_layers_after_skip: 2
+
+dense_generator:
+  num_steps: 10
+  threshold: 0.1
+  num_points: 9000000
+  filter_val: 0.005
+  prepare_epochs: 0
+  type: scene # voxel or scene
+
+inference:
+  term: UDF # UDF or Seg
+  split: val
+  evaluate: True
+  save_predictions: True
+  visualization: True
+  show_visualizations: True

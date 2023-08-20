@@ -1,5 +1,6 @@
 # Managed by Hydra
 
+# ckpt_path: /localhome/zla247/projects/data/output/Scannet/AutoDecoder/stage-1_AutoDecoder_overfit-True_intake-10_0.5_latent-64_norm-initial_inner-steps-300_lr-0.002-0.001-0.005_reg-True_reg-lambda-0.0001_L1-blocks-[1, 2, 3]-[1, 2, 3]_run_1/training/epoch=149.ckpt
 ckpt_path: 
 
 logger:
@@ -33,7 +34,9 @@ lr_decay:
 
 
 inference:
+  term: UDF # UDF or Seg
   split: val
   evaluate: True
-  save_predictions: False
-  visualize_udf: False
+  save_predictions: True
+  visualization: True
+  show_visualizaitons: True
