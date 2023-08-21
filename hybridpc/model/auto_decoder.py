@@ -14,7 +14,7 @@ import pytorch_lightning as pl
 import matplotlib.pyplot as plt
 import hydra
 from hybridpc.optimizer.optimizer import cosine_lr_decay, adjust_learning_rate
-from hybridpc.model.module import Backbone, ImplicitDecoder, Dense_Generator
+from hybridpc.model.module import Backbone, MinkUNetBackbone, ImplicitDecoder, Dense_Generator
 from hybridpc.model.general_model import GeneralModel
 from hybridpc.evaluation.semantic_segmentation import *
 from torch.nn import functional as F
@@ -48,11 +48,9 @@ class AutoDecoder(GeneralModel):
         )
 
         if self.training_stage == 2:
-            self.seg_backbone = Backbone(
-                backbone_type=cfg.model.network.backbone_type,
-                input_channel=self.latent_dim, output_channel=cfg.model.network.modulation_dim, block_channels=cfg.model.network.seg_blocks,
-                block_reps=cfg.model.network.seg_block_reps,
-                sem_classes=cfg.data.classes
+            self.seg_backbone = MinkUNetBackbone(
+                self.latent_dim,
+                cfg.model.network.modulation_dim
             )
 
             self.seg_decoder = ImplicitDecoder(

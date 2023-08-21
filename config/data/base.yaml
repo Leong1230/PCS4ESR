@@ -4,7 +4,7 @@ dataset_root_path: ${project_root_path}/../../data
 
 batch_size: 2
 num_workers: 2
-voxel_size: 0.02 #scannet default: 0.02
+voxel_size: 0.5 #scannet default: 0.02
 num_point: 200
 full_scale: [128, 512]
 max_num_point: 250000
@@ -31,7 +31,7 @@ augmentation:
   rotation: True
   elastic: False
   jitter_rgb: True
-  use_aug: False
+  use_aug: True
   color_trans_ratio: 0.1
   color_jitter_std: 0.05
   hue_max: 0.5

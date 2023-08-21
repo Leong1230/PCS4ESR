@@ -12,7 +12,7 @@ import pytorch_lightning as pl
 import matplotlib.pyplot as plt
 import hydra
 from hybridpc.optimizer.optimizer import cosine_lr_decay
-from hybridpc.model.module import Backbone, ImplicitDecoder, Dense_Generator
+from hybridpc.model.module import Backbone, MinkUNetBackbone, ImplicitDecoder, Dense_Generator
 from hybridpc.model.general_model import GeneralModel
 from hybridpc.evaluation.semantic_segmentation import *
 from torch.nn import functional as F
@@ -26,25 +26,17 @@ class VanillaMinkowski(GeneralModel):
         # self.automatic_optimization = False
         self.feature_in = cfg.model.network.feature_in # random_latent/ voxel_features
         self.use_decoder = cfg.model.network.use_decoder # whether to use decoder
+        if self.use_decoder:
+            output_channel = cfg.model.network.modulation_dim
+        else:
+            output_channel = cfg.data.classes # use the number of classes as the output channel
         if self.feature_in == "random_latent":
             input_channel = cfg.model.network.latent_dim
         else: 
             input_channel = 3 + cfg.model.network.use_color * 3 + cfg.model.network.use_normal * 3
-        # self.backbone = Backbone(
-        #     backbone_type=cfg.model.network.backbone_type,
-        #     input_channel=input_channel,
-        #     output_channel=cfg.model.network.modulation_dim, 
-        #     block_channels=cfg.model.network.blocks,
-        #     block_reps=cfg.model.network.block_reps,
-        #     sem_classes=cfg.data.classes
-        # )
-        self.backbone = Backbone(
-            backbone_type=cfg.model.network.backbone_type,
-            input_channel=input_channel,
-            output_channel=cfg.model.network.modulation_dim, 
-            block_channels=cfg.model.network.blocks,
-            block_reps=cfg.model.network.block_reps,
-            sem_classes=cfg.data.classes
+        self.backbone = MinkUNetBackbone(
+            input_channel,
+            output_channel
         )
         self.seg_decoder = ImplicitDecoder(
             "seg",

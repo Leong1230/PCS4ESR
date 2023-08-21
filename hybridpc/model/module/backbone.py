@@ -12,7 +12,6 @@ class Backbone(pl.LightningModule):
         sp_norm = functools.partial(ME.MinkowskiBatchNorm)
         norm = functools.partial(nn.BatchNorm1d)
         self.backbone_type = backbone_type
-
         # 1. Unet
         self.unet = nn.Sequential(
             ME.MinkowskiConvolution(in_channels=input_channel, out_channels=output_channel, kernel_size=3, dimension=3),
@@ -20,8 +19,6 @@ class Backbone(pl.LightningModule):
             sp_norm(output_channel),
             ME.MinkowskiReLU(inplace=True)
         )
-        if self.backbone_type == 'MinkUNet34C':
-            self.minkunet34c = MinkUNet34C(input_channel, output_channel)
         #2. Convs
         layers = []
         for c in block_channels:
@@ -49,8 +46,6 @@ class Backbone(pl.LightningModule):
         x = ME.SparseTensor(features=voxel_features, coordinates=voxel_coordinates)
         if self.backbone_type == 'Conv':
             unet_out = self.convs(x)
-        elif self.backbone_type == 'MinkUNet34C':
-            unet_out = self.minkunet34c(x)
         else: 
             unet_out = self.unet(x)
         output_dict["point_features"] = unet_out.features[v2p_map]
@@ -60,7 +55,20 @@ class Backbone(pl.LightningModule):
 
         return output_dict
         
+class MinkUNetBackbone(pl.LightningModule):
+    def __init__(self, input_channel, output_channel):
+        super().__init__()
+        self.minkunet34c = MinkUNet34C(input_channel, output_channel)
 
+    def forward(self, voxel_features, voxel_coordinates, v2p_map):
+        output_dict = {}
+        x = ME.SparseTensor(features=voxel_features, coordinates=voxel_coordinates)
+        unet_out = self.minkunet34c(x)
+        output_dict["point_features"] = unet_out.features[v2p_map]
+        output_dict["voxel_features"] = unet_out
+
+        return output_dict
+    
 class MinkUNetBase(ResNetBase):
     BLOCK = None
     PLANES = None

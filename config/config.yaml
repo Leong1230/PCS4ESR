@@ -11,9 +11,9 @@ defaults:
   - model: base
 
 # experiment_name: Fixed-Unet-voxel-${data.voxel_size}_stage-${model.training_stage}_${model.network.module}_overfit-${data.over_fitting}_intake-${data.take}_${data.voxel_size}_latent-${model.network.latent_dim}_norm-initial_inner-steps-${model.optimizer.inner_loop_steps}_lr-${model.optimizer.lr}-${model.optimizer.latent_lr}-${model.optimizer.inner_loop_lr}_reg-${model.loss.use_reg}_reg-lambda-${model.loss.code_reg_lambda}_${model.loss.loss_type}-blocks-${model.network.functa_blocks}-${model.network.seg_blocks}_1
-# experiment_name: Fixed-Unet_debug_1
+experiment_name: Fixed-Unet_debug_1
 
-experiment_name: ${model.network.module}_Fixed-Unet-voxel-${data.voxel_size}_stage-${model.training_stage}_overfit-${data.over_fitting}_intake-${data.take}_latent-${model.network.latent_dim}_lr-${model.optimizer.lr}_blocks-${model.network.blocks}_run_1
+# experiment_name: ${model.network.module}_Fixed-Unet-voxel-${data.voxel_size}_stage-${model.training_stage}_overfit-${data.over_fitting}_intake-${data.take}_latent-${model.network.latent_dim}_lr-${model.optimizer.lr}_blocks-${model.network.blocks}_run_1
 # experiment_name: debug
 project_root_path: ${hydra:runtime.cwd}
 exp_output_root_path: ${project_root_path}/../data/output/${data.dataset}/${model.network.module}/${experiment_name}

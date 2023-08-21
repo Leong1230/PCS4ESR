@@ -38,12 +38,12 @@ network:
 
   use_color: True
   use_normal: True
-  feature_in: voxel_features # random_latent or voxel_features 
-  use_decoder: False
+  feature_in: random_latent # random_latent or voxel_features 
+  use_decoder: True
 
   positional_encoding: Fourier # Triplane
-  modulation_dim: 64
-  latent_dim: 64 #
+  modulation_dim: 16
+  latent_dim: 16 #
 
   prepare_epochs: 300
 

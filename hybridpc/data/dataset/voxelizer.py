@@ -116,17 +116,18 @@ class Voxelizer:
             rigid_transformation = M_r @ rigid_transformation
 
         homo_coords = np.hstack((coords, np.ones((coords.shape[0], 1), dtype=coords.dtype)))
-        coords_aug = np.floor(homo_coords @ rigid_transformation.T[:, :3])
+        coords_aug_in = np.floor(homo_coords @ rigid_transformation.T[:, :3])
 
         # Align all coordinates to the origin.
-        min_coords = coords_aug.min(0)
-        M_t = np.eye(4)
-        M_t[:3, -1] = -min_coords
-        rigid_transformation = M_t @ rigid_transformation
-        coords_aug = np.floor(coords_aug - min_coords)
+        # min_coords = coords_aug.min(0)
+        # M_t = np.eye(4)
+        # M_t[:3, -1] = -min_coords
+        # rigid_transformation = M_t @ rigid_transformation
+        # coords_aug = np.floor(coords_aug - min_coords)
+        # point_coords = coords_aug
 
-        inds, inds_reconstruct = sparse_quantize(coords_aug, return_index=True)
-        coords_aug, feats, labels = coords_aug[inds], feats[inds], labels[inds]
+        inds, inds_reconstruct = sparse_quantize(coords_aug_in, return_index=True)
+        coords_aug, feats, labels = coords_aug_in[inds], feats[inds], labels[inds]
 
         # Normal rotation
         if feats.shape[1] > 6:

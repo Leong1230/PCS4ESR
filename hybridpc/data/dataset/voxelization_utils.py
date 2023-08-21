@@ -47,7 +47,7 @@ def sparse_quantize(coords,
                     ignore_label=255,
                     set_ignore_label_when_collision=False,
                     return_index=False,
-                    hash_type='fnv',
+                    hash_type='ravel',
                     quantization_size=1):
     r'''Given coordinates, and features (optionally labels), the function
     generates quantized (voxelized) coordinates.
