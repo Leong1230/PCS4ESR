@@ -21,7 +21,7 @@ trainer:
 optimizer:
     target_: torch.optim.Adam
     lr: 0.002
-    inner_loop_steps: 300
+    inner_loop_steps: 200
     inner_loop_lr: 0.005
     latent_lr: 0.001
     decreased_by: 10
@@ -54,7 +54,7 @@ network:
   latent_dim: 64 #
   seg_loss_weight: 0.5
 
-  prepare_epochs: 20
+  prepare_epochs: 10
 
   fourier_encoder:
     embedding_dim: 32

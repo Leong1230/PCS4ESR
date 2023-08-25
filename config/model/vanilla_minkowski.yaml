@@ -32,20 +32,17 @@ network:
 
   # m: 16 # 16 or 32 (U-Net hidden dimension)
   backbone_type: MinkUNet34C # Conv, UNet or MinkUNet34C
-  blocks: [1, 2, 3]
-  cluster_blocks: [1, 2]
-  block_reps: 2
 
   use_color: True
   use_normal: True
   feature_in: random_latent # random_latent or voxel_features 
-  use_decoder: True
+  use_decoder: False
 
   positional_encoding: Fourier # Triplane
-  modulation_dim: 16
-  latent_dim: 16 #
+  modulation_dim: 6
+  latent_dim: 6 #
 
-  prepare_epochs: 300
+  prepare_epochs: 30
 
   fourier_encoder:
     embedding_dim: 32

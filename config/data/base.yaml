@@ -21,9 +21,9 @@ udf_queries:
   queries_ratio_per_std: 0.5
   max_dist: 0.1
 in_memory: True # whether precompute voxel indices and load voxel into memory
-take: 10 # how many data to take for training and validation, -1 means all
-intake_start: 10
-over_fitting: True # whether to use only one voxel for training and validation
+take: -1 # how many data to take for training and validation, -1 means all
+intake_start: 0
+over_fitting: False # whether to use only one voxel for training and validation
 
 augmentation:
   jitter_xyz: True
@@ -32,6 +32,8 @@ augmentation:
   elastic: False
   jitter_rgb: True
   use_aug: True
+  method: N-times # N-times or Original
+  loops: 4
   color_trans_ratio: 0.1
   color_jitter_std: 0.05
   hue_max: 0.5

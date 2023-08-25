@@ -40,6 +40,7 @@ class GeneralDataset(Dataset):
         self.num_point = cfg.data.num_point
         self.rotate_num = cfg.data.rotate_num
         self.take = cfg.data.take
+        self.loops = cfg.data.augmentation.loops
         self.intake_start = cfg.data.intake_start
         self.use_relative = cfg.data.use_relative
         self.max_num_point = cfg.data.max_num_point
@@ -60,7 +61,7 @@ class GeneralDataset(Dataset):
         self.voxelizer = Voxelizer(
             voxel_size=self.voxel_size,
             clip_bound=None,
-            use_augmentation=False,
+            use_augmentation=True if self.cfg.data.augmentation.method == 'original' else False,
             scale_augmentation_bound=self.SCALE_AUGMENTATION_BOUND,
             rotation_augmentation_bound=self.ROTATION_AUGMENTATION_BOUND,
             translation_augmentation_ratio_bound=self.TRANSLATION_AUGMENTATION_RATIO_BOUND)
@@ -69,25 +70,42 @@ class GeneralDataset(Dataset):
             prevoxel_transform_train = [
                 t.ElasticDistortion(self.ELASTIC_DISTORT_PARAMS)]
             self.prevoxel_transforms = t.Compose(prevoxel_transform_train)
-            input_transforms = [
-                # t.RandomDropout(0.2),
-                # t.RandomHorizontalFlip(self.ROTATION_AXIS, is_temporal=False),
-                t.ChromaticAutoContrast(),
-                t.ChromaticTranslation(cfg.data.augmentation.color_trans_ratio),
-                t.ChromaticJitter(cfg.data.augmentation.color_jitter_std),
-                t.HueSaturationTranslation(
-                    cfg.data.augmentation.hue_max, cfg.data.augmentation.saturation_max),
-            ]
+            if self.cfg.data.augmentation.method == 'original':
+                input_transforms = [
+                    t.RandomDropout(0.2),
+                    t.RandomHorizontalFlip(self.ROTATION_AXIS, is_temporal=False),
+                    t.ChromaticAutoContrast(),
+                    t.ChromaticTranslation(cfg.data.augmentation.color_trans_ratio),
+                    t.ChromaticJitter(cfg.data.augmentation.color_jitter_std),
+                    t.HueSaturationTranslation(
+                        cfg.data.augmentation.hue_max, cfg.data.augmentation.saturation_max),
+                ]
+            else:
+                input_transforms = [
+                    # t.RandomDropout(0.2),
+                    # t.RandomHorizontalFlip(self.ROTATION_AXIS, is_temporal=False),
+                    t.ChromaticAutoContrast(),
+                    t.ChromaticTranslation(cfg.data.augmentation.color_trans_ratio),
+                    t.ChromaticJitter(cfg.data.augmentation.color_jitter_std),
+                    t.HueSaturationTranslation(
+                        cfg.data.augmentation.hue_max, cfg.data.augmentation.saturation_max),
+                ]
             self.input_transforms = t.Compose(input_transforms)
         self._load_from_disk()
         self.scenes = []
 
+
+        if cfg.data.augmentation.use_aug and cfg.data.augmentation.method == 'N-times' and self.split == 'train':
+            N = cfg.data.augmentation.loops
+        else:
+            N = 1
+
         for idx, sample in tqdm(enumerate(self.scenes_in), desc="Voxelizing and Sample points", ncols=80):
-            if self.sample_entire_scene:
-                processed_sample = self.preprocess_sample_entire_scene(sample, idx)
-            else:
-                processed_sample = self.preprocess_sample(sample)
-            self.scenes.append(processed_sample)
+            for i in range(N):  # This loop will run N times if conditions are satisfied, otherwise just once
+                processed_sample = self.preprocess_sample_entire_scene(sample, i)
+                self.scenes.append(processed_sample)
+
+
 
 
         # self.label_map = self.get_semantic_mapping_file(cfg.data.metadata.combine_file)
@@ -124,103 +142,8 @@ class GeneralDataset(Dataset):
             scene['scene_name'] = scene_name
             self.scenes_in.append(scene) 
 
-    # def preprocess_sample(self, sample):
-    #     # Voxelize the points
-    #     voxel_coords, unique_map, inverse_map = MinkowskiEngine.utils.sparse_quantize(
-    #         sample['points'], return_index=True, return_inverse=True, quantization_size=self.voxel_size)
-
-    #     # Get unique voxel coordinates and count the number of points per voxel
-    #     unique_voxel_coords, counts = np.unique(inverse_map, return_counts=True, axis=0)
-        
-    #     # Compute the number of unique labels per voxel
-    #     labels_per_voxel = [np.unique(sample['labels'][inverse_map == i]) for i in range(len(unique_voxel_coords))]
-    #     num_labels_per_voxel = [len(labels) for labels in labels_per_voxel]
-    #     all_points = []
-    #     all_colors = []
-    #     all_labels = []
-    #     all_query_points = []
-    #     all_values = []
-    #     all_voxel_indices = []
-    #     all_query_voxel_indices = []
-
-    #     # Initialize counter for non-empty voxels
-    #     num_non_empty_voxels = 0
-    #     for voxel_idx in range(len(unique_voxel_coords)):
-    #         mask = (inverse_map == voxel_idx)
-
-    #         points_in_selected_voxel = sample['points'][mask]
-    #         num_points_in_voxel = len(points_in_selected_voxel)
-
-    #         if num_points_in_voxel == 0:  # Skip if there are no points in the voxel
-    #             continue
-    #         # Assume points_in_selected_voxel is your points tensor of shape (N, 3)
-    #         # and voxel_size is the size of your voxel
-
-    #         # Shift the points to the range [0, voxel_size]
-    #         points_in_selected_voxel -= np.min(points_in_selected_voxel, 0)
-
-    #         # Scale to the range [0, 1]
-    #         points_in_selected_voxel /= self.voxel_size
-
-    #         # Shift and scale to the range [-1, 1]
-    #         norm_points_in_selected_voxel = 2.0 * points_in_selected_voxel - 1.0
-
-    #         norm_points_in_selected_voxel_tensor = torch.tensor(np.asarray(norm_points_in_selected_voxel))
-
-    #         # Calculate number of queries based on the ratio and the number of points in the voxel
-    #         num_queries_on_surface = int(num_points_in_voxel * self.ratio_on_surface + 1)
-    #         num_queries_per_std = [int(num_points_in_voxel * self.ratio_per_std + 1)] * 4  # A list of 4 equal values
-
-    #         query_points, values = compute_udf_from_pcd(
-    #             norm_points_in_selected_voxel_tensor,
-    #             num_queries_on_surface,
-    #             self.queries_stds,
-    #             num_queries_per_std
-    #         )
-
-    #         # Convert tensors to numpy arrays:
-    #         query_points = query_points.cpu().numpy()
-    #         values = values.cpu().numpy()
-
-    #         # Check for NaN values:
-    #         nan_mask_query_points = np.isnan(query_points).any(axis=1)
-    #         nan_mask_values = np.isnan(values)
-
-    #         # Check if there are any NaNs in either query_points or values:
-    #         nan_mask_combined = nan_mask_query_points | nan_mask_values
-
-    #         # If there are any NaNs, print a warning and remove them:
-    #         if np.any(nan_mask_combined):
-    #             # print(f"Warning: found NaN in data, removing corresponding rows.")
-    #             query_points = query_points[~nan_mask_combined]
-    #             values = values[~nan_mask_combined]
-
-    #         if self.use_relative:
-    #             all_points.append(norm_points_in_selected_voxel)  # Output points in not normalized within each voxel
-    #         else:
-    #             all_points.append(points_in_selected_voxel)  # Output points in not normalized within each voxel
-    #         all_colors.append(sample['colors'][mask])
-    #         all_labels.append(sample['labels'][mask])
-    #         all_query_points.append(query_points)  # Output query points in normalized within each voxel
-    #         all_values.append(values)
-    #         all_voxel_indices.append(np.full((points_in_selected_voxel.shape[0],), voxel_idx))
-    #         all_query_voxel_indices.append(np.full((query_points.shape[0],), voxel_idx))
-
-    #     # Concatenate all the data
-    #     data = {
-    #         "points": np.concatenate(all_points, axis=0), #N, 3
-    #         "colors": np.concatenate(all_colors, axis=0), #N, 3
-    #         "labels": np.concatenate(all_labels, axis=0), #N, 
-    #         "voxel_indices": np.concatenate(all_voxel_indices, axis=0), #N, 
-    #         "query_points": np.concatenate(all_query_points, axis=0), # M, 3
-    #         "values": np.concatenate(all_values, axis=0), # M,
-    #         "query_voxel_indices": np.concatenate(all_query_voxel_indices, axis=0), # M, 3
-    #         "voxel_coords": voxel_coords.cpu().numpy() # K, 3
-    #         # "num_non_empty_voxels": num_non_empty_voxels # int
-    #     }
-    #     return data
     
-    def preprocess_sample_entire_scene(self, sample, idx):
+    def preprocess_sample_entire_scene(self, sample, i):
         # Voxelize the points
         xyz = sample['xyz']
         sem_labels = sample['sem_labels']
@@ -233,6 +156,9 @@ class GeneralDataset(Dataset):
 
         point_features = np.concatenate((point_features, xyz), axis=1)  # add xyz to point features
 
+        if self.split == "train" and self.cfg.data.augmentation.use_aug and self.cfg.data.augmentation.method == 'N-times':
+            xyz = self.prevoxel_transforms(xyz)
+            xyz = xyz.astype(np.float32)
         voxel_coords, feats, labels, inds_reconstruct = self.voxelizer.voxelize(xyz, point_features, sem_labels)
         # Convert to tensor
         points_tensor = torch.tensor(np.asarray(xyz))
@@ -290,35 +216,21 @@ class GeneralDataset(Dataset):
 
 
         #crop
-        if all(label == -1 for label in sample['sem_labels']):
-            flag = idx
+        # if all(label == -1 for label in sample['sem_labels']):
+        #     flag = idx
 
-        # Concatenate all the data
-        # data = {
-        #     "xyz": xyz,  # N, 3
-        #     "points": relative_coords,  # N, 3
-        #     "colors": sample['rgb'],  # N, 3
-        #     "labels": sample['sem_labels'],  # N,
-        #     "voxel_indices": inverse_map.cpu().numpy(),  # N,
-        #     "query_points": query_relative_coords,  # M, 3
-        #     "query_voxel_indices": query_indices.cpu().numpy(),  # M,
-        #     "values": values,  # M,
-        #     "voxel_coords": voxel_coords.cpu().numpy(),  # K, 3
-        #     "voxel_features": voxel_features,  # K, ?
-        #     "scene_name": sample['scene_name']
-        # }
         data = {
             "xyz": xyz,  # N, 3
             "points": relative_coords,  # N, 3
+            "point_features": point_features,  # N, 3
             "features": feats,  # N, 3
             "labels": sample['sem_labels'],  # N,
-            # "query_points": query_points.cpu().numpy(),  # M, 3
             "voxel_coords": voxel_coords.cpu().numpy(),
             "voxel_indices": inds_reconstruct,  # N,
             "query_points": query_relative_coords,  # M, 3
             "query_voxel_indices": query_indices.cpu().numpy(),  # M,
             "values": values,  # M,
-            "scene_name": sample['scene_name']
+            "scene_name": f"{sample['scene_name']}_{i}"
         }
         # # computing voxel center coordinates
         # voxel_centers = self.voxel_size * voxel_coords[data['voxel_indices']] + self.voxel_size / 2
@@ -444,7 +356,7 @@ class GeneralDataset(Dataset):
     # def __getitem__(self, idx):
 
     #     return self.data[idx]
-
+    
     def __getitem__(self, idx):
 
         # index = index_long % len(self.data_paths)
@@ -464,30 +376,31 @@ class GeneralDataset(Dataset):
             #     feats_in = np.zeros_like(locs_in)
             # feats_in = (feats_in + 1.) * 127.5
         scene = self.scenes[idx]
-        # locs_in = scene['xyz']
-        # relative_coords = scene['points']
-        # query_points = scene['query_points']
-        # values = scene['values']
-        # scene_name = scene['scene_name']
+        locs_in = scene['xyz']
+        point_features = scene['point_features']
 
         voxel_coords_in = scene['voxel_coords']
         feats_in = scene['features']
         labels_in = scene['labels']
+        inds_reconstruct  = scene['voxel_indices']
 
-        if self.split == "train" and self.cfg.data.augmentation.use_aug:
-            # locs = self.prevoxel_transforms(locs_in)
+        if self.split == "train" and self.cfg.data.augmentation.use_aug and self.cfg.data.augmentation.method=='N-times':
             voxel_coords, feats, labels = self.input_transforms(voxel_coords_in, feats_in, labels_in)
-            # coords = np.hstack([np.ones([coords.shape[0], 1], dtype=np.int), coords])
+        elif self.split == "train" and self.cfg.data.augmentation.use_aug and self.cfg.data.augmentation.method=='original':
+            locs = self.prevoxel_transforms(locs_in)
+            locs, feats, labels, inds_reconstruct = self.voxelizer.voxelize(locs, point_features, labels_in)
+            voxel_coords, feats, labels = self.input_transforms(locs, feats, labels)
         else:
-            # locs, feats, labels, inds_reconstruct = self.voxelizer.voxelize(locs_in, feats_in, labels_in)
-            voxel_coords_in = voxel_coords
+            voxel_coords = voxel_coords_in
+            feats = feats_in
+            labels = labels_in
 
         data = {
             "xyz": scene['xyz'],  # N, 3
             "points": scene['points'],  # N, 3
             "labels": scene['labels'],  # N,
-            "voxel_indices": scene['voxel_indices'],  # N,
-            "voxel_coords": scene['voxel_coords'],  # K, 3
+            "voxel_indices": inds_reconstruct,  # N,
+            "voxel_coords": voxel_coords,  # K, 3
             "voxel_features": feats,  # K, ?
             "query_points": scene['query_points'],  # M, 3
             "query_voxel_indices": scene['query_voxel_indices'],  # M,
