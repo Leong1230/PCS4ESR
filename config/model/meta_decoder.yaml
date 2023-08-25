@@ -53,6 +53,7 @@ network:
 
   use_color: True
   use_normal: False
+  use_xyz: True
 
   positional_encoding: Fourier # Triplane
   modulation_dim: 64

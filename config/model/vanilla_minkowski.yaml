@@ -35,7 +35,8 @@ network:
 
   use_color: True
   use_normal: True
-  feature_in: random_latent # random_latent or voxel_features 
+  use_xyz: True
+  feature_in: voxel_features # random_latent or voxel_features 
   use_decoder: False
 
   positional_encoding: Fourier # Triplane

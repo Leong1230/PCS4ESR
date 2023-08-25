@@ -74,7 +74,7 @@ class GeneralDataset(Dataset):
                 input_transforms = [
                     t.RandomDropout(0.2),
                     t.RandomHorizontalFlip(self.ROTATION_AXIS, is_temporal=False),
-                    t.ChromaticAutoContrast(),
+                    # t.ChromaticAutoContrast(),
                     t.ChromaticTranslation(cfg.data.augmentation.color_trans_ratio),
                     t.ChromaticJitter(cfg.data.augmentation.color_jitter_std),
                     t.HueSaturationTranslation(
@@ -84,7 +84,7 @@ class GeneralDataset(Dataset):
                 input_transforms = [
                     # t.RandomDropout(0.2),
                     # t.RandomHorizontalFlip(self.ROTATION_AXIS, is_temporal=False),
-                    t.ChromaticAutoContrast(),
+                    # t.ChromaticAutoContrast(),
                     t.ChromaticTranslation(cfg.data.augmentation.color_trans_ratio),
                     t.ChromaticJitter(cfg.data.augmentation.color_jitter_std),
                     t.HueSaturationTranslation(
@@ -153,8 +153,8 @@ class GeneralDataset(Dataset):
             point_features = np.concatenate((point_features, sample['rgb']), axis=1)
         if self.cfg.model.network.use_normal:
             point_features = np.concatenate((point_features, sample['normal']), axis=1)
-
-        point_features = np.concatenate((point_features, xyz), axis=1)  # add xyz to point features
+        if self.cfg.model.network.use_xyz:
+            point_features = np.concatenate((point_features, xyz), axis=1)  # add xyz to point features
 
         if self.split == "train" and self.cfg.data.augmentation.use_aug and self.cfg.data.augmentation.method == 'N-times':
             xyz = self.prevoxel_transforms(xyz)
@@ -384,16 +384,21 @@ class GeneralDataset(Dataset):
         labels_in = scene['labels']
         inds_reconstruct  = scene['voxel_indices']
 
-        if self.split == "train" and self.cfg.data.augmentation.use_aug and self.cfg.data.augmentation.method=='N-times':
-            voxel_coords, feats, labels = self.input_transforms(voxel_coords_in, feats_in, labels_in)
-        elif self.split == "train" and self.cfg.data.augmentation.use_aug and self.cfg.data.augmentation.method=='original':
-            locs = self.prevoxel_transforms(locs_in)
-            locs, feats, labels, inds_reconstruct = self.voxelizer.voxelize(locs, point_features, labels_in)
-            voxel_coords, feats, labels = self.input_transforms(locs, feats, labels)
-        else:
-            voxel_coords = voxel_coords_in
-            feats = feats_in
-            labels = labels_in
+        if self.cfg.data.augmentation.method=='N-times':
+            if self.split == "train" and self.cfg.data.augmentation.use_aug:
+                voxel_coords, feats, labels = self.input_transforms(voxel_coords_in, feats_in, labels_in)
+            else:
+                voxel_coords = voxel_coords_in
+                feats = feats_in
+                labels = labels_in
+
+        if self.cfg.data.augmentation.method=='original':
+            if self.split == "train" and self.cfg.data.augmentation.use_aug:
+                locs = self.prevoxel_transforms(locs_in)
+                locs, feats, labels, inds_reconstruct = self.voxelizer.voxelize(locs, point_features, labels_in)
+                voxel_coords, feats, labels = self.input_transforms(locs, feats, labels)
+            else:
+                voxel_coords, feats, labels, inds_reconstruct = self.voxelizer.voxelize(locs_in, point_features, labels_in)
 
         data = {
             "xyz": scene['xyz'],  # N, 3

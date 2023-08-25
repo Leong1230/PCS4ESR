@@ -33,7 +33,7 @@ class VanillaMinkowski(GeneralModel):
         if self.feature_in == "random_latent":
             input_channel = cfg.model.network.latent_dim
         else: 
-            input_channel = 3 + cfg.model.network.use_color * 3 + cfg.model.network.use_normal * 3
+            input_channel = cfg.model.network.use_xyz * 3 + cfg.model.network.use_color * 3 + cfg.model.network.use_normal * 3
         self.backbone = MinkUNetBackbone(
             input_channel,
             output_channel
