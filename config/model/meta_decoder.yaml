@@ -43,10 +43,10 @@ network:
 
   # m: 16 # 16 or 32 (U-Net hidden dimension)
   backbone_type: UNet # Conv or UNet
-  blocks: [1, 2, 3]
+  blocks: [1, 2, 3, 4, 5]
   cluster_blocks: [1, 2]
   block_reps: 2
-  seg_blocks: [1, 2, 3]
+  seg_blocks: [1, 2, 3, 4, 5]
   functa_blocks: [1, 2, 3]
   seg_block_reps: 2
   functa_block_reps: 2
@@ -56,8 +56,8 @@ network:
   use_xyz: True
 
   positional_encoding: Fourier # Triplane
-  modulation_dim: 64
-  latent_dim: 64 #
+  modulation_dim: 8
+  latent_dim: 8 #
   seg_loss_weight: 0.5
 
   prepare_epochs: 100
