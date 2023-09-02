@@ -198,6 +198,7 @@ class GeneralDataset(Dataset):
         mask = np.all(mask,-1)
         query_indices = query_indices[mask]
         query_relative_coords = query_relative_coords[mask]
+        unmasked_values = values.cpu().numpy()
         values = values[mask].cpu().numpy()
         # feats = torch.ones(coords.shape[0], 3)
 
@@ -227,9 +228,11 @@ class GeneralDataset(Dataset):
             "labels": sample['sem_labels'],  # N,
             "voxel_coords": voxel_coords.cpu().numpy(),
             "voxel_indices": inds_reconstruct,  # N,
+            "absolute_query_points": query_points.cpu().numpy(),
             "query_points": query_relative_coords,  # M, 3
             "query_voxel_indices": query_indices.cpu().numpy(),  # M,
             "values": values,  # M,
+            "unmasked_values": unmasked_values,
             "scene_name": f"{sample['scene_name']}_{i}"
         }
         # # computing voxel center coordinates
@@ -407,9 +410,11 @@ class GeneralDataset(Dataset):
             "voxel_indices": inds_reconstruct,  # N,
             "voxel_coords": voxel_coords,  # K, 3
             "voxel_features": feats,  # K, ?
+            "absolute_query_points": scene['absolute_query_points'],
             "query_points": scene['query_points'],  # M, 3
             "query_voxel_indices": scene['query_voxel_indices'],  # M,
             "values": scene['values'],  # M,
+            "unmasked_values": scene['unmasked_values'],  # M,
             "scene_name": scene['scene_name']
         }
 

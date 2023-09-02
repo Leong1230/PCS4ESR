@@ -1,0 +1,86 @@
+
+# Managed by Hydra
+
+defaults:
+  - base
+
+
+stage1_ckpt_path: None
+
+
+# stage1_ckpt_path: None
+
+training_stage: 1
+
+trainer:
+  max_epochs: 700
+
+optimizer:
+    target_: torch.optim.Adam
+    lr: 0.05
+    decreased_by: 10
+
+loss:
+  norm_initialization: True # initialize latent code by norm distirbution
+  loss_type: L1 # L1 or L2
+  use_reg: True # whether to use regularization
+  code_reg_lambda: 1e-4 # regularization lambda
+
+lr_decay:
+  decay_start_epoch: 350
+
+network:
+  module: AutoEncoder
+
+  # m: 16 # 16 or 32 (U-Net hidden dimension)
+  backbone_type: UNet # Conv or UNet
+  functa_blocks: [1, 2, 3]
+  functa_block_reps: 2
+
+  use_color: True
+  use_normal: False
+  use_xyz: True
+
+  positional_encoding: Fourier # Triplane
+  latent_dim: 64 #
+
+  prepare_epochs: 10
+
+  encoder:
+    use_unet: True
+    voxel_size_out: 0.5
+    feature_in: voxel_features
+    blocks: [1, 2, 3]
+    block_reps: 2
+
+  fourier_encoder:
+    embedding_dim: 32
+
+  seg_decoder:
+    input_dim: 3
+    feature_dim: 64
+    hidden_dim: 64
+    num_hidden_layers_before_skip: 2
+    num_hidden_layers_after_skip: 2
+
+  udf_decoder:
+    input_dim: 3
+    hidden_dim: 64
+    num_hidden_layers_before_skip: 2
+    num_hidden_layers_after_skip: 2
+
+dense_generator:
+  num_steps: 10
+  threshold: 0.1
+  num_points: 9000000
+  filter_val: 0.005
+  prepare_epochs: 400
+  type: voxel # voxel or scene
+
+inference:
+  term: UDF # UDF or Seg
+  split: val
+  evaluate: True
+  save_predictions: True
+  visualization: True
+  show_visualizations: True

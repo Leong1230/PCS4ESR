@@ -115,7 +115,7 @@ class ImplicitDecoder(pl.LightningModule):
 
 
     def forward(self, embeddings: Tensor, coords: Tensor, index: Tensor) -> Tensor:
-        # embeddings (B, D1)
+        # embeddings (M, C)
         # coords (N, D2)
         # index (N, )
         coords = self.coords_enc.embed(coords)
