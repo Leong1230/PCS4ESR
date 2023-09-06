@@ -4,7 +4,7 @@ dataset_root_path: ${project_root_path}/../../data
 
 batch_size: 1
 num_workers: 1
-voxel_size: 0.02 #scannet default: 0.02
+voxel_size: 0.1 #scannet default: 0.02
 num_point: 200
 full_scale: [128, 512]
 max_num_point: 250000
@@ -22,7 +22,7 @@ udf_queries:
   max_dist: 0.1
 in_memory: True # whether precompute voxel indices and load voxel into memory
 take: 1 # how many data to take for training and validation, -1 means all
-intake_start: 2
+intake_start: 5
 over_fitting: True # whether to use only one voxel for training and validation
 
 augmentation:

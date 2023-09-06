@@ -1,6 +1,8 @@
 import torch.nn as nn
+import torch
 import MinkowskiEngine as ME
 from collections import OrderedDict
+from torch_scatter import scatter_mean, scatter_max
 import pytorch_lightning as pl
 
 
@@ -16,7 +18,50 @@ class BasicConvolutionBlock(pl.LightningModule):
     def forward(self, x):
         return self.net(x)
 
+class ResnetBlockFC(pl.LightningModule):
+    ''' Fully connected ResNet Block class.
 
+    Args:
+        size_in (int): input dimension
+        size_out (int): output dimension
+        size_h (int): hidden dimension
+    '''
+
+    def __init__(self, size_in, size_out=None, size_h=None):
+        super().__init__()
+        # Attributes
+        if size_out is None:
+            size_out = size_in
+
+        if size_h is None:
+            size_h = min(size_in, size_out)
+
+        self.size_in = size_in
+        self.size_h = size_h
+        self.size_out = size_out
+        # Submodules
+        self.fc_0 = nn.Linear(size_in, size_h)
+        self.fc_1 = nn.Linear(size_h, size_out)
+        self.actvn = nn.ReLU()
+
+        if size_in == size_out:
+            self.shortcut = None
+        else:
+            self.shortcut = nn.Linear(size_in, size_out, bias=False)
+        # Initialization
+        nn.init.zeros_(self.fc_1.weight)
+
+    def forward(self, x):
+        net = self.fc_0(self.actvn(x))
+        dx = self.fc_1(self.actvn(net))
+
+        if self.shortcut is not None:
+            x_s = self.shortcut(x)
+        else:
+            x_s = x
+
+        return x_s + dx
+    
 class ResidualBlock(pl.LightningModule):
 
     def __init__(self, in_channels, out_channels, dimension, norm_fn=None):
@@ -109,7 +154,127 @@ class UBlock(pl.LightningModule):
             out = ME.cat(identity, out)
             out = self.blocks_tail(out)
         return out
+    
+class LocalPointNet(pl.LightningModule):
+    ''' PointNet-based encoder network with ResNet blocks for each point.
+        Number of input points are fixed.
+    
+    Args:
+        latent_dim (int): dimension of latent code c
+        c_in (int): input points dimension
+        hidden_dim (int): hidden dimension of the network
+        scatter_type (str): feature aggregation when doing local pooling
+        n_blocks (int): number of blocks ResNetBlockFC layers
+        block: block type
+        norm_fn: 
+    '''
 
+    def __init__(self, c_in, latent_dim, hidden_dim, norm_fn, block, scatter_type='max', n_blocks=5):
+
+        super().__init__()
+
+        self.latent_dim = latent_dim
+        self.fc_pos = nn.Linear(c_in, 2*hidden_dim)
+        self.D = 3
+
+        # blocks = {'block{}'.format(i): block(2*hidden_dim, hidden_dim, self.D, norm_fn) for i in range(n_blocks)}
+        # blocks = OrderedDict(blocks)
+        # self.blocks = nn.Sequential(blocks)        
+        self.blocks = nn.ModuleList([
+            ResnetBlockFC(2*hidden_dim, hidden_dim) for i in range(n_blocks)
+        ])
+        self.fc_c = nn.Linear(hidden_dim, latent_dim)
+
+        self.actvn = nn.ReLU()
+        self.hidden_dim = hidden_dim
+
+        if scatter_type == 'max':
+            self.scatter = scatter_max
+        elif scatter_type == 'mean':
+            self.scatter = scatter_mean
+        else:
+            raise ValueError('incorrect scatter type')
+        
+
+    def pool_local(self, point_features, indices):
+        ''' Pooling local features within the voxel '''
+
+        # Find the total number of voxels, K
+        K = indices.max().item() + 1
+        C = point_features.shape[1]
+
+        # Initialize a tensor to hold the scattered features, shape (K, C)
+        scattered_feat = torch.zeros(K, C).to(indices.device)
+
+        # Scatter the point features into the voxel features
+        # This sums up all point features that belong to the same voxel
+        scattered_feat.index_add_(0, indices, point_features)
+
+        # Gather the voxel features back to the points
+        # This will make points within the same voxel have the same features
+        gathered_feat = scattered_feat.index_select(0, indices)
+
+        return gathered_feat    
+    
+    def forward(self, relative_coords, indices):
+        net = self.fc_pos(relative_coords)
+
+        net = self.blocks[0](net)
+        for block in self.blocks[1:]:
+            pooled = self.pool_local(net, indices)
+            net = torch.cat([net, pooled], dim=1)
+            net = block(net)
+
+        c = self.fc_c(net)
+        voxel_feat = torch.zeros(indices.max().item() + 1, c.shape[1]).to(c.device)
+        voxel_feat.index_add_(0, indices, c)
+
+        return voxel_feat
+
+class DownsampleUBlock(pl.LightningModule):
+
+    def __init__(self, n_planes, norm_fn, block_reps, block, downsample_steps):
+
+        super().__init__()
+
+        self.nPlanes = n_planes
+        self.D = 3
+
+        blocks = {'block{}'.format(i): block(n_planes[0], n_planes[0], self.D, norm_fn) for i in range(block_reps)}
+        blocks = OrderedDict(blocks)
+        self.blocks = nn.Sequential(blocks)
+
+        if len(n_planes) > 1:
+            self.conv = nn.Sequential(
+                norm_fn(n_planes[0]),
+                ME.MinkowskiReLU(inplace=True),
+                ME.MinkowskiConvolution(n_planes[0], n_planes[1], kernel_size=2, stride=2, dimension=self.D)
+            )
+
+            self.u = UBlock(n_planes[1:], norm_fn, block_reps, block)
+
+            self.deconv = nn.Sequential(
+                norm_fn(n_planes[1]),
+                ME.MinkowskiReLU(inplace=True),
+                ME.MinkowskiConvolutionTranspose(n_planes[1], n_planes[0], kernel_size=2, stride=2, dimension=self.D)
+            )
+
+            blocks_tail = {'block{}'.format(i): block(n_planes[0] * (2 - i), n_planes[0], self.D, norm_fn) for i in
+                           range(block_reps)}
+            blocks_tail = OrderedDict(blocks_tail)
+            self.blocks_tail = nn.Sequential(blocks_tail)
+
+    def forward(self, x):
+        out = self.blocks(x)
+        identity = out
+
+        if len(self.nPlanes) > 1:
+            out = self.conv(out)
+            out = self.u(out)
+            out = self.deconv(out)
+            out = ME.cat(identity, out)
+            out = self.blocks_tail(out)
+        return out
 
 class SparseConvEncoder(pl.LightningModule):
     def __init__(self, input_dim):

@@ -17,7 +17,7 @@ trainer:
 
 optimizer:
     target_: torch.optim.Adam
-    lr: 0.05
+    lr: 0.0002
     decreased_by: 10
 
 loss:
@@ -27,19 +27,17 @@ loss:
   code_reg_lambda: 1e-4 # regularization lambda
 
 lr_decay:
-  decay_start_epoch: 350
+  decay_start_epoch: 1000
 
 network:
   module: AutoEncoder
 
   # m: 16 # 16 or 32 (U-Net hidden dimension)
   backbone_type: UNet # Conv or UNet
-  functa_blocks: [1, 2, 3]
-  functa_block_reps: 2
 
   use_color: True
   use_normal: False
-  use_xyz: True
+  use_xyz: False
 
   positional_encoding: Fourier # Triplane
   latent_dim: 64 #
@@ -47,11 +45,13 @@ network:
   prepare_epochs: 10
 
   encoder:
+    pn_hidden_dim: 128
+    pn_n_blocks: 3
     use_unet: True
     voxel_size_out: 0.5
     feature_in: voxel_features
-    blocks: [1, 2, 3]
-    block_reps: 2
+    unet_blocks: [1, 2, 3, 4, 5, 6, 7]
+    unet_block_reps: 2
 
   fourier_encoder:
     embedding_dim: 32
@@ -74,7 +74,7 @@ dense_generator:
   threshold: 0.1
   num_points: 9000000
   filter_val: 0.005
-  prepare_epochs: 400
+  prepare_epochs: 1900
   type: voxel # voxel or scene
 
 inference:
@@ -83,4 +83,4 @@ inference:
   evaluate: True
   save_predictions: True
   visualization: True
-  show_visualizations: True
+  show_visualizations: False

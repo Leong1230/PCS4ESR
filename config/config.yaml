@@ -12,7 +12,10 @@ defaults:
 
 # experiment_name: ${model.network.module}_Fixed-Unet-voxel-${data.voxel_size}_stage-${model.training_stage}_overfit-${data.over_fitting}_intake-${data.take}_${data.voxel_size}_latent-${model.network.latent_dim}_norm-initial_inner-steps-${model.optimizer.inner_loop_steps}_lr-${model.optimizer.lr}-${model.optimizer.latent_lr}-${model.optimizer.inner_loop_lr}_reg-lambda-${model.loss.code_reg_lambda}_${model.loss.loss_type}-blocks-${model.network.functa_blocks}_run_1
 
-experiment_name: ${model.network.module}_stage-${model.training_stage}_voxel-in-out-${data.voxel_size}-${model.network.encoder.voxel_size_out}_overfit-${data.over_fitting}_intake-${data.take}_${model.network.encoder.feature_in}_use-unet-${model.network.encoder.use_unet}_latent-${model.network.latent_dim}-${model.network.seg_decoder.feature_dim}_lr-${model.optimizer.lr}_${model.loss.loss_type}-blocks-${model.network.functa_blocks}_run_1
+# experiment_name: ${model.network.module}_stage-${model.training_stage}_voxel-in-out-${data.voxel_size}-${model.network.encoder.voxel_size_out}_overfit-${data.over_fitting}_intake-${data.take}_${model.network.encoder.feature_in}_use-unet-${model.network.encoder.use_unet}_latent-${model.network.latent_dim}-${model.network.seg_decoder.feature_dim}_lr-${model.optimizer.lr}_${model.loss.loss_type}-blocks-${model.network.encoder.blocks}_run_1
+
+experiment_name: ${model.network.module}_stage-${model.training_stage}_voxel-in-out-${data.voxel_size}-${model.network.encoder.voxel_size_out}_overfit-${data.over_fitting}_intake-${data.take}_${model.network.encoder.feature_in}_use-unet-${model.network.encoder.use_unet}_latent-${model.network.latent_dim}-${model.network.encoder.pn_hidden_dim}-${model.network.seg_decoder.feature_dim}_lr-${model.optimizer.lr}_${model.loss.loss_type}_debug_1
+
 
 
 # experiment_name: Auto_encoder_debug_1

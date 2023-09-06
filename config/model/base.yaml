@@ -17,14 +17,14 @@ trainer:
   num_nodes: 1
   max_epochs: 800
   num_sanity_val_steps: 10
-  check_val_every_n_epoch: 20
+  check_val_every_n_epoch: 10
   profiler: simple
 
 # https://pytorch-lightning.readthedocs.io/en/stable/api/pytorch_lightning.callbacks.ModelCheckpoint.html
 checkpoint_monitor:
   _target_: pytorch_lightning.callbacks.ModelCheckpoint
   save_top_k: -1
-  every_n_epochs: 20
+  every_n_epochs: 500
   filename: "{epoch}"
   dirpath: ${exp_output_root_path}/training
 
