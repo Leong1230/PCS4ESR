@@ -34,14 +34,14 @@ network:
   backbone_type: MinkUNet34C # Conv, UNet or MinkUNet34C
 
   use_color: True
-  use_normal: True
-  use_xyz: True
-  feature_in: voxel_features # random_latent or voxel_features 
-  use_decoder: False
+  use_normal: False
+  use_xyz: False
+  feature_in: mixed_latent # random_latent, voxel_features or mixed_latent 
+  use_decoder: True
 
   positional_encoding: Fourier # Triplane
-  modulation_dim: 6
-  latent_dim: 6 #
+  modulation_dim: 64
+  latent_dim: 64 #
 
   prepare_epochs: 30
 
@@ -51,5 +51,5 @@ network:
   seg_decoder:
     input_dim: 3
     hidden_dim: 64
-    num_hidden_layers_before_skip: 1
-    num_hidden_layers_after_skip: 1
+    num_hidden_layers_before_skip: 2
+    num_hidden_layers_after_skip: 2

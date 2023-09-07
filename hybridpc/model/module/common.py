@@ -2,7 +2,7 @@ import torch.nn as nn
 import torch
 import MinkowskiEngine as ME
 from collections import OrderedDict
-from torch_scatter import scatter_mean, scatter_max
+from torch_scatter import scatter_mean, scatter_max, scatter_add
 import pytorch_lightning as pl
 
 
@@ -161,7 +161,7 @@ class LocalPointNet(pl.LightningModule):
     
     Args:
         latent_dim (int): dimension of latent code c
-        c_in (int): input points dimension
+        c_in (int): input point features dimension(3 + colors_dim)
         hidden_dim (int): hidden dimension of the network
         scatter_type (str): feature aggregation when doing local pooling
         n_blocks (int): number of blocks ResNetBlockFC layers
@@ -192,6 +192,8 @@ class LocalPointNet(pl.LightningModule):
             self.scatter = scatter_max
         elif scatter_type == 'mean':
             self.scatter = scatter_mean
+        elif scatter_type == 'add':
+            self.scatter = scatter_add
         else:
             raise ValueError('incorrect scatter type')
         
@@ -201,23 +203,17 @@ class LocalPointNet(pl.LightningModule):
 
         # Find the total number of voxels, K
         K = indices.max().item() + 1
-        C = point_features.shape[1]
-
-        # Initialize a tensor to hold the scattered features, shape (K, C)
-        scattered_feat = torch.zeros(K, C).to(indices.device)
 
         # Scatter the point features into the voxel features
-        # This sums up all point features that belong to the same voxel
-        scattered_feat.index_add_(0, indices, point_features)
-
+        scattered_feat = self.scatter(point_features, indices, dim=0, dim_size=K)
+        
         # Gather the voxel features back to the points
-        # This will make points within the same voxel have the same features
         gathered_feat = scattered_feat.index_select(0, indices)
 
         return gathered_feat    
     
-    def forward(self, relative_coords, indices):
-        net = self.fc_pos(relative_coords)
+    def forward(self, features_in, indices):
+        net = self.fc_pos(features_in)
 
         net = self.blocks[0](net)
         for block in self.blocks[1:]:
@@ -226,8 +222,8 @@ class LocalPointNet(pl.LightningModule):
             net = block(net)
 
         c = self.fc_c(net)
-        voxel_feat = torch.zeros(indices.max().item() + 1, c.shape[1]).to(c.device)
-        voxel_feat.index_add_(0, indices, c)
+        K = indices.max().item() + 1
+        voxel_feat = self.scatter(c, indices, dim=0, dim_size=K)
 
         return voxel_feat
 

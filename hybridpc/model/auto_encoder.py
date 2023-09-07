@@ -43,8 +43,17 @@ class AutoEncoder(GeneralModel):
                 1
             )
         else:
+            self.udf_decoder = ImplicitDecoder(
+                "functa",
+                cfg.model.network.latent_dim,
+                cfg.model.network.udf_decoder.input_dim,
+                cfg.model.network.udf_decoder.hidden_dim,
+                cfg.model.network.udf_decoder.num_hidden_layers_before_skip,
+                cfg.model.network.udf_decoder.num_hidden_layers_after_skip,
+                1
+            )
             self.seg_backbone = MinkUNetBackbone(
-                self.latent_dim,
+                self.latent_dim + cfg.model.network.use_xyz * 3 + cfg.model.network.use_color * 3 + cfg.model.network.use_normal * 3,
                 cfg.model.network.seg_decoder.feature_dim
             )
 
@@ -74,6 +83,8 @@ class AutoEncoder(GeneralModel):
         if self.training_stage == 2:
             for param in self.encoder.parameters():
                 param.requires_grad = False
+            for param in self.udf_decoder.parameters():
+                param.requires_grad = False
                  
     @classmethod
     def load_from_checkpoint(cls, checkpoint_path, cfg, map_location=None):
@@ -83,11 +94,11 @@ class AutoEncoder(GeneralModel):
         model = cls(cfg)
 
         # Load the model weights selectively
-        functa_backbone_state_dict = {k[len("functa_backbone."):]: v for k, v in checkpoint['state_dict'].items() if k.startswith("functa_backbone.")}
-        model.functa_backbone.load_state_dict(functa_backbone_state_dict)
+        encoder_state_dict = {k[len("encoder."):]: v for k, v in checkpoint['state_dict'].items() if k.startswith("encoder.")}
+        model.encoder.load_state_dict(encoder_state_dict)
 
-        functa_decoder_state_dict = {k[len("functa_decoder."):]: v for k, v in checkpoint['state_dict'].items() if k.startswith("functa_decoder.")}
-        model.functa_decoder.load_state_dict(functa_decoder_state_dict)
+        udf_decoder_state_dict = {k[len("udf_decoder."):]: v for k, v in checkpoint['state_dict'].items() if k.startswith("udf_decoder.")}
+        model.udf_decoder.load_state_dict(udf_decoder_state_dict)
 
         return model
       # The inner loop optimizer is applied to the latent code
@@ -95,15 +106,15 @@ class AutoEncoder(GeneralModel):
 
     def forward(self, data_dict):
         encodes_dict = self.encoder(data_dict)
+        segmentation = 0
         if self.training_stage == 2:
-            seg_features = self.seg_backbone(encodes_dict['latent_codes'], encodes_dict['voxel_coords'], encodes_dict['indices']) # B, C
-            segmentation = self.seg_decoder(seg_features['voxel_features'].F, encodes_dict['relative_coords'], data_dict["indices"])
-            outputs = segmentation
+            seg_features = self.seg_backbone(encodes_dict['mixed_latent_codes'], encodes_dict['voxel_coords'], encodes_dict['indices']) # B, C
+            segmentation = self.seg_decoder(seg_features['voxel_features'].F, encodes_dict['relative_coords'], encodes_dict["indices"])
+            values = self.udf_decoder(encodes_dict['latent_codes'], encodes_dict['query_relative_coords'], encodes_dict['query_indices'])
         else:
             values = self.udf_decoder(encodes_dict['latent_codes'], encodes_dict['query_relative_coords'], encodes_dict['query_indices'])
-            outputs = values
 
-        return encodes_dict, outputs
+        return encodes_dict, values, segmentation
 
     def seg_loss(self, data_dict, outputs):
         loss = F.cross_entropy(outputs, data_dict['labels'].long(), ignore_index=-1)
@@ -120,7 +131,7 @@ class AutoEncoder(GeneralModel):
 
     def configure_optimizers(self):
         if self.training_stage == 1:
-            params_to_optimize = list(self.encoder.parameters())
+            params_to_optimize = list(self.encoder.parameters()) + list(self.udf_decoder.parameters())
         elif self.training_stage == 2:
             params_to_optimize = list(self.seg_backbone.parameters()) + list(self.seg_decoder.parameters())
         else:
@@ -133,7 +144,7 @@ class AutoEncoder(GeneralModel):
         if self.training_stage == 1:
             """ UDF auto-encoder training stage """
             batch_size = self.hparams.data.batch_size
-            encodes_dict, outputs = self.forward(data_dict)
+            encodes_dict, outputs, _ = self.forward(data_dict)
             udf_loss = self.udf_loss(encodes_dict, outputs)
             self.log("train/udf_loss", udf_loss, on_step=True, on_epoch=True, sync_dist=True, batch_size=batch_size)
 
@@ -143,9 +154,11 @@ class AutoEncoder(GeneralModel):
             """ segmentation training stage """
 
             batch_size = self.hparams.data.batch_size
-            encodes_dict, outputs = self.forward(data_dict)
+            encodes_dict, values, outputs = self.forward(data_dict)
             seg_loss = self.seg_loss(data_dict, outputs)
+            udf_loss = self.udf_loss(encodes_dict, values)
 
+            self.log("train/udf_loss", udf_loss, on_step=True, on_epoch=True, sync_dist=True, batch_size=batch_size)
             self.log("train/seg_loss", seg_loss, on_step=True, on_epoch=True, sync_dist=True, batch_size=batch_size)
             # Calculating the metrics
             semantic_predictions = torch.argmax(outputs, dim=-1)  # (B, N)
@@ -173,7 +186,7 @@ class AutoEncoder(GeneralModel):
         if self.training_stage == 1:
             """ UDF auto-encoder training stage """
             batch_size = self.hparams.data.batch_size
-            encodes_dict, outputs = self.forward(data_dict)
+            encodes_dict, outputs, _ = self.forward(data_dict)
             udf_loss = self.udf_loss(encodes_dict, outputs)
             self.log("val/udf_loss", udf_loss, on_step=True, on_epoch=True, sync_dist=True, batch_size=batch_size)
         
@@ -181,19 +194,21 @@ class AutoEncoder(GeneralModel):
             """ segmentation training stage """
 
             batch_size = self.hparams.data.batch_size
-            encodes_dict, outputs = self.forward(data_dict)
+            encodes_dict, values, outputs = self.forward(data_dict)
             seg_loss = self.seg_loss(data_dict, outputs)
+            udf_loss = self.udf_loss(encodes_dict, values)
 
             self.log("val/seg_loss", seg_loss, on_step=True, on_epoch=True, sync_dist=True, batch_size=batch_size)
+            self.log("val/udf_loss", udf_loss, on_step=True, on_epoch=True, sync_dist=True, batch_size=batch_size)
             # Calculating the metrics
             semantic_predictions = torch.argmax(outputs, dim=-1)  # (B, N)
             semantic_accuracy = evaluate_semantic_accuracy(semantic_predictions, data_dict["labels"], ignore_label=-1)
             semantic_mean_iou = evaluate_semantic_miou(semantic_predictions, data_dict["labels"], ignore_label=-1)
             self.log(
-                "val/semantic_accuracy", semantic_accuracy, on_step=False, on_epoch=True, sync_dist=True, batch_size=batch_size
+                "val_eval/semantic_accuracy", semantic_accuracy, on_step=False, on_epoch=True, sync_dist=True, batch_size=batch_size
             )         
             self.log(
-                "val/semantic_mean_iou", semantic_mean_iou, on_step=False, on_epoch=True, sync_dist=True, batch_size=batch_size
+                "val_eval/semantic_mean_iou", semantic_mean_iou, on_step=False, on_epoch=True, sync_dist=True, batch_size=batch_size
             )
             self.val_test_step_outputs.append((semantic_accuracy, semantic_mean_iou))
 

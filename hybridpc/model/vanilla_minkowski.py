@@ -30,8 +30,8 @@ class VanillaMinkowski(GeneralModel):
             output_channel = cfg.model.network.modulation_dim
         else:
             output_channel = cfg.data.classes # use the number of classes as the output channel
-        if self.feature_in == "random_latent":
-            input_channel = cfg.model.network.latent_dim
+        if self.feature_in == "mixed_latent":
+            input_channel = cfg.model.network.latent_dim + cfg.model.network.use_xyz * 3 + cfg.model.network.use_color * 3 + cfg.model.network.use_normal * 3 
         else: 
             input_channel = cfg.model.network.use_xyz * 3 + cfg.model.network.use_color * 3 + cfg.model.network.use_normal * 3
         self.backbone = MinkUNetBackbone(
@@ -51,9 +51,9 @@ class VanillaMinkowski(GeneralModel):
 
 
     def forward(self, data_dict, latent_code):
-        if self.feature_in == "random_latent":
+        if self.feature_in == "mixed_latent":
             backbone_output_dict = self.backbone(
-            latent_code, data_dict["voxel_coords"], data_dict["voxel_indices"]
+            torch.cat((latent_code, data_dict['voxel_features']), dim=1), data_dict["voxel_coords"], data_dict["voxel_indices"]
         )
         else:
             backbone_output_dict = self.backbone(

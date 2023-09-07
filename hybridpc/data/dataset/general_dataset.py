@@ -406,6 +406,7 @@ class GeneralDataset(Dataset):
         data = {
             "xyz": scene['xyz'],  # N, 3
             "points": scene['points'],  # N, 3
+            "point_features": scene['point_features'],  # N, 3
             "labels": scene['labels'],  # N,
             "voxel_indices": inds_reconstruct,  # N,
             "voxel_coords": voxel_coords,  # K, 3

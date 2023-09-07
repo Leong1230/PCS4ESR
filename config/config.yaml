@@ -14,13 +14,13 @@ defaults:
 
 # experiment_name: ${model.network.module}_stage-${model.training_stage}_voxel-in-out-${data.voxel_size}-${model.network.encoder.voxel_size_out}_overfit-${data.over_fitting}_intake-${data.take}_${model.network.encoder.feature_in}_use-unet-${model.network.encoder.use_unet}_latent-${model.network.latent_dim}-${model.network.seg_decoder.feature_dim}_lr-${model.optimizer.lr}_${model.loss.loss_type}-blocks-${model.network.encoder.blocks}_run_1
 
-experiment_name: ${model.network.module}_stage-${model.training_stage}_voxel-in-out-${data.voxel_size}-${model.network.encoder.voxel_size_out}_overfit-${data.over_fitting}_intake-${data.take}_${model.network.encoder.feature_in}_use-unet-${model.network.encoder.use_unet}_latent-${model.network.latent_dim}-${model.network.encoder.pn_hidden_dim}-${model.network.seg_decoder.feature_dim}_lr-${model.optimizer.lr}_${model.loss.loss_type}_debug_1
+# experiment_name: ${model.network.module}_stage-${model.training_stage}_voxel-in-out-${data.voxel_size}-${model.network.encoder.voxel_size_out}_overfit-${data.over_fitting}_intake-${data.take}_${model.network.encoder.feature_in}_encoder-${model.network.encoder.design}_latent-${model.network.latent_dim}-${model.network.encoder.pn_hidden_dim}-${model.network.latent_dim}-${model.network.seg_decoder.feature_dim}_lr-${model.optimizer.lr}_run_1
 
 
 
 # experiment_name: Auto_encoder_debug_1
 
-# experiment_name: ${model.network.module}_Fixed-Unet-voxel-${data.voxel_size}_overfit-${data.over_fitting}_intake-${data.take}_use-decoder-${model.network.use_decoder}_latent-${model.network.feature_in}-${model.network.latent_dim}_${model.network.modulation_dim}_lr-${model.optimizer.lr}_run_1
+experiment_name: ${model.network.module}_Fixed-Unet-voxel-${data.voxel_size}_overfit-${data.over_fitting}_intake-${data.take}_use-decoder-${model.network.use_decoder}_latent-${model.network.feature_in}-${model.network.latent_dim}_${model.network.modulation_dim}_lr-${model.optimizer.lr}_run_1
 # experiment_name: debug
 project_root_path: ${hydra:runtime.cwd}
 exp_output_root_path: ${project_root_path}/../data/output/${data.dataset}/${model.network.module}/${experiment_name}

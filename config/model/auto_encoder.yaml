@@ -5,19 +5,19 @@ defaults:
   - base
 
 
-stage1_ckpt_path: None
+stage1_ckpt_path: '/localhome/zla247/projects/data/output/Scannet/AutoEncoder/AutoEncoder_stage-1_voxel-in-out-0.5-0.5_overfit-True_intake-10_voxel_features_encoder-local-pointnet-unet_latent-64-64-64-64_lr-0.002_run_1/training/epoch=499.ckpt'
 
 
 # stage1_ckpt_path: None
 
-training_stage: 1
+training_stage: 2
 
 trainer:
   max_epochs: 700
 
 optimizer:
     target_: torch.optim.Adam
-    lr: 0.0002
+    lr: 0.002
     decreased_by: 10
 
 loss:
@@ -33,7 +33,6 @@ network:
   module: AutoEncoder
 
   # m: 16 # 16 or 32 (U-Net hidden dimension)
-  backbone_type: UNet # Conv or UNet
 
   use_color: True
   use_normal: False
@@ -45,12 +44,15 @@ network:
   prepare_epochs: 10
 
   encoder:
-    pn_hidden_dim: 128
-    pn_n_blocks: 3
+    design: local-pointnet-unet
+    local_pointnet: True
+    down_sampler: None # None, MaxPool, Conv
+    pn_hidden_dim: 64
+    pn_n_blocks: 6
     use_unet: True
     voxel_size_out: 0.5
     feature_in: voxel_features
-    unet_blocks: [1, 2, 3, 4, 5, 6, 7]
+    unet_blocks: [1, 2, 3]
     unet_block_reps: 2
 
   fourier_encoder:
@@ -74,7 +76,7 @@ dense_generator:
   threshold: 0.1
   num_points: 9000000
   filter_val: 0.005
-  prepare_epochs: 1900
+  prepare_epochs: 800
   type: voxel # voxel or scene
 
 inference:
