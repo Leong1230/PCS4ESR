@@ -5,12 +5,12 @@ defaults:
   - base
 
 
-stage1_ckpt_path: '/localhome/zla247/projects/data/output/Scannet/AutoEncoder/AutoEncoder_stage-1_voxel-in-out-0.5-0.5_overfit-True_intake-10_voxel_features_encoder-local-pointnet-unet_latent-64-64-64-64_lr-0.002_run_1/training/epoch=499.ckpt'
+# stage1_ckpt_path: '/localhome/zla247/projects/data/output/Scannet/AutoEncoder/AutoEncoder_stage-1_voxel-in-out-0.5-0.5_overfit-True_intake-10_voxel_features_encoder-local-pointnet-unet_latent-64-64-64-64_lr-0.002_run_1/training/epoch=499.ckpt'
 
 
-# stage1_ckpt_path: None
+stage1_ckpt_path: None
 
-training_stage: 2
+training_stage: 1
 
 trainer:
   max_epochs: 700
@@ -41,6 +41,9 @@ network:
   positional_encoding: Fourier # Triplane
   latent_dim: 64 #
 
+  k_neighbors: 10 # 1 for no interpolation
+  interpolation_mode: inverse_distance # inverse_distance or max
+
   prepare_epochs: 10
 
   encoder:
@@ -52,7 +55,7 @@ network:
     use_unet: True
     voxel_size_out: 0.5
     feature_in: voxel_features
-    unet_blocks: [1, 2, 3]
+    unet_blocks: [1, 2, 3, 4, 5]
     unet_block_reps: 2
 
   fourier_encoder:

@@ -20,7 +20,7 @@ def main(cfg):
     pl.seed_everything(cfg.global_train_seed, workers=True)
 
     output_path = os.path.join(cfg.exp_output_root_path, "training")
-    os.makedirs(output_path, exist_ok=True)
+    # os.makedirs(output_path, exist_ok=True)
 
     print("==> initializing data ...")
     data_module = DataModule(cfg)
@@ -32,7 +32,7 @@ def main(cfg):
     callbacks = init_callbacks(cfg)
 
     output_path = os.path.join(cfg.exp_output_root_path, "inference", cfg.model.inference.split, "udf_visualizations")
-    os.makedirs(output_path, exist_ok=True)
+    # os.makedirs(output_path, exist_ok=True)
 
     print("==> initializing trainer ...")
     trainer = pl.Trainer(callbacks=callbacks, logger=logger, **cfg.model.trainer)

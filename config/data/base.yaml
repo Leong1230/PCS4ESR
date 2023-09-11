@@ -1,7 +1,7 @@
 # Managed by Hydra
 
-dataset_root_path: ${project_root_path}/../../data
-
+# dataset_root_path: ${project_root_path}/../../data
+dataset_root_path: ${project_root_path}/../../zla247/data
 batch_size: 2
 num_workers: 2
 voxel_size: 0.5 #scannet default: 0.02
@@ -21,14 +21,14 @@ udf_queries:
   queries_ratio_per_std: 0.5
   max_dist: 0.1
 in_memory: True # whether precompute voxel indices and load voxel into memory
-take: 10 # how many data to take for training and validation, -1 means all
+take: 1 # how many data to take for training and validation, -1 means all
 intake_start: 5
 over_fitting: True # whether to use only one voxel for training and validation
 
 augmentation:
-  use_aug: False
+  use_aug: True
   method: N-times # N-times or original
-  loops: 1
+  loops: 4
   color_trans_ratio: 0.1
   color_jitter_std: 0.05
   hue_max: 0.5

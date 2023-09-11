@@ -37,6 +37,6 @@ inference:
   term: UDF # UDF or Seg
   split: val
   evaluate: True
-  save_predictions: True
-  visualization: True
+  save_predictions: False
+  visualization: False
   show_visualizaitons: True

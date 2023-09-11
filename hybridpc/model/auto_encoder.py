@@ -32,26 +32,18 @@ class AutoEncoder(GeneralModel):
         self.latent_dim = cfg.model.network.latent_dim
 
         self.encoder = Encoder(cfg)
-        if self.training_stage == 1:
-            self.udf_decoder = ImplicitDecoder(
-                "functa",
-                cfg.model.network.latent_dim,
-                cfg.model.network.udf_decoder.input_dim,
-                cfg.model.network.udf_decoder.hidden_dim,
-                cfg.model.network.udf_decoder.num_hidden_layers_before_skip,
-                cfg.model.network.udf_decoder.num_hidden_layers_after_skip,
-                1
-            )
-        else:
-            self.udf_decoder = ImplicitDecoder(
-                "functa",
-                cfg.model.network.latent_dim,
-                cfg.model.network.udf_decoder.input_dim,
-                cfg.model.network.udf_decoder.hidden_dim,
-                cfg.model.network.udf_decoder.num_hidden_layers_before_skip,
-                cfg.model.network.udf_decoder.num_hidden_layers_after_skip,
-                1
-            )
+        self.udf_decoder = ImplicitDecoder(
+            "functa",
+            cfg.model.network.k_neighbors,
+            cfg.model.network.interpolation_mode,
+            cfg.model.network.latent_dim,
+            cfg.model.network.udf_decoder.input_dim,
+            cfg.model.network.udf_decoder.hidden_dim,
+            cfg.model.network.udf_decoder.num_hidden_layers_before_skip,
+            cfg.model.network.udf_decoder.num_hidden_layers_after_skip,
+            1
+        )
+        if self.training_stage == 2:
             self.seg_backbone = MinkUNetBackbone(
                 self.latent_dim + cfg.model.network.use_xyz * 3 + cfg.model.network.use_color * 3 + cfg.model.network.use_normal * 3,
                 cfg.model.network.seg_decoder.feature_dim
@@ -59,6 +51,8 @@ class AutoEncoder(GeneralModel):
 
             self.seg_decoder = ImplicitDecoder(
                 "seg",
+                cfg.model.network.k_neighbors,
+                cfg.model.network.interpolation_mode,
                 cfg.model.network.seg_decoder.feature_dim,
                 cfg.model.network.seg_decoder.input_dim,
                 cfg.model.network.seg_decoder.hidden_dim,
