@@ -48,7 +48,7 @@ class GeneralDataset(Dataset):
         self.sample_entire_scene = cfg.data.udf_queries.sample_entire_scene
         self.num_queries_on_surface = cfg.data.udf_queries.num_queries_on_surface
         self.queries_stds = cfg.data.udf_queries.queries_stds
-        self.num_queries_per_std = cfg.data.udf_queries.num_queries_per_std
+        # self.num_queries_per_std = cfg.data.udf_queries.num_queries_per_std
         # Setting ratio parameters for point selection
         self.ratio_on_surface = cfg.data.udf_queries.queries_ratio_on_surface
         self.ratio_per_std = cfg.data.udf_queries.queries_ratio_per_std
@@ -178,72 +178,57 @@ class GeneralDataset(Dataset):
             (torch.tensor(min_range), torch.tensor(max_range))
         ) # torch.tensor
 
-        # compute query indices and relative coordinates
-        if self.cfg.model.network.k_neighbors == 1: # query the nearest voxel
-            voxel_coords = torch.from_numpy(voxel_coords).int()
-            # coords = torch.cat((torch.ones(coords.shape[0], 1, dtype=torch.int), coords), dim=1)
-            voxel_center = voxel_coords * self.voxel_size + self.voxel_size / 2.0 # compute voxel_center in orginal coordinate system (torch.tensor)
-            device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-            query_points = query_points.to(device)
-            voxel_center = voxel_center.to(device)
-            query_indices, _, _ = knn(query_points, voxel_center, 1)
-            query_indices = query_indices[:, 0]
-            relative_coords = xyz - voxel_center[inds_reconstruct].cpu().numpy()
-            query_relative_coords = query_points.cpu().numpy() - voxel_center[query_indices].cpu().numpy()
+        # # compute query indices and relative coordinates
+        # if self.cfg.model.network.k_neighbors == 1: # query the nearest voxel
+        #     voxel_coords = torch.from_numpy(voxel_coords).int()
+        #     # coords = torch.cat((torch.ones(coords.shape[0], 1, dtype=torch.int), coords), dim=1)
+        #     voxel_center = voxel_coords * self.voxel_size + self.voxel_size / 2.0 # compute voxel_center in orginal coordinate system (torch.tensor)
+        #     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        #     query_points = query_points.to(device)
+        #     voxel_center = voxel_center.to(device)
+        #     query_indices, _, _ = knn(query_points, voxel_center, 1)
+        #     query_indices = query_indices[:, 0]
+        #     relative_coords = xyz - voxel_center[inds_reconstruct].cpu().numpy()
+        #     query_relative_coords = query_points.cpu().numpy() - voxel_center[query_indices].cpu().numpy()
 
-            # remove query_points outside the voxel
-            lower_bound = -self.voxel_size / 2
-            upper_bound = self.voxel_size / 2
-            # Create a mask
-            mask = (query_relative_coords >= lower_bound) & (query_relative_coords <= upper_bound)
-            # Reduce across the last dimension to get a (N, ) mask
-            mask = np.all(mask,-1)
-            query_indices = query_indices[mask]
-            query_relative_coords = query_relative_coords[mask]
-            unmasked_values = values.cpu().numpy()
-            values = values[mask].cpu().numpy()
+        #     # remove query_points outside the voxel
+        #     lower_bound = -self.voxel_size / 2
+        #     upper_bound = self.voxel_size / 2
+        #     # Create a mask
+        #     mask = (query_relative_coords >= lower_bound) & (query_relative_coords <= upper_bound)
+        #     # Reduce across the last dimension to get a (N, ) mask
+        #     mask = np.all(mask,-1)
+        #     query_indices = query_indices[mask]
+        #     query_relative_coords = query_relative_coords[mask]
+        #     unmasked_values = values.cpu().numpy()
+        #     values = values[mask].cpu().numpy()
 
-        else: # query multiple voxels
-            voxel_coords = torch.from_numpy(voxel_coords).int()
-            voxel_center = voxel_coords * self.voxel_size + self.voxel_size / 2.0 # compute voxel_center in orginal coordinate system (torch.tensor)
-            device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-            query_points = query_points.to(device)
-            voxel_center = voxel_center.to(device)
-            query_indices, _, _ = knn(query_points, voxel_center, self.cfg.model.network.k_neighbors)
-            inds_reconstruct, _, _ = knn(points_tensor.to(device), voxel_center, self.cfg.model.network.k_neighbors)
-            relative_coords = xyz - voxel_center[inds_reconstruct].cpu().numpy() # N, K, 3
-            query_relative_coords = query_points.cpu().numpy() - voxel_center[query_indices].cpu().numpy() #M, K, 3
-            
-            # remove query_points outside the voxel
-            lower_bound = -self.voxel_size / 2
-            upper_bound = self.voxel_size / 2
-            # Create a mask
-            mask = (query_relative_coords >= lower_bound) & (query_relative_coords <= upper_bound)
-            # Reduce across the last dimension to get a (N, ) mask
-            mask = np.all(mask,-1)
-            query_indices = query_indices[mask]
-            query_relative_coords = query_relative_coords[mask]
-            unmasked_values = values.cpu().numpy()
-            values = values[mask].cpu().numpy()
-        # feats = torch.ones(coords.shape[0], 3)
-
-        # num_surface_queries = num_queries_on_surface # number of surface queries
-        # num_gaussian_queries = sum(num_queries_per_std) - num_queries_per_std[-1]# number of all Gaussian queries
-        # num_uniform_queries = num_queries_per_std[-1] # Number of uniform queries
-        # if num_uniform_queries < 0: # Check if we have any discrepancy in the count
-        #     raise ValueError('The counts of queries do not match the total number of queries in `query_points`.')
-
-        # Create masks
-        # mask_surface = torch.cat((torch.ones(num_surface_queries), torch.zeros(num_gaussian_queries + num_uniform_queries))).bool().cpu().numpy()
-        # mask_gaussian = torch.cat((torch.zeros(num_surface_queries), torch.ones(num_gaussian_queries), torch.zeros(num_uniform_queries))).bool().cpu().numpy()
-        # mask_uniform = torch.cat((torch.zeros(num_surface_queries + num_gaussian_queries), torch.ones(num_uniform_queries))).bool().cpu().numpy()
-
-        # find the nearest voxel center for each query point
+        # else: # query multiple voxels
+        voxel_coords = torch.from_numpy(voxel_coords).int()
+        voxel_center = voxel_coords * self.voxel_size + self.voxel_size / 2.0 # compute voxel_center in orginal coordinate system (torch.tensor)
+        device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        query_points = query_points.to(device)
+        voxel_center = voxel_center.to(device)
+        query_indices, _, _ = knn(query_points, voxel_center, self.cfg.model.network.k_neighbors)
+        inds_reconstruct, _, _ = knn(points_tensor.to(device), voxel_center, self.cfg.model.network.k_neighbors)
+        relative_coords = xyz[:, np.newaxis] - voxel_center[inds_reconstruct].cpu().numpy() # N, K, 3
+        query_relative_coords = query_points.cpu().numpy()[:, np.newaxis] - voxel_center[query_indices].cpu().numpy() #M, K, 3
+        
+        # remove query_points outside the voxel
+        lower_bound = -self.voxel_size / 2
+        upper_bound = self.voxel_size / 2
+        # Create a mask
+        mask = (query_relative_coords[:, 0, :] >= lower_bound) & (query_relative_coords[:, 0, :] <= upper_bound)
+        # Reduce across the last dimension to get a (N, ) mask
+        mask = np.all(mask,-1)
+        query_indices = query_indices[mask]
+        query_relative_coords = query_relative_coords[mask]
+        unmasked_values = values.cpu().numpy()
+        values = values[mask].cpu().numpy()
+        inds_reconstruct = inds_reconstruct.cpu().numpy()
 
 
-        #crop
-        # if all(label == -1 for label in sample['sem_labels']):
-        #     flag = idx
+
 
         data = {
             "xyz": xyz,  # N, 3
@@ -260,7 +245,43 @@ class GeneralDataset(Dataset):
             "unmasked_values": unmasked_values,
             "scene_name": f"{sample['scene_name']}_{i}"
         }
+
+        # voxel_id = 10
+        # # voxel_center = data['voxel_coords'][:, 1:4][voxel_id] * self.voxel_size - self.voxel_size
+        # relative_points = (data['points'][data['voxel_indices'][:, 0] == voxel_id])[:, 0, :]
+        # # absolute_points = relative_points + voxel_center.cpu().numpy()
+        # # Append the absolute coordinates to the all_points list
+        # # all_original_points.append(absolute_points)
+        
+        # query_relative_points = (data['query_points'][data['query_voxel_indices'][:, 0] == voxel_id])[:, 0, :]
+        # # query_absolute_points = query_relative_points + voxel_center.cpu().numpy()
+        # # all_query_points.append(query_absolute_points)
+
+
+
+
+        # # all_points_np = np.vstack(all_original_points)
+        # # all_dense_points_np = np.vstack(all_dense_points)
+        # # all_query_points_np = np.vstack(all_query_points)
+        # # Use open3d to visualize the point cloud
+        # points_cloud = o3d.geometry.PointCloud()
+        # points_cloud.points = o3d.utility.Vector3dVector(relative_points)
+        # query_points_cloud = o3d.geometry.PointCloud()
+        # query_points_cloud.points = o3d.utility.Vector3dVector(query_relative_points)
+    
+        # red_color = [1, 0, 0]
+        # blue_color = [0, 0, 1]
+        # points_cloud.paint_uniform_color(red_color)
+        # query_points_cloud.paint_uniform_color(blue_color)
+
+        # # Merge the point clouds
+        # merged_pcd = points_cloud + query_points_cloud
+        # original_points_cloud = merged_pcd
+
+        # o3d.visualization.draw_geometries([original_points_cloud])
+
         # # computing voxel center coordinates
+
         # voxel_centers = self.voxel_size * voxel_coords[data['voxel_indices']] + self.voxel_size / 2
 
         # # recovering the absolute coordinates of points
@@ -428,6 +449,13 @@ class GeneralDataset(Dataset):
             else:
                 voxel_coords, feats, labels, inds_reconstruct = self.voxelizer.voxelize(locs_in, point_features, labels_in)
 
+        # Number of data points you have
+        M = scene["query_points"].shape[0]
+        # Number of points you want to keep
+        num_to_keep = int(M * self.cfg.data.udf_queries.ratio_per_epoch)
+        # Randomly select indices
+        perm_indices = torch.randperm(M)[:num_to_keep]
+
         data = {
             "xyz": scene['xyz'],  # N, 3
             "points": scene['points'],  # N, 3 or N, K , 3
@@ -436,10 +464,10 @@ class GeneralDataset(Dataset):
             "voxel_indices": inds_reconstruct,  # N, or N, K
             "voxel_coords": voxel_coords,  # K, 3
             "voxel_features": feats,  # K, ?
-            "absolute_query_points": scene['absolute_query_points'],
-            "query_points": scene['query_points'],  # M, 3 or M, K, 3
-            "query_voxel_indices": scene['query_voxel_indices'],  # M, or M, K
-            "values": scene['values'],  # M,
+            "absolute_query_points": scene['absolute_query_points'][perm_indices],
+            "query_points": scene['query_points'][perm_indices],  # M, 3 or M, K, 3
+            "query_voxel_indices": scene['query_voxel_indices'][perm_indices],  # M, or M, K
+            "values": scene['values'][perm_indices],  # M,
             "unmasked_values": scene['unmasked_values'],  # M,
             "scene_name": scene['scene_name']
         }

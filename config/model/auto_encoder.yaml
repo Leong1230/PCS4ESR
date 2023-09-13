@@ -59,7 +59,7 @@ network:
     unet_block_reps: 2
 
   fourier_encoder:
-    embedding_dim: 32
+    embedding_dim: 0
 
   seg_decoder:
     input_dim: 3
@@ -77,10 +77,10 @@ network:
 dense_generator:
   num_steps: 10
   threshold: 0.1
-  num_points: 9000000
+  num_points: 900000
   filter_val: 0.005
-  prepare_epochs: 800
-  type: voxel # voxel or scene
+  prepare_epochs: 1000
+  type: multiple_voxels # multiple_voxels or voxel or scene
 
 inference:
   term: UDF # UDF or Seg
@@ -88,4 +88,4 @@ inference:
   evaluate: True
   save_predictions: True
   visualization: True
-  show_visualizations: False
+  show_visualizations: True

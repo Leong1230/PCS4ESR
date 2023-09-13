@@ -82,7 +82,7 @@ def _sparse_collate_fn(batch):
         # batch_ids.append(torch.full((b["points"].shape[0],), fill_value=i, dtype=torch.int32))
 
         # Update the cumulative length for the next iteration
-        cumulative_voxel_coords_len += len(b["voxel_coords"])
+        cumulative_voxel_coords_len += (b["voxel_coords"].shape[0])
 
     data['xyz'] = torch.cat(xyz, dim=0)
     data['points'] = torch.cat(points, dim=0)

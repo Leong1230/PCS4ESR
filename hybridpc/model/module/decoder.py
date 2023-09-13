@@ -75,11 +75,14 @@ class ImplicitDecoder(pl.LightningModule):
 
         self.k_neighbors = k_neighbors # 1 for no interpolation
         self.interpolation_mode = interpolation_mode
-        if self.k_neighbors > 1:
-            self.interpolation_layer = ResnetBlockFC(embed_dim+in_dim, embed_dim)
+
         self.coords_enc = CoordsEncoder(in_dim)
         coords_dim = self.coords_enc.out_dim
 
+        if self.k_neighbors > 1:
+            self.interpolation_layer = ResnetBlockFC(embed_dim+in_dim, embed_dim)
+
+        # coords_dim = 0
         self.in_layer = nn.Sequential(nn.Linear(embed_dim + coords_dim, hidden_dim), nn.ReLU())
 
         self.skip_proj = nn.Sequential(nn.Linear(embed_dim + coords_dim, hidden_dim), nn.ReLU())
@@ -120,7 +123,8 @@ class ImplicitDecoder(pl.LightningModule):
         """
 
         # Gather the corresponding voxel latents based on index
-        gathered_latents = torch.gather(voxel_latents, 0, index.unsqueeze(-1).expand(-1, -1, voxel_latents.size(1)))
+        gathered_latents = voxel_latents[index]
+        # embeded_coords = self.coords_enc.embed(coords)
         gathered_features = self.interpolation_layer(torch.cat((gathered_latents, coords), 2))
 
         # Calculate the weights for interpolation based on distances
@@ -133,7 +137,7 @@ class ImplicitDecoder(pl.LightningModule):
             # Compute the interpolated features
             interpolated_features = torch.sum(gathered_features * normalized_weights.unsqueeze(-1), dim=1) #N, D
         elif self.interpolation_mode == 'max':
-            interpolated_features = torch.max(gathered_features, dim=1) #N, D
+            interpolated_features, _ = torch.max(gathered_features, dim=1) #N, D
         else:
             raise ValueError(f"Unsupported interpolation mode: {self.interpolation_mode}")
 
@@ -146,14 +150,15 @@ class ImplicitDecoder(pl.LightningModule):
         # coords (N, 3) or (N, K, 3)
         # index (N, ) or (N, K)
         if self.k_neighbors == 1:
-            coords = self.coords_enc.embed(coords)
-            selected_embeddings = embeddings[index]
-            emb_and_coords = torch.cat([selected_embeddings, coords], dim=-1)
+            embeded_coords = self.coords_enc.embed(coords[:, 0, :])
+            selected_embeddings = embeddings[index[:, 0]]
+            emb_and_coords = torch.cat([selected_embeddings, embeded_coords], dim=-1)
 
         else:
-            coords = self.coords_enc.embed(coords[:, 0, :]) # embed the nearest relative coords
+            embeded_coords = self.coords_enc.embed(coords[:, 0, :]) # embed the nearest relative coords
             interpolated_embeddings = self.interpolation(embeddings, coords, index) # N, C
-            emb_and_coords = torch.cat([interpolated_embeddings, coords], dim=-1)
+            emb_and_coords = torch.cat([interpolated_embeddings, embeded_coords], dim=-1)
+            # emb_and_coords = interpolated_embeddings
 
         x = self.in_layer(emb_and_coords)
         x = self.before_skip(x)

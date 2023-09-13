@@ -141,7 +141,8 @@ class Encoder(pl.LightningModule):
         output_dict = {}
         if self.local_pointnet:
             # use local pointnet to extract voxel features
-            pn_feat = self.local_pointnet(torch.cat((data_dict['points'], data_dict['point_features']), dim=1), data_dict['voxel_indices'])
+            # pn_feat = self.local_pointnet(torch.cat((data_dict['points'], data_dict['point_features']), dim=1), data_dict['voxel_indices'])
+            pn_feat = self.local_pointnet(torch.cat((data_dict['points'][:, 0, :], data_dict['point_features']), dim=1), data_dict['voxel_indices'][:, 0])
             x = ME.SparseTensor(pn_feat, coordinates=data_dict['voxel_coords'])
         else:
             x = ME.SparseTensor(features=data_dict['voxel_features'], coordinates=data_dict['voxel_coords'])

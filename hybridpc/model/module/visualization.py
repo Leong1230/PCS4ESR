@@ -79,6 +79,66 @@ class Dense_Generator(pl.LightningModule):
 
             duration = time.time() - start
             return samples_cpu, duration
+
+        if self.type == 'multiple_voxels':
+            start = time.time()
+
+            # freeze model parameters
+            for param in self.model.parameters():
+                param.requires_grad = False
+
+            # sample_num set to 200000
+            sample_num = 200000
+
+            # Initialize samples in CUDA device
+            samples_cpu = np.zeros((0, 3))
+
+            # Initialize samples and move to CUDA device
+            samples = torch.rand(1, sample_num, 3).float().to(self.device)  # make samples within voxel_size
+            N = samples.shape[1]  # The number of samples
+            # index = torch.full((N,), voxel_id, dtype=torch.long, device=self.device)
+            indices = voxel_id.unsqueeze(0).repeat(N, 1)
+            voxel_center_transfer  = encodes_dict['voxel_coords'][:, 1:4][voxel_id[0]].unsqueeze(0) - encodes_dict['voxel_coords'][:, 1:4][voxel_id] # K, 3
+
+
+            samples.requires_grad = True
+
+            i = 0
+            while len(samples_cpu) < self.num_points:
+                print('iteration', i)
+
+                for j in range(self.num_steps):
+                    print('refinement', j)
+                    samples_relative = samples.unsqueeze(2) - voxel_center_transfer.unsqueeze(0).unsqueeze(0) 
+                    N = samples.shape[1]  # The number of samples
+                    indices = voxel_id.unsqueeze(0).repeat(N, 1)
+                    df_pred = torch.clamp(self.model(voxel_latents.detach(), samples_relative[0], indices), max=self.threshold).unsqueeze(0)
+                    df_pred.sum().backward(retain_graph=True)
+                    gradient = samples.grad.detach()
+                    samples = samples.detach()
+                    df_pred = df_pred.detach()
+                    samples = samples - F.normalize(gradient, dim=2) * df_pred.reshape(-1, 1)  
+                    samples = samples.detach()
+                    samples.requires_grad = True
+
+                print('finished refinement')
+
+                if not i == 0:
+                    # Move samples to CPU, detach from computation graph, convert to numpy array, and stack to samples_cpu
+                    samples_cpu = np.vstack((samples_cpu, samples[df_pred < self.filter_val].detach().cpu().numpy()))
+
+                samples = samples[df_pred < 0.03].unsqueeze(0)
+                indices = torch.randint(samples.shape[1], (1, sample_num))
+                samples = samples[[[0, ] * sample_num], indices]
+                samples += (self.threshold / 3) * torch.randn(samples.shape).to(self.device)  # 3 sigma rule
+                samples = samples.detach()
+                samples.requires_grad = True
+
+                i += 1
+                print(samples_cpu.shape)
+
+            duration = time.time() - start
+            return samples_cpu, duration
         
         else:
             start = time.time()

@@ -1,7 +1,7 @@
 # Managed by Hydra
 
-# dataset_root_path: ${project_root_path}/../../data
-dataset_root_path: ${project_root_path}/../../zla247/data
+dataset_root_path: ${project_root_path}/../../data
+# dataset_root_path: ${project_root_path}/../../zla247/data
 batch_size: 2
 num_workers: 2
 voxel_size: 0.5 #scannet default: 0.02
@@ -11,24 +11,25 @@ max_num_point: 250000
 rotate_num: 100
 use_relative: True # use relative query coordinates within each voxel
 
-k_neighbors: 10
+k_neighbors: 1
 udf_queries:
   sample_entire_scene: True
   num_queries_on_surface: 100
-  queries_ratio_on_surface: 0.5
+  ratio_per_epoch: 0.1
+  queries_ratio_on_surface: 1
   queries_stds: [0.001, 0.01, 0.1]
-  num_queries_per_std: [400, 320, 400, 400]
-  queries_ratio_per_std: 0.5
+  # num_queries_per_std: [400, 320, 400, 400]
+  queries_ratio_per_std: 1
   max_dist: 0.1
 in_memory: True # whether precompute voxel indices and load voxel into memory
-take: 1 # how many data to take for training and validation, -1 means all
+take: 10 # how many data to take for training and validation, -1 means all
 intake_start: 5
 over_fitting: True # whether to use only one voxel for training and validation
 
 augmentation:
-  use_aug: True
+  use_aug: False
   method: N-times # N-times or original
-  loops: 4
+  loops: 1
   color_trans_ratio: 0.1
   color_jitter_std: 0.05
   hue_max: 0.5
