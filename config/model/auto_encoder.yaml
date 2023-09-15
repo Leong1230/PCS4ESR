@@ -39,7 +39,7 @@ network:
   use_xyz: False
 
   positional_encoding: Fourier # Triplane
-  latent_dim: 64 #
+  latent_dim: 8 #
 
   k_neighbors: 10 # 1 for no interpolation
   interpolation_mode: inverse_distance # inverse_distance or max
@@ -50,20 +50,17 @@ network:
     design: local-pointnet-unet
     local_pointnet: True
     down_sampler: None # None, MaxPool, Conv
-    pn_hidden_dim: 64
+    pn_hidden_dim: 8
     pn_n_blocks: 6
     use_unet: True
-    voxel_size_out: 0.5
+    voxel_size_out: 0.1
     feature_in: voxel_features
-    unet_blocks: [1, 2, 3, 4, 5]
+    unet_blocks: [1, 2, 3, 4, 5, 6, 7]
     unet_block_reps: 2
-
-  fourier_encoder:
-    embedding_dim: 0
 
   seg_decoder:
     input_dim: 3
-    feature_dim: 64
+    feature_dim: 8
     hidden_dim: 64
     num_hidden_layers_before_skip: 2
     num_hidden_layers_after_skip: 2
@@ -79,7 +76,7 @@ dense_generator:
   threshold: 0.1
   num_points: 900000
   filter_val: 0.005
-  prepare_epochs: 1000
+  prepare_epochs: 1900
   type: multiple_voxels # multiple_voxels or voxel or scene
 
 inference:
@@ -89,3 +86,5 @@ inference:
   save_predictions: True
   visualization: True
   show_visualizations: True
+  visualize_given_voxels: True
+  visualize_ids: [406, 405, 366, 365, 403, 402, 410, 363, 409, 362]

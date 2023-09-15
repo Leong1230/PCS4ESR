@@ -165,6 +165,7 @@ class Encoder(pl.LightningModule):
             relative_coords = data_dict['points']
             indices = data_dict['voxel_indices']
         output_dict['query_relative_coords'] = query_relative_coords
+        output_dict['query_absolute_coords'] = data_dict['absolute_query_points']
         output_dict['query_indices'] = query_indices
         output_dict['relative_coords'] = relative_coords
         output_dict['indices'] = indices

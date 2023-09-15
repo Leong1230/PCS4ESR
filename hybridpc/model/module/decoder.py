@@ -145,8 +145,35 @@ class ImplicitDecoder(pl.LightningModule):
         
 
 
+    # def forward(self, embeddings: Tensor, absolute_coords: Tensor, coords: Tensor, index: Tensor) -> Tensor:
+    #     # embeddings (M, C)
+    #     # absolute_coords (N, K, 3)
+    #     # coords (N, 3) or (N, K, 3)
+    #     # index (N, ) or (N, K)
+    #     if self.k_neighbors == 1:
+    #         embeded_coords = self.coords_enc.embed(coords[:, 0, :])
+    #         selected_embeddings = embeddings[index[:, 0]]
+    #         emb_and_coords = torch.cat([selected_embeddings, embeded_coords], dim=-1)
+
+    #     else:
+    #         embeded_coords = self.coords_enc.embed(absolute_coords) # embed the nearest relative coords
+    #         interpolated_embeddings = self.interpolation(embeddings, coords, index) # N, C
+    #         emb_and_coords = torch.cat([interpolated_embeddings, embeded_coords], dim=-1)
+    #         # emb_and_coords = interpolated_embeddings
+
+    #     x = self.in_layer(emb_and_coords)
+    #     x = self.before_skip(x)
+
+    #     inp_proj = self.skip_proj(emb_and_coords)
+    #     x = x + inp_proj
+
+    #     x = self.after_skip(x)
+
+    #     return x.squeeze(-1)
+    
     def forward(self, embeddings: Tensor, coords: Tensor, index: Tensor) -> Tensor:
         # embeddings (M, C)
+        # absolute_coords (N, K, 3)
         # coords (N, 3) or (N, K, 3)
         # index (N, ) or (N, K)
         if self.k_neighbors == 1:

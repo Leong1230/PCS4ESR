@@ -94,11 +94,11 @@ class Dense_Generator(pl.LightningModule):
             samples_cpu = np.zeros((0, 3))
 
             # Initialize samples and move to CUDA device
-            samples = torch.rand(1, sample_num, 3).float().to(self.device)  # make samples within voxel_size
+            samples = torch.rand(1, sample_num, 3).float().to(self.device) * self.voxel_size - self.voxel_size / 2 # make samples   # make samples within voxel_size
             N = samples.shape[1]  # The number of samples
             # index = torch.full((N,), voxel_id, dtype=torch.long, device=self.device)
             indices = voxel_id.unsqueeze(0).repeat(N, 1)
-            voxel_center_transfer  = encodes_dict['voxel_coords'][:, 1:4][voxel_id[0]].unsqueeze(0) - encodes_dict['voxel_coords'][:, 1:4][voxel_id] # K, 3
+            voxel_center_transfer  = (encodes_dict['voxel_coords'][:, 1:4][voxel_id[0]].unsqueeze(0) - encodes_dict['voxel_coords'][:, 1:4][voxel_id]) * self.voxel_size # K, 3
 
 
             samples.requires_grad = True

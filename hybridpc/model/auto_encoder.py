@@ -235,6 +235,11 @@ class AutoEncoder(GeneralModel):
             #         self.udf_visualization(data_dict, encodes_dict, self.current_epoch, udf_loss)
             # Calculating the metrics
 
+    def get_unique_color(self, voxel_id, num_voxels):
+        # You can customize this function further if you have a preferred color scheme
+        color_map = plt.cm.jet  # You can change this to any other colormap
+        return color_map(voxel_id / num_voxels)[:3]
+
     def udf_visualization(self, data_dict, encodes_dict, current_epoch, udf_loss):
         voxel_latents = encodes_dict['latent_codes']
         voxel_num = voxel_latents.shape[0]
@@ -272,12 +277,18 @@ class AutoEncoder(GeneralModel):
             # for voxel_id in range(voxel_num):
             voxel_id = voxel_num - 10
             original_indices = encodes_dict['indices'][encodes_dict['indices'][:, 0] == voxel_id]
-            voxel_ids = original_indices[0]
+            if self.hparams.model.inference.visualize_given_voxels:
+                voxel_ids = self.hparams.model.inference.visualize_ids
+            else:
+                voxel_ids = original_indices[0]
             all_original_points = []  # List to accumulate all the absolute coordinates
             all_dense_points = []
             all_query_points = []
-            for voxel_id in voxel_ids: 
-                voxel_center = encodes_dict['voxel_coords'][:, 1:4][voxel_id] * self.hparams.model.network.encoder.voxel_size_out - self.hparams.model.network.encoder.voxel_size_out/2
+            all_points_colors = []
+            all_query_points_colors = []
+            all_dense_points_colors = []
+            for index, voxel_id in enumerate(voxel_ids):
+                voxel_center = encodes_dict['voxel_coords'][:, 1:4][voxel_id] * self.hparams.model.network.encoder.voxel_size_out + self.hparams.model.network.encoder.voxel_size_out/2 #M, 3
                 relative_points = (encodes_dict['relative_coords'][encodes_dict['indices'][:, 0] == voxel_id])[:, 0, :].cpu().numpy()
                 absolute_points = relative_points + voxel_center.cpu().numpy()
                 # Append the absolute coordinates to the all_points list
@@ -287,40 +298,52 @@ class AutoEncoder(GeneralModel):
                 query_absolute_points = query_relative_points + voxel_center.cpu().numpy()
                 all_query_points.append(query_absolute_points)
 
-                original_indices = encodes_dict['indices'][encodes_dict['indices'][:, 0] == voxel_id]
-                current_voxel_ids = original_indices[0]
+                original_indices = encodes_dict['indices'][encodes_dict['indices'][:, 0] == voxel_id] # P,K
+                current_voxel_ids = original_indices[0] #, K
                 dense_points, duration = self.dense_generator.generate_point_cloud(data_dict, encodes_dict, voxel_latents, current_voxel_ids)
                 all_dense_points.append(dense_points + voxel_center.cpu().numpy())
 
+                color = self.get_unique_color(index, len(voxel_ids))     
+                all_points_colors.append(np.repeat([color], absolute_points.shape[0], axis=0))
+                all_query_points_colors.append(np.repeat([color], query_absolute_points.shape[0], axis=0))
+                all_dense_points_colors.append(np.repeat([color], dense_points.shape[0], axis=0))
 
 
+            # Stack the colors
+            all_points_colors_np = np.vstack(all_points_colors)
+            all_query_points_colors_np = np.vstack(all_query_points_colors)
+            all_dense_points_colors_np = np.vstack(all_dense_points_colors)
+            # stack points
             all_points_np = np.vstack(all_original_points)
             all_dense_points_np = np.vstack(all_dense_points)
             all_query_points_np = np.vstack(all_query_points)
+
             # Use open3d to visualize the point cloud
             points_cloud = o3d.geometry.PointCloud()
             points_cloud.points = o3d.utility.Vector3dVector(all_points_np)
             query_points_cloud = o3d.geometry.PointCloud()
             query_points_cloud.points = o3d.utility.Vector3dVector(all_query_points_np)
+            points_cloud.colors = o3d.utility.Vector3dVector(all_points_colors_np)
         
-            red_color = [1, 0, 0]
+            # red_color = [1, 0, 0]
             blue_color = [0, 0, 1]
-            points_cloud.paint_uniform_color(red_color)
+            # points_cloud.paint_uniform_color(red_color)
             query_points_cloud.paint_uniform_color(blue_color)
 
             # Merge the point clouds
             merged_pcd = points_cloud + query_points_cloud
-            original_points_cloud = merged_pcd
+            original_points_cloud = points_cloud
 
             dense_points_cloud = o3d.geometry.PointCloud()
             dense_points_cloud.points = o3d.utility.Vector3dVector(all_dense_points_np)
+            dense_points_cloud.colors = o3d.utility.Vector3dVector(all_dense_points_colors_np)
 
             if self.hparams.model.inference.show_visualizations:
                 o3d.visualization.draw_geometries([dense_points_cloud])
                 o3d.visualization.draw_geometries([original_points_cloud])
 
             if self.hparams.model.inference.save_predictions:
-                filename_base = f'Single_voxel_{self.hparams.model.network.encoder.voxel_size_out}_from_{scene_name}_voxelid_{voxel_id}_{loss_type}_udf_loss_{udf_loss:.5f}'
+                filename_base = f'Multiple_voxels_{self.hparams.model.network.encoder.voxel_size_out}_from_{scene_name}_voxelid_{voxel_id}_{loss_type}_udf_loss_{udf_loss:.5f}'
                 o3d.io.write_point_cloud(os.path.join(save_dir, f'{filename_base}_dense.ply'), dense_points_cloud)
                 self.save_rotating_video_from_object(dense_points_cloud, os.path.join(save_dir, f'{filename_base}_dense.mp4'))
                 o3d.io.write_point_cloud(os.path.join(save_dir, f'{filename_base}_origin.ply'), original_points_cloud)
