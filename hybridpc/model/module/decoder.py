@@ -62,38 +62,51 @@ class ImplicitDecoder(pl.LightningModule):
     def __init__(
         self,
         type: str,
-        k_neighbors: int,
-        interpolation_mode: str,
+        cfg,
         embed_dim: int,
-        in_dim: int,
-        hidden_dim: int,
-        num_hidden_layes_before_skip: int,
-        num_hidden_layes_after_skip: int,
-        out_dim: int,
+        voxel_size: float,
+        out_dim: int
     ) -> None:
         super().__init__()
 
-        self.k_neighbors = k_neighbors # 1 for no interpolation
-        self.interpolation_mode = interpolation_mode
+        in_dim = cfg.input_dim
+        embed_dim = embed_dim
+        hidden_dim = cfg.hidden_dim
+        out_dim = out_dim
+        self.local_coords = cfg.local_coords
+        self.decoder_type = cfg.decoder_type
+        self.k_neighbors = cfg.k_neighbors # 1 for no interpolation
+        self.interpolation_mode = cfg.interpolation_mode
+        self.normalize_encoding = cfg.normalize_encoding
+        self.voxel_size = voxel_size
+        self.num_hidden_layers_before_skip = cfg.num_hidden_layers_before_skip
+        self.num_hidden_layers_after_skip = cfg.num_hidden_layers_after_skip
 
         self.coords_enc = CoordsEncoder(in_dim)
-        coords_dim = self.coords_enc.out_dim
+        enc_dim = self.coords_enc.out_dim
 
         if self.k_neighbors > 1:
             self.interpolation_layer = ResnetBlockFC(embed_dim+in_dim, embed_dim)
 
         # coords_dim = 0
-        self.in_layer = nn.Sequential(nn.Linear(embed_dim + coords_dim, hidden_dim), nn.ReLU())
-
-        self.skip_proj = nn.Sequential(nn.Linear(embed_dim + coords_dim, hidden_dim), nn.ReLU())
-
-        before_skip = []
-        for _ in range(num_hidden_layes_before_skip):
-            before_skip.append(nn.Sequential(nn.Linear(hidden_dim, hidden_dim), nn.ReLU()))
-        self.before_skip = nn.Sequential(*before_skip)
+        if self.decoder_type == 'ConvONet':
+            self.fc_c = nn.ModuleList([
+                nn.Linear(embed_dim, hidden_dim) for i in range(self.num_hidden_layers_before_skip)
+            ])
+            self.blocks = nn.ModuleList([
+                ResnetBlockFC(hidden_dim) for i in range(self.num_hidden_layers_before_skip)
+            ])
+            self.fc_p = nn.Linear(enc_dim, hidden_dim)
+        else:
+            self.in_layer = nn.Sequential(nn.Linear(embed_dim + enc_dim, hidden_dim), nn.ReLU())
+            self.skip_proj = nn.Sequential(nn.Linear(embed_dim + enc_dim, hidden_dim), nn.ReLU())
+            before_skip = []
+            for _ in range(self.num_hidden_layers_before_skip):
+                before_skip.append(nn.Sequential(nn.Linear(hidden_dim, hidden_dim), nn.ReLU()))
+            self.before_skip = nn.Sequential(*before_skip)
 
         after_skip = []
-        for _ in range(num_hidden_layes_after_skip):
+        for _ in range(self.num_hidden_layers_after_skip):
             after_skip.append(nn.Sequential(nn.Linear(hidden_dim, hidden_dim), nn.ReLU()))
         after_skip.append(nn.Linear(hidden_dim, out_dim))
         if self.type == 'functa':
@@ -124,8 +137,10 @@ class ImplicitDecoder(pl.LightningModule):
 
         # Gather the corresponding voxel latents based on index
         gathered_latents = voxel_latents[index]
-        # embeded_coords = self.coords_enc.embed(coords)
-        gathered_features = self.interpolation_layer(torch.cat((gathered_latents, coords), 2))
+        if self.interpolation_mode == 'trilinear':
+            gathered_features = gathered_latents
+        else:
+            gathered_features = self.interpolation_layer(torch.cat((gathered_latents, coords), 2))
 
         # Calculate the weights for interpolation based on distances
         # Here, we simply use the inverse of the distance. Closer voxels have higher weights.
@@ -138,6 +153,37 @@ class ImplicitDecoder(pl.LightningModule):
             interpolated_features = torch.sum(gathered_features * normalized_weights.unsqueeze(-1), dim=1) #N, D
         elif self.interpolation_mode == 'max':
             interpolated_features, _ = torch.max(gathered_features, dim=1) #N, D
+        elif self.interpolation_mode == 'trilinear':
+            # Calculate bounding box of the neighbors for each point
+            max_abs_value, _ = torch.max(torch.abs(coords), dim=1, keepdim=True)  # Shape: N, 1, 3
+            
+            # Normalize coords based on the maximum absolute value
+            norm_coords = coords / max_abs_value
+            # Split the normalized coords for easier calculation
+            x, y, z = norm_coords[..., 0], norm_coords[..., 1], norm_coords[..., 2]
+
+            # Calculate weights for trilinear interpolation
+            wx = 1 - x
+            wy = 1 - y
+            wz = 1 - z
+
+            # Weights for each corner (assuming K=8)
+            w000 = wx * wy * wz
+            w001 = wx * wy * z
+            w010 = wx * y * wz
+            w011 = wx * y * z
+            w100 = x * wy * wz
+            w101 = x * wy * z
+            w110 = x * y * wz
+            w111 = x * y * z
+
+            # Gather features for each corner (assuming gathered_features has shape N, K, C with K=8)
+            f000, f001, f010, f011, f100, f101, f110, f111 = torch.split(gathered_features, 1, dim=1)
+
+            # Trilinear interpolation
+            interpolated_features = (w000 * f000 + w001 * f001 + w010 * f010 + w011 * f011 +
+                                    w100 * f100 + w101 * f101 + w110 * f110 + w111 * f111).squeeze(1)
+            
         else:
             raise ValueError(f"Unsupported interpolation mode: {self.interpolation_mode}")
 
@@ -171,31 +217,43 @@ class ImplicitDecoder(pl.LightningModule):
 
     #     return x.squeeze(-1)
     
-    def forward(self, embeddings: Tensor, coords: Tensor, index: Tensor) -> Tensor:
+    def forward(self, embeddings: Tensor, absolute_coords: Tensor, coords: Tensor, index: Tensor) -> Tensor:
         # embeddings (M, C)
         # absolute_coords (N, K, 3)
         # coords (N, 3) or (N, K, 3)
         # index (N, ) or (N, K)
-        if self.k_neighbors == 1:
-            embeded_coords = self.coords_enc.embed(coords[:, 0, :])
-            selected_embeddings = embeddings[index[:, 0]]
-            emb_and_coords = torch.cat([selected_embeddings, embeded_coords], dim=-1)
 
+        # compute positional encoding
+        if self.local_coords:
+            if self.normalize_encoding:
+                enc_coords = self.coords_enc.embed(coords[:, 0, :] / self.voxel_size) # encode the nearest relative coords
+            else:
+                enc_coords = self.coords_enc.embed(coords[:, 0, :])
         else:
-            embeded_coords = self.coords_enc.embed(coords[:, 0, :]) # embed the nearest relative coords
+            enc_coords = self.coords_enc.embed(absolute_coords) # encode the nearest relative coords
+        
+        # nearest query
+        if self.k_neighbors == 1:
+            interpolated_embeddings = embeddings[index[:, 0]]
+        else:
             interpolated_embeddings = self.interpolation(embeddings, coords, index) # N, C
-            emb_and_coords = torch.cat([interpolated_embeddings, embeded_coords], dim=-1)
-            # emb_and_coords = interpolated_embeddings
 
-        x = self.in_layer(emb_and_coords)
-        x = self.before_skip(x)
+        if self.decoder_type == 'ConvONet':
+            net = self.fc_p(enc_coords) # N, hidden_dim
+            for i in range(self.num_hidden_layers_before_skip):
+                net = net + self.fc_c[i](interpolated_embeddings)
+                net = self.blocks[i](net)
+        
+        else:
+            emb_and_coords = torch.cat([interpolated_embeddings, enc_coords], dim=-1)
+            net = self.in_layer(emb_and_coords)
+            net = self.before_skip(net)
+            inp_proj = self.skip_proj(emb_and_coords)
+            net = net + inp_proj
 
-        inp_proj = self.skip_proj(emb_and_coords)
-        x = x + inp_proj
+        out = self.after_skip(net)
 
-        x = self.after_skip(x)
-
-        return x.squeeze(-1)
+        return out.squeeze(-1)
     
 # class UDF_Decoder(pl.LightningModule):
 #     def __init__(

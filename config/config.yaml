@@ -15,7 +15,10 @@ defaults:
 # experiment_name: ${model.network.module}_stage-${model.training_stage}_voxel-in-out-${data.voxel_size}-${model.network.encoder.voxel_size_out}_overfit-${data.over_fitting}_intake-${data.take}_${model.network.encoder.feature_in}_use-unet-${model.network.encoder.use_unet}_latent-${model.network.latent_dim}-${model.network.seg_decoder.feature_dim}_lr-${model.optimizer.lr}_${model.loss.loss_type}-blocks-${model.network.encoder.blocks}_run_1
 
 #Auto-Encoder
-experiment_name: Visualize_${model.network.module}_stage-${model.training_stage}_voxel-in-out-${data.voxel_size}-${model.network.encoder.voxel_size_out}_overfit-${data.over_fitting}_intake-${data.take}_${model.network.encoder.feature_in}_encoder-${model.network.encoder.design}_${model.network.interpolation_mode}-${model.network.k_neighbors}-latent-${model.network.latent_dim}-${model.network.encoder.pn_hidden_dim}-${model.network.latent_dim}-${model.network.seg_decoder.feature_dim}_lr-${model.optimizer.lr}_ratio-sampling_debug
+# experiment_name: ${model.network.module}_stage-${model.training_stage}_voxel-in-out-${data.voxel_size}-${model.network.encoder.voxel_size_out}_overfit-${data.over_fitting}_intake-${data.take}_${model.network.encoder.feature_in}_encoder-${model.network.encoder.design}_${model.network.interpolation_mode}-${model.network.k_neighbors}-latent-${model.network.latent_dim}-${model.network.encoder.pn_hidden_dim}-${model.network.latent_dim}-${model.network.seg_decoder.feature_dim}_lr-${model.optimizer.lr}_ratio-sampling_debug
+
+#Decoder-Comparsion
+experiment_name: Decoder-selecting_stage-${model.training_stage}_voxel-${data.voxel_size}_overfit-${data.over_fitting}_intake-${data.take}_udf-queries-${data.udf_queries.ratio_per_epoch}-${data.udf_queries.queries_ratio_on_surface}_decoder-${model.network.udf_decoder.decoder_type}_local-coords-${model.network.udf_decoder.local_coords}_normalize-encoding-${model.network.udf_decoder.normalize_encoding}_${model.network.udf_decoder.interpolation_mode}-${model.network.udf_decoder.k_neighbors}-blocks-${model.network.udf_decoder.num_hidden_layers_before_skip}_latent-${model.network.encoder.pn_hidden_dim}-${model.network.latent_dim}-${model.network.udf_decoder.hidden_dim}_lr-${model.optimizer.lr}_debug
 
 
 

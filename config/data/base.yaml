@@ -15,11 +15,11 @@ udf_queries:
   pre_sampling: True # True for pre sampling in dataloader initialization
   sample_entire_scene: True
   num_queries_on_surface: 100
-  ratio_per_epoch: 0.01
-  queries_ratio_on_surface: 2
+  ratio_per_epoch: 0.1
+  queries_ratio_on_surface: 0.5
   queries_stds: [0.002, 0.02, 0.2]
   # num_queries_per_std: [400, 320, 400, 400]
-  queries_ratio_per_std: 2
+  queries_ratio_per_std: 0.5
   max_dist: 0.1
 in_memory: True # whether precompute voxel indices and load voxel into memory
 take: 2 # how many data to take for training and validation, -1 means all
@@ -29,7 +29,7 @@ over_fitting: True # whether to use only one voxel for training and validation
 augmentation:
   use_aug: False
   method: N-times # N-times or original
-  loops: 1
+  loops: 4
   color_trans_ratio: 0.1
   color_jitter_std: 0.05
   hue_max: 0.5

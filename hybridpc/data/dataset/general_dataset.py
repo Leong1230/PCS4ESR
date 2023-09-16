@@ -44,7 +44,7 @@ class GeneralDataset(Dataset):
         self.intake_start = cfg.data.intake_start
         self.use_relative = cfg.data.use_relative
         self.max_num_point = cfg.data.max_num_point
-        self.k_neighbors = cfg.model.network.k_neighbors # 1 for no interpolation
+        self.k_neighbors = cfg.model.network.udf_decoder.k_neighbors # 1 for no interpolation
         self.sample_entire_scene = cfg.data.udf_queries.sample_entire_scene
         self.num_queries_on_surface = cfg.data.udf_queries.num_queries_on_surface
         self.queries_stds = cfg.data.udf_queries.queries_stds
@@ -166,7 +166,7 @@ class GeneralDataset(Dataset):
         # Calculate k-neighbors of original points
         voxel_center = voxel_coords * self.voxel_size + self.voxel_size / 2.0 
         device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-        inds_reconstruct, _, _ = knn(torch.from_numpy(xyz).to(device), torch.from_numpy(voxel_center).to(device), self.cfg.model.network.k_neighbors) #N, K, 3
+        inds_reconstruct, _, _ = knn(torch.from_numpy(xyz).to(device), torch.from_numpy(voxel_center).to(device), self.k_neighbors) #N, K, 3
         inds_reconstruct = inds_reconstruct.cpu().numpy()
 
         # Calculate number of queries based on the ratio and the number of points
@@ -370,7 +370,7 @@ class GeneralDataset(Dataset):
         device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         query_points = query_points.to(device)
         voxel_center = voxel_center.to(device)
-        query_indices, _, _ = knn(query_points, voxel_center, self.cfg.model.network.k_neighbors)    
+        query_indices, _, _ = knn(query_points, voxel_center, self.k_neighbors)    
         
         # remove query_points outside the voxel
         lower_bound = -self.voxel_size / 2

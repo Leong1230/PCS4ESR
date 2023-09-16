@@ -39,13 +39,9 @@ class AutoDecoder(GeneralModel):
         )
         self.functa_decoder = ImplicitDecoder(
             "functa",
-            cfg.model.network.k_neighbors,
-            cfg.model.network.interpolation_mode,
-            cfg.model.network.modulation_dim,
-            cfg.model.network.functa_decoder.input_dim,
-            cfg.model.network.functa_decoder.hidden_dim,
-            cfg.model.network.functa_decoder.num_hidden_layers_before_skip,
-            cfg.model.network.functa_decoder.num_hidden_layers_after_skip,
+            cfg.model.network.udf_decoder,
+            cfg.model.network.latent_dim,
+            cfg.data.voxel_size,
             1
         )
 
@@ -57,13 +53,9 @@ class AutoDecoder(GeneralModel):
 
             self.seg_decoder = ImplicitDecoder(
                 "seg",
-                cfg.model.network.k_neighbors,
-                cfg.model.network.interpolation_mode,
-                cfg.model.network.modulation_dim,
-                cfg.model.network.seg_decoder.input_dim,
-                cfg.model.network.seg_decoder.hidden_dim,
-                cfg.model.network.seg_decoder.num_hidden_layers_before_skip,
-                cfg.model.network.seg_decoder.num_hidden_layers_after_skip,
+                cfg.model.network.seg_decoder, 
+                cfg.model.network.feature_dim,
+                cfg.data.voxel_size,
                 cfg.data.classes
             )
 
