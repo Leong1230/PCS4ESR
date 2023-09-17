@@ -57,6 +57,30 @@ class CoordsEncoder(pl.LightningModule):
     def embed(self, inputs: Tensor) -> Tensor:
         return torch.cat([fn(inputs) for fn in self.embed_fns], -1)
 
+class CrossAttention(pl.LightningModule):
+    def __init__(
+        self,
+        latent_dim: int,
+        hidden_dim: int,
+        num_heads: int,
+        num_attention_stages: int = 5,
+    ):
+        super().__init__()
+
+        # Attention layers
+        self.attention_layers = nn.ModuleList([
+            nn.MultiheadAttention(embed_dim=latent_dim, num_heads=num_heads) 
+            for _ in range(num_attention_stages)
+        ])
+
+    def forward(self, encoded_features):
+        # Apply attention stages
+        net = encoded_features
+        for attention_layer in self.attention_layers:
+            attn_output, _ = attention_layer(net, net, net)
+            net = net + attn_output
+
+        return net
 
 class ImplicitDecoder(pl.LightningModule):
     def __init__(
@@ -73,6 +97,7 @@ class ImplicitDecoder(pl.LightningModule):
         embed_dim = embed_dim
         hidden_dim = cfg.hidden_dim
         out_dim = out_dim
+        num_heads = 8
         self.local_coords = cfg.local_coords
         self.decoder_type = cfg.decoder_type
         self.k_neighbors = cfg.k_neighbors # 1 for no interpolation
@@ -97,6 +122,13 @@ class ImplicitDecoder(pl.LightningModule):
                 ResnetBlockFC(hidden_dim) for i in range(self.num_hidden_layers_before_skip)
             ])
             self.fc_p = nn.Linear(enc_dim, hidden_dim)
+
+        elif self.decoder_type == 'CrossAttention':
+            self.fc_p = nn.Linear(enc_dim, embed_dim)
+            self.attention_layers = nn.ModuleList([
+                nn.MultiheadAttention(embed_dim=embed_dim, num_heads=num_heads) 
+                for _ in range(self.num_hidden_layers_before_skip)
+            ])
         else:
             self.in_layer = nn.Sequential(nn.Linear(embed_dim + enc_dim, hidden_dim), nn.ReLU())
             self.skip_proj = nn.Sequential(nn.Linear(embed_dim + enc_dim, hidden_dim), nn.ReLU())
@@ -112,7 +144,8 @@ class ImplicitDecoder(pl.LightningModule):
         if self.type == 'functa':
             after_skip.append(nn.ReLU())
         self.after_skip = nn.Sequential(*after_skip)
-        
+
+
     def interpolation(self, voxel_latents: Tensor, coords: Tensor, index: Tensor):
         """Interpolates voxel features for a given set of points.
 
@@ -224,6 +257,20 @@ class ImplicitDecoder(pl.LightningModule):
         # index (N, ) or (N, K)
 
         # compute positional encoding
+        if self.decoder_type == 'CrossAttention':
+            if self.normalize_encoding:
+                enc_coords = self.coords_enc.embed(coords/ self.voxel_size)
+            else:
+                enc_coords = self.coords_enc.embed(coords) #N, K, C
+            gathered_latents = embeddings[index] # N, K, C
+            net = gathered_latents + self.fc_p(enc_coords)
+            for attention_layer in self.attention_layers:
+                attn_output, _ = attention_layer(net, net, net)
+                net = net + attn_output
+            out = self.after_skip(net)
+
+            return out.squeeze(-1)
+
         if self.local_coords:
             if self.normalize_encoding:
                 enc_coords = self.coords_enc.embed(coords[:, 0, :] / self.voxel_size) # encode the nearest relative coords

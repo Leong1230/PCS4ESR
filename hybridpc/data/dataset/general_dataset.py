@@ -94,6 +94,7 @@ class GeneralDataset(Dataset):
             self.input_transforms = t.Compose(input_transforms)
         self._load_from_disk()
         self.scenes = []
+        self.aug_scene_names = []
 
 
         if cfg.data.augmentation.use_aug and cfg.data.augmentation.method == 'N-times' and self.split == 'train':
@@ -104,7 +105,13 @@ class GeneralDataset(Dataset):
         for idx, sample in tqdm(enumerate(self.scenes_in), desc="Voxelizing and Sample points", ncols=80):
             for i in range(N):  # This loop will run N times if conditions are satisfied, otherwise just once
                 processed_sample = self.preprocess_sample_entire_scene(sample, i)
-                self.scenes.append(processed_sample)
+                self.aug_scene_names.append(processed_sample['scene_name'])
+                # Save processed_sample to disk instead of appending to memory
+                if self.in_memory:
+                    self.scenes.append(processed_sample)
+                else:
+                    save_path = os.path.join(cfg.exp_output_root_path, "processed_data", f"{processed_sample['scene_name']}.pth")
+                    torch.save(processed_sample, save_path)
 
 
 
@@ -388,11 +395,8 @@ class GeneralDataset(Dataset):
         return query_absolute_points, values, unmasked_values, query_indices
 
     def __len__(self):
-        return len(self.scenes)
+        return len(self.aug_scene_names)
 
-    # def __getitem__(self, idx):
-
-    #     return self.data[idx]
     
     def __getitem__(self, idx):
 
@@ -412,8 +416,12 @@ class GeneralDataset(Dataset):
             # if np.isscalar(feats_in) and feats_in == 0:
             #     feats_in = np.zeros_like(locs_in)
             # feats_in = (feats_in + 1.) * 127.5
-
-        scene = self.scenes[idx]
+        if not self.in_memory:
+            scene_name = self.aug_scene_names[idx]
+            scene_path = os.path.join(self.cfg.exp_output_root_path, "processed_data",  f"{scene_name}.pth")
+            scene = torch.load(scene_path)
+        else:
+            scene = self.scenes[idx]
         xyz = scene['xyz']
         # point_features = scene['point_features']
 

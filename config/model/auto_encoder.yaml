@@ -39,7 +39,7 @@ network:
   use_xyz: False
 
   positional_encoding: Fourier # Triplane
-  latent_dim: 8 #
+  latent_dim: 64 #
 
 
   prepare_epochs: 10
@@ -48,29 +48,29 @@ network:
     design: local-pointnet-unet
     local_pointnet: True
     down_sampler: None # None, MaxPool, Conv
-    pn_hidden_dim: 8
+    pn_hidden_dim: 64
     pn_n_blocks: 6
     use_unet: True
-    voxel_size_out: 0.1
+    voxel_size_out: 0.5
     feature_in: voxel_features
-    unet_blocks: [1, 2, 3, 4, 5, 6, 7]
+    unet_blocks: [1, 2, 3, 4, 5]
     unet_block_reps: 2
 
   udf_decoder:
-    decoder_type: ConvONet
+    decoder_type: ConvONet # ConvONet or CrossAttention or Concatenate
     interpolation_mode: inverse_distance # inverse_distance or max or trilinear
     local_coords: True
     normalize_encoding: True
     k_neighbors: 8 # 1 for no interpolation
 
     input_dim: 3
-    hidden_dim: 16
+    hidden_dim: 64
     num_hidden_layers_before_skip: 5
     num_hidden_layers_after_skip: 1
 
   seg_decoder:
     decoder_type: ConvONet
-    interpolation_mode: trilinear # inverse_distance or max or trilinear
+    interpolation_mode: inverse_distance # inverse_distance or max or trilinear
     local_coords: True
     normalize_encoding: True
     k_neighbors: 8 # 1 for no interpolation

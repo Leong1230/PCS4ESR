@@ -22,6 +22,9 @@ def main(cfg):
     output_path = os.path.join(cfg.exp_output_root_path, "training")
     os.makedirs(output_path, exist_ok=True)
 
+    processed_path = os.path.join(cfg.exp_output_root_path, "processed_data")
+    os.makedirs(processed_path, exist_ok=True)
+    
     print("==> initializing data ...")
     data_module = DataModule(cfg)
 
@@ -33,6 +36,7 @@ def main(cfg):
 
     output_path = os.path.join(cfg.exp_output_root_path, "inference", cfg.model.inference.split, "udf_visualizations")
     os.makedirs(output_path, exist_ok=True)
+
 
     print("==> initializing trainer ...")
     trainer = pl.Trainer(callbacks=callbacks, logger=logger, **cfg.model.trainer)
