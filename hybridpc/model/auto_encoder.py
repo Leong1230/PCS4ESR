@@ -32,19 +32,7 @@ class AutoEncoder(GeneralModel):
         self.latent_dim = cfg.model.network.latent_dim
 
         self.encoder = Encoder(cfg)
-        # self.udf_decoder = ImplicitDecoder(
-        #     "functa",
-        #     cfg.model.network.udf_decoder.decoder_type,
-        #     cfg.model.network.udf_decoder.local_coords,
-        #     cfg.model.network.k_neighbors,
-        #     cfg.model.network.udf_decoder.interpolation_mode,
-        #     cfg.model.network.latent_dim,
-        #     cfg.model.network.udf_decoder.input_dim,
-        #     cfg.model.network.udf_decoder.hidden_dim,
-        #     cfg.model.network.udf_decoder.num_hidden_layers_before_skip,
-        #     cfg.model.network.udf_decoder.num_hidden_layers_after_skip,
-        #     1
-        # )
+
         self.udf_decoder = ImplicitDecoder(
             "functa",
             cfg.model.network.udf_decoder,
@@ -61,7 +49,7 @@ class AutoEncoder(GeneralModel):
             self.seg_decoder = ImplicitDecoder(
                 "seg",
                 cfg.model.network.seg_decoder, 
-                cfg.model.network.feature_dim,
+                cfg.model.network.seg_decoder.feature_dim,
                 cfg.data.voxel_size,
                 cfg.data.classes
             )
@@ -105,10 +93,12 @@ class AutoEncoder(GeneralModel):
     def forward(self, data_dict):
         encodes_dict = self.encoder(data_dict)
         segmentation = 0
+        values = 0
         if self.training_stage == 2:
-            seg_features = self.seg_backbone(encodes_dict['mixed_latent_codes'], encodes_dict['query_absolute_coords'], encodes_dict['voxel_coords'], encodes_dict['indices'][:, 0]) # B, C
-            segmentation = self.seg_decoder(seg_features['voxel_features'].F, encodes_dict['query_absolute_coords'], encodes_dict['relative_coords'], encodes_dict["indices"])
-            values = self.udf_decoder(encodes_dict['latent_codes'], encodes_dict['query_absolute_coords'], encodes_dict['query_relative_coords'], encodes_dict['query_indices'])
+            seg_features = self.seg_backbone(encodes_dict['mixed_latent_codes'],  encodes_dict['voxel_coords'], encodes_dict['indices'][:, 0]) # B, C
+            segmentation = self.seg_decoder(seg_features['voxel_features'].F, data_dict['xyz'], encodes_dict['relative_coords'], encodes_dict["indices"])
+            if self.hparams.model.recompute_udf:
+                values = self.udf_decoder(encodes_dict['latent_codes'], encodes_dict['query_absolute_coords'], encodes_dict['query_relative_coords'], encodes_dict['query_indices'])
         else:
             values = self.udf_decoder(encodes_dict['latent_codes'], encodes_dict['query_absolute_coords'], encodes_dict['query_relative_coords'], encodes_dict['query_indices'])
 
@@ -158,10 +148,11 @@ class AutoEncoder(GeneralModel):
             batch_size = self.hparams.data.batch_size
             encodes_dict, values, outputs = self.forward(data_dict)
             seg_loss = self.seg_loss(data_dict, outputs)
-            udf_loss = self.udf_loss(encodes_dict, values)
+            if self.hparams.model.recompute_udf:
+                udf_loss = self.udf_loss(encodes_dict, values)
+                self.log("train/udf_loss", udf_loss, on_step=True, on_epoch=True, sync_dist=True, batch_size=batch_size)
+                self.log("train/seg_loss", seg_loss, on_step=True, on_epoch=True, sync_dist=True, batch_size=batch_size)
 
-            self.log("train/udf_loss", udf_loss, on_step=True, on_epoch=True, sync_dist=True, batch_size=batch_size)
-            self.log("train/seg_loss", seg_loss, on_step=True, on_epoch=True, sync_dist=True, batch_size=batch_size)
             # Calculating the metrics
             semantic_predictions = torch.argmax(outputs, dim=-1)  # (B, N)
             semantic_accuracy = evaluate_semantic_accuracy(semantic_predictions, data_dict["labels"], ignore_label=-1)
@@ -198,10 +189,11 @@ class AutoEncoder(GeneralModel):
             batch_size = self.hparams.data.batch_size
             encodes_dict, values, outputs = self.forward(data_dict)
             seg_loss = self.seg_loss(data_dict, outputs)
-            udf_loss = self.udf_loss(encodes_dict, values)
-
-            self.log("val/seg_loss", seg_loss, on_step=True, on_epoch=True, sync_dist=True, batch_size=batch_size)
-            self.log("val/udf_loss", udf_loss, on_step=True, on_epoch=True, sync_dist=True, batch_size=batch_size)
+            if self.hparams.model.recompute_udf:
+                udf_loss = self.udf_loss(encodes_dict, values)
+                self.log("val/seg_loss", seg_loss, on_step=True, on_epoch=True, sync_dist=True, batch_size=batch_size)
+                self.log("val/udf_loss", udf_loss, on_step=True, on_epoch=True, sync_dist=True, batch_size=batch_size)
+                
             # Calculating the metrics
             semantic_predictions = torch.argmax(outputs, dim=-1)  # (B, N)
             semantic_accuracy = evaluate_semantic_accuracy(semantic_predictions, data_dict["labels"], ignore_label=-1)

@@ -159,17 +159,22 @@ class Encoder(pl.LightningModule):
             # compute original points indices
             relative_coords, indices = self.recompute_xyz_queries(x.C[:, 1:4], self.voxel_size_in, self.voxel_size_out, data_dict['xyz'])
         else:
-            output_dict['values'] = data_dict['values']
-            query_relative_coords = data_dict['query_points']
-            query_indices = data_dict['query_voxel_indices']
+            if 'values' in data_dict:
+                values = data_dict['values']
+                query_relative_coords = data_dict['query_points']
+                query_indices = data_dict['query_voxel_indices']
             relative_coords = data_dict['points']
             indices = data_dict['voxel_indices']
-        output_dict['query_relative_coords'] = query_relative_coords
-        output_dict['query_absolute_coords'] = data_dict['absolute_query_points']
-        output_dict['query_indices'] = query_indices
-        output_dict['relative_coords'] = relative_coords
+        
+        if 'values' in data_dict:
+            output_dict['query_relative_coords'] = query_relative_coords
+            output_dict['query_absolute_coords'] = data_dict['absolute_query_points']
+            output_dict['query_indices'] = query_indices
+            output_dict['values'] = values
         output_dict['indices'] = indices
         output_dict['latent_codes'] = x.F
+        output_dict['relative_coords'] = relative_coords
+
         if self.down_sampler == 'None':
             output_dict['mixed_latent_codes'] = torch.cat((x.F, data_dict['voxel_features']), dim=1)
         output_dict['voxel_coords'] = x.C

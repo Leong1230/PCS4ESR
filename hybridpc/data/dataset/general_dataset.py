@@ -176,6 +176,19 @@ class GeneralDataset(Dataset):
         inds_reconstruct, _, _ = knn(torch.from_numpy(xyz).to(device), torch.from_numpy(voxel_center).to(device), self.k_neighbors) #N, K, 3
         inds_reconstruct = inds_reconstruct.cpu().numpy()
 
+
+        if self.cfg.model.training_stage == 2 and self.cfg.model.recompute_udf==False:
+            data = {
+                "xyz": xyz,  # N, 3
+                "point_features": point_features,  # N, 3
+                "features": feats,  # N, 3
+                "labels": sample['sem_labels'],  # N,
+                "voxel_coords": voxel_coords,
+                "voxel_indices": inds_reconstruct,  # N, K
+                "scene_name": f"{sample['scene_name']}_{i}"
+            }
+            return data
+        
         # Calculate number of queries based on the ratio and the number of points
         if self.cfg.data.udf_queries.pre_sampling:
             query_absolute_points, values, unmasked_values, query_indices = self.sample_points(xyz, voxel_coords)
@@ -203,86 +216,6 @@ class GeneralDataset(Dataset):
                 "voxel_indices": inds_reconstruct,  # N, K
                 "scene_name": f"{sample['scene_name']}_{i}"
             }
-
-        # voxel_id = 10
-        # # voxel_center = data['voxel_coords'][:, 1:4][voxel_id] * self.voxel_size - self.voxel_size
-        # relative_points = (data['points'][data['voxel_indices'][:, 0] == voxel_id])[:, 0, :]
-        # # absolute_points = relative_points + voxel_center.cpu().numpy()
-        # # Append the absolute coordinates to the all_points list
-        # # all_original_points.append(absolute_points)
-        
-        # query_relative_points = (data['query_points'][data['query_voxel_indices'][:, 0] == voxel_id])[:, 0, :]
-        # # query_absolute_points = query_relative_points + voxel_center.cpu().numpy()
-        # # all_query_points.append(query_absolute_points)
-
-
-
-
-        # # all_points_np = np.vstack(all_original_points)
-        # # all_dense_points_np = np.vstack(all_dense_points)
-        # # all_query_points_np = np.vstack(all_query_points)
-        # # Use open3d to visualize the point cloud
-        # points_cloud = o3d.geometry.PointCloud()
-        # points_cloud.points = o3d.utility.Vector3dVector(relative_points)
-        # query_points_cloud = o3d.geometry.PointCloud()
-        # query_points_cloud.points = o3d.utility.Vector3dVector(query_relative_points)
-    
-        # red_color = [1, 0, 0]
-        # blue_color = [0, 0, 1]
-        # points_cloud.paint_uniform_color(red_color)
-        # query_points_cloud.paint_uniform_color(blue_color)
-
-        # # Merge the point clouds
-        # merged_pcd = points_cloud + query_points_cloud
-        # original_points_cloud = merged_pcd
-
-        # o3d.visualization.draw_geometries([original_points_cloud])
-
-        # # computing voxel center coordinates
-
-        # voxel_centers = self.voxel_size * voxel_coords[data['voxel_indices']] + self.voxel_size / 2
-
-        # # recovering the absolute coordinates of points
-        # absolute_points = relative_coords + voxel_centers.cpu().numpy()
-
-        # # recover query points
-        # query_voxel_indices = data["query_voxel_indices"]
-        # query_points = data["query_points"]
-        # query_voxel_centers = self.voxel_size * voxel_coords[query_voxel_indices] + self.voxel_size / 2
-        # query_absolute_points = query_points + query_voxel_centers.cpu().numpy()
-        # surface_queries = query_absolute_points[mask_surface[mask]]
-        # gaussian_queries = query_absolute_points[mask_gaussian[mask]]
-        # uniform_queries = query_absolute_points[mask_uniform[mask]]
-
-        # # Create Open3D point cloud for points
-        # pcd = o3d.geometry.PointCloud()
-        # pcd.points = o3d.utility.Vector3dVector(absolute_points)
-        # pcd.colors = o3d.utility.Vector3dVector(np.ones_like(absolute_points) * [1, 0, 0])  # red
-
-        # # Create Open3D point cloud for query points
-        # surface_query_pcd = o3d.geometry.PointCloud()
-        # surface_query_pcd.points = o3d.utility.Vector3dVector(surface_queries)
-        # surface_query_pcd.colors = o3d.utility.Vector3dVector(np.ones_like(surface_queries) * [0, 1, 0])  # green
-        # # Create Open3D point cloud for query points
-        # gaussian_query_pcd = o3d.geometry.PointCloud()
-        # gaussian_query_pcd.points = o3d.utility.Vector3dVector(gaussian_queries)
-        # gaussian_query_pcd.colors = o3d.utility.Vector3dVector(np.ones_like(gaussian_queries) * [0, 1, 0])
-        # # Create Open3D point cloud for query points
-        # uniform_query_pcd = o3d.geometry.PointCloud()
-        # uniform_query_pcd.points = o3d.utility.Vector3dVector(uniform_queries)
-        # uniform_query_pcd.colors = o3d.utility.Vector3dVector(np.ones_like(uniform_queries) * [0, 1, 0])
-
-        # # visualize the point clouds
-        # # merged_points_cloud = pcd + query_pcd
-        # # o3d.visualization.draw_geometries([pcd, query_pcd])
-
-        # # Save the point clouds
-        # save_dir = os.path.join(self.cfg.exp_output_root_path)
-        # o3d.io.write_point_cloud(os.path.join(save_dir, 'voxel_' + str(self.cfg.data.voxel_size) + '_original.ply'), pcd)
-        # o3d.io.write_point_cloud(os.path.join(save_dir, 'voxel_' + str(self.cfg.data.voxel_size) + '_surface.ply'), surface_query_pcd)
-        # o3d.io.write_point_cloud(os.path.join(save_dir, 'voxel_' + str(self.cfg.data.voxel_size) + '_gaussian.ply'), gaussian_query_pcd)
-        # o3d.io.write_point_cloud(os.path.join(save_dir, 'voxel_' + str(self.cfg.data.voxel_size) + '_uniform.ply'), uniform_query_pcd)
-
 
         return data
     
@@ -399,41 +332,21 @@ class GeneralDataset(Dataset):
 
     
     def __getitem__(self, idx):
-
-        # index = index_long % len(self.data_paths)
-        # if self.use_shm:
-        #     locs_in = SA.attach("shm://%s_%s_%06d_locs_%08d" %
-        #                         (self.dataset_name, self.split, self.identifier, index)).copy()
-        #     feats_in = SA.attach("shm://%s_%s_%06d_feats_%08d" %
-        #                          (self.dataset_name, self.split, self.identifier, index)).copy()
-        #     labels_in = SA.attach("shm://%s_%s_%06d_labels_%08d" %
-        #                           (self.dataset_name, self.split, self.identifier, index)).copy()
-        # else:
-            # locs_in, feats_in, labels_in = torch.load(self.data_paths[index])
-            # labels_in[labels_in == -100] = 255
-            # labels_in = labels_in.astype(np.uint8)
-            # # no color in the input point cloud, e.g nuscenes
-            # if np.isscalar(feats_in) and feats_in == 0:
-            #     feats_in = np.zeros_like(locs_in)
-            # feats_in = (feats_in + 1.) * 127.5
         if not self.in_memory:
             scene_name = self.aug_scene_names[idx]
             scene_path = os.path.join(self.cfg.exp_output_root_path, "processed_data",  f"{scene_name}.pth")
             scene = torch.load(scene_path)
         else:
             scene = self.scenes[idx]
-        xyz = scene['xyz']
-        # point_features = scene['point_features']
 
+
+        xyz = scene['xyz']
         voxel_coords_in = scene['voxel_coords']
         feats_in = scene['features']
         labels_in = scene['labels']
         inds_reconstruct  = scene['voxel_indices']
-        query_points = scene['query_absolute_points']
-        query_indices = scene['query_voxel_indices']
         voxel_center =  voxel_coords_in * self.voxel_size + self.voxel_size / 2.0
         relative_coords = xyz[:, np.newaxis] - voxel_center[inds_reconstruct] # N, K, 3
-
         if self.cfg.data.augmentation.method=='N-times':
             if self.split == "train" and self.cfg.data.augmentation.use_aug:
                 voxel_coords, feats, labels = self.input_transforms(voxel_coords_in, feats_in, labels_in)
@@ -441,6 +354,23 @@ class GeneralDataset(Dataset):
                 voxel_coords = voxel_coords_in
                 feats = feats_in
                 labels = labels_in
+        
+        if self.cfg.model.training_stage == 2 and self.cfg.model.recompute_udf==False:
+            data = {
+                "xyz": xyz,  # N, 3
+                "points": relative_coords,  # N, K , 3
+                "point_features": scene['point_features'],  # N, 3
+                "labels": scene['labels'],  # N,
+                "voxel_indices": inds_reconstruct,  # N, or N, K
+                "voxel_coords": voxel_coords,  # K, 3
+                "voxel_features": feats,  # K, ?
+                "scene_name": scene['scene_name']
+            }
+
+            return data
+
+        query_points = scene['query_absolute_points']
+        query_indices = scene['query_voxel_indices']
 
         # if self.cfg.data.augmentation.method=='original':
         #     if self.split == "train" and self.cfg.data.augmentation.use_aug:
