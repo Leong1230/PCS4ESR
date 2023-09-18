@@ -5,12 +5,12 @@ defaults:
   - base
 
 
-stage1_ckpt_path: '/localhome/zla247/projects/data/output/Scannet/AutoEncoder/Decoder-selecting_stage-1_voxel-0.5_overfit-True_intake-2_udf-queries-0.1-2_decoder-ConvONet_local-coords-True_normalize-encoding-True_inverse_distance-8-blocks-5_latent-64-64-64_lr-0.002_run_1/training/epoch=99.ckpt'
+# stage1_ckpt_path: '/localhome/zla247/projects/data/output/Scannet/AutoEncoder/Decoder-selecting_stage-1_voxel-0.5_overfit-True_intake-2_udf-queries-0.1-2_decoder-ConvONet_local-coords-True_normalize-encoding-True_inverse_distance-8-blocks-5_latent-64-64-64_lr-0.002_run_1/training/epoch=99.ckpt'
 
 
-# stage1_ckpt_path: None
+stage1_ckpt_path: None
 
-training_stage: 2
+training_stage: 1
 recompute_udf: False
 
 trainer:
@@ -58,14 +58,14 @@ network:
     unet_block_reps: 2
 
   udf_decoder:
-    decoder_type: ConvONet # ConvONet or CrossAttention or Concatenate
+    decoder_type: CrossAttention # ConvONet or CrossAttention or Concatenate
     interpolation_mode: inverse_distance # inverse_distance or max or trilinear
     local_coords: True
     normalize_encoding: True
     k_neighbors: 8 # 1 for no interpolation
 
     input_dim: 3
-    hidden_dim: 64
+    hidden_dim: 8
     num_hidden_layers_before_skip: 5
     num_hidden_layers_after_skip: 1
 

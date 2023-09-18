@@ -57,30 +57,30 @@ class CoordsEncoder(pl.LightningModule):
     def embed(self, inputs: Tensor) -> Tensor:
         return torch.cat([fn(inputs) for fn in self.embed_fns], -1)
 
-class CrossAttention(pl.LightningModule):
-    def __init__(
-        self,
-        latent_dim: int,
-        hidden_dim: int,
-        num_heads: int,
-        num_attention_stages: int = 5,
-    ):
-        super().__init__()
+# class CrossAttention(pl.LightningModule):
+#     def __init__(
+#         self,
+#         latent_dim: int,
+#         hidden_dim: int,
+#         num_heads: int,
+#         num_attention_stages: int = 5,
+#     ):
+#         super().__init__()
 
-        # Attention layers
-        self.attention_layers = nn.ModuleList([
-            nn.MultiheadAttention(embed_dim=latent_dim, num_heads=num_heads) 
-            for _ in range(num_attention_stages)
-        ])
+#         # Attention layers
+#         self.attention_layers = nn.ModuleList([
+#             nn.MultiheadAttention(embed_dim=latent_dim, num_heads=num_heads, batch_first=True) 
+#             for _ in range(num_attention_stages)
+#         ])
 
-    def forward(self, encoded_features):
-        # Apply attention stages
-        net = encoded_features
-        for attention_layer in self.attention_layers:
-            attn_output, _ = attention_layer(net, net, net)
-            net = net + attn_output
+#     def forward(self, encoded_features):
+#         # Apply attention stages
+#         net = encoded_features
+#         for attention_layer in self.attention_layers:
+#             attn_output, _ = attention_layer(net, net, net)
+#             net = net + attn_output
 
-        return net
+#         return net
 
 class ImplicitDecoder(pl.LightningModule):
     def __init__(
@@ -97,7 +97,7 @@ class ImplicitDecoder(pl.LightningModule):
         embed_dim = embed_dim
         hidden_dim = cfg.hidden_dim
         out_dim = out_dim
-        num_heads = 8
+        num_heads = 4
         self.local_coords = cfg.local_coords
         self.decoder_type = cfg.decoder_type
         self.k_neighbors = cfg.k_neighbors # 1 for no interpolation
@@ -124,11 +124,14 @@ class ImplicitDecoder(pl.LightningModule):
             self.fc_p = nn.Linear(enc_dim, hidden_dim)
 
         elif self.decoder_type == 'CrossAttention':
-            self.fc_p = nn.Linear(enc_dim, embed_dim)
-            self.attention_layers = nn.ModuleList([
-                nn.MultiheadAttention(embed_dim=embed_dim, num_heads=num_heads) 
-                for _ in range(self.num_hidden_layers_before_skip)
-            ])
+            self.fc_c = nn.Linear(embed_dim, hidden_dim)
+            self.fc_p = nn.Linear(enc_dim, hidden_dim)
+            encoder_layer = nn.TransformerEncoderLayer(d_model=hidden_dim, nhead=num_heads)
+            self.transformer_encoder = nn.TransformerEncoder(encoder_layer, self.num_hidden_layers_before_skip)
+            # self.attention_layers = nn.ModuleList([
+            #     nn.MultiheadAttention(embed_dim=embed_dim, num_heads=num_heads) 
+            #     for _ in range(self.num_hidden_layers_before_skip)
+            # ])
         else:
             self.in_layer = nn.Sequential(nn.Linear(embed_dim + enc_dim, hidden_dim), nn.ReLU())
             self.skip_proj = nn.Sequential(nn.Linear(embed_dim + enc_dim, hidden_dim), nn.ReLU())
@@ -263,11 +266,12 @@ class ImplicitDecoder(pl.LightningModule):
             else:
                 enc_coords = self.coords_enc.embed(coords) #N, K, C
             gathered_latents = embeddings[index] # N, K, C
-            net = gathered_latents + self.fc_p(enc_coords)
-            for attention_layer in self.attention_layers:
-                attn_output, _ = attention_layer(net, net, net)
-                net = net + attn_output
-            out = self.after_skip(net)
+            net = self.fc_c(gathered_latents) + self.fc_p(enc_coords)
+            net = self.transformer_encoder(net.transpose(0, 1))
+            # for attention_layer in self.attention_layers:
+            #     attn_output, _ = attention_layer(net, net, net)
+            #     net = net + attn_output[:, 0, :]
+            out = self.after_skip(net.transpose(0, 1)[:, 0, :])
 
             return out.squeeze(-1)
 
