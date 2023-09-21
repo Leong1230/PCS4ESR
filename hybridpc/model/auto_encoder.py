@@ -10,8 +10,12 @@ import imageio
 import math
 import torchmetrics
 import open3d as o3d
+import cv2
 import pytorch_lightning as pl
+import matplotlib
+matplotlib.use('Agg')
 import matplotlib.pyplot as plt
+
 import hydra
 from hybridpc.optimizer.optimizer import cosine_lr_decay, adjust_learning_rate
 from hybridpc.model.module import Backbone, Encoder, MinkUNetBackbone, ImplicitDecoder, Dense_Generator
@@ -19,6 +23,8 @@ from hybridpc.model.module import Backbone, Encoder, MinkUNetBackbone, ImplicitD
 from hybridpc.model.general_model import GeneralModel
 from hybridpc.evaluation.semantic_segmentation import *
 from torch.nn import functional as F
+
+matplotlib.use('Agg')  # Use the Agg backend which is non-interactive and doesn't use tkinter
 
 class AutoEncoder(GeneralModel):
     def __init__(self, cfg):
@@ -66,6 +72,7 @@ class AutoEncoder(GeneralModel):
 
         # Initialize an empty dictionary to store the latent codes
         self.latent_codes = {}
+        self.frames = {}
         if self.training_stage == 2:
             for param in self.encoder.parameters():
                 param.requires_grad = False
@@ -88,6 +95,46 @@ class AutoEncoder(GeneralModel):
 
         return model
       # The inner loop optimizer is applied to the latent code
+
+    def visualize_udf_value(self, data_dict, values, epoch):
+        N = data_dict['values'].shape[0]
+        ground_truth = data_dict['values'].cpu().detach().numpy()
+        predictions = values.squeeze().cpu().detach().numpy()
+
+        # Sort ground truth and get sorting indices
+        sorted_indices = np.argsort(ground_truth)
+        sorted_ground_truth = ground_truth[sorted_indices]
+        reordered_predictions = predictions[sorted_indices]
+
+        # Plot
+        plt.figure(figsize=(10, 6))
+        plt.plot(sorted_ground_truth, label='Ground Truth', color='blue')
+        plt.scatter(np.arange(N), reordered_predictions, label='Predictions', color='red', marker='o')
+        plt.fill_between(np.arange(N), sorted_ground_truth, reordered_predictions, color='gray', alpha=0.2)
+        plt.legend()
+        plt.title("Comparison between Ground Truth and Predictions")
+        plt.xlabel("Data Points (sorted by ground truth)")
+        plt.ylabel("Value")
+        
+        # Convert the figure's content to a numpy array and store in the dictionary
+        fig = plt.gcf()
+        fig.canvas.draw()
+        img_arr = np.array(fig.canvas.renderer.buffer_rgba())
+        self.frames[epoch] = img_arr
+        plt.close()
+
+
+    def generate_video_from_memory(self, save_dir: str):
+        img_array = [(np.array(self.frames[key]) * 255).astype(np.uint8) for key in sorted(self.frames.keys())]
+
+        if len(img_array) == 0:
+            print("No frames found!")
+            return
+
+        # Save the frames as a video using imageio
+        imageio.mimsave(save_dir, img_array, fps=30)
+
+
 
 
     def forward(self, data_dict):
@@ -133,12 +180,13 @@ class AutoEncoder(GeneralModel):
             """ UDF auto-encoder training stage """
             batch_size = self.hparams.data.batch_size
             encodes_dict, outputs, _ = self.forward(data_dict)
+            self.visualize_udf_value(data_dict, outputs, self.current_epoch)
             udf_loss = self.udf_loss(encodes_dict, outputs)
             self.log("train/udf_loss", udf_loss, on_step=True, on_epoch=True, sync_dist=True, batch_size=batch_size)
 
-            # if self.current_epoch >= self.hparams.model.dense_generator.prepare_epochs:
-            #     if self.hparams.model.inference.visualization:
-            #         self.udf_visualization(data_dict, encodes_dict, self.current_epoch, udf_loss)
+            if self.current_epoch >= self.hparams.model.network.encoder.save_every_epoches and (self.current_epoch - self.hparams.model.network.encoder.save_every_epoches) % self.hparams.model.network.encoder.save_every_epoches == 0:
+                self.generate_video_from_memory(f"video_at_epoch_{self.current_epoch}.mp4")
+
 
             return udf_loss
         
@@ -396,43 +444,3 @@ class AutoEncoder(GeneralModel):
         
         vis.destroy_window()
 
-    # def save_rotating_video_from_object(self, obj: o3d.geometry.Geometry3D, save_dir: str):
-    #     """
-    #     Generates a rotating video from an Open3D object.
-
-    #     Parameters:
-    #     - obj: The Open3D object to visualize.
-    #     - save_dir: The directory (including filename) to save the video.
-    #     """
-    #     # Create a visualizer
-    #     vis = o3d.visualization.Visualizer()
-    #     vis.create_window(visible=True)  # visible window for offscreen rendering
-    #     vis.add_geometry(obj)
-        
-    #     frames = []
-        
-    #     def rotate_view(vis):
-    #         ctr = vis.get_view_control()
-    #         ctr.rotate(5.0, 0.0)  # rotate 5 degrees around z-axis
-            
-    #         frame = vis.capture_screen_float_buffer(True)
-    #         frames.append((np.asarray(frame) * 255).astype(np.uint8))
-            
-    #         # Save in intervals to not hold too much in memory
-    #         if len(frames) == 360:  # Save after capturing 360 frames, i.e., every 12 seconds at 30fps
-    #             imageio.mimsave(save_dir, frames, fps=30)
-    #             frames.clear()  # Clear the frames list
-            
-    #         return False
-        
-    #     # Set the callback function to be called before rendering
-    #     vis.register_animation_callback(rotate_view)
-        
-    #     # Run the visualizer
-    #     vis.run()
-        
-    #     # After the window is closed
-    #     if frames:  # Save any remaining frames
-    #         imageio.mimsave(save_dir, frames, fps=30)
-        
-    #     vis.destroy_window()

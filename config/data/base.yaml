@@ -15,7 +15,7 @@ udf_queries:
   pre_sampling: True # True for pre sampling in dataloader initialization
   sample_entire_scene: True
   num_queries_on_surface: 100
-  ratio_per_epoch: 0.002
+  ratio_per_epoch: 0.02
   queries_ratio_on_surface: 2
   queries_stds: [0.002, 0.02, 0.2]
   # num_queries_per_std: [400, 320, 400, 400]

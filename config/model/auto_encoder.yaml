@@ -47,6 +47,7 @@ network:
 
   encoder:
     design: local-pointnet-unet
+    save_every_epoches: 400
     local_pointnet: True
     down_sampler: None # None, MaxPool, Conv
     pn_hidden_dim: 64
@@ -58,14 +59,14 @@ network:
     unet_block_reps: 2
 
   udf_decoder:
-    decoder_type: CrossAttention # ConvONet or CrossAttention or Concatenate
+    decoder_type: Concatenate # ConvONet or CrossAttention or Concatenate
     interpolation_mode: inverse_distance # inverse_distance or max or trilinear
     local_coords: True
     normalize_encoding: True
-    k_neighbors: 8 # 1 for no interpolation
+    k_neighbors: 1 # 1 for no interpolation
 
     input_dim: 3
-    hidden_dim: 8
+    hidden_dim: 16
     num_hidden_layers_before_skip: 5
     num_hidden_layers_after_skip: 1
 

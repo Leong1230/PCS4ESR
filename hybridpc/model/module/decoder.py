@@ -98,6 +98,7 @@ class ImplicitDecoder(pl.LightningModule):
         hidden_dim = cfg.hidden_dim
         out_dim = out_dim
         num_heads = 4
+        self.type = type
         self.local_coords = cfg.local_coords
         self.decoder_type = cfg.decoder_type
         self.k_neighbors = cfg.k_neighbors # 1 for no interpolation

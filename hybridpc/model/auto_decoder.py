@@ -455,59 +455,6 @@ class AutoDecoder(GeneralModel):
                     self.udf_visualization(data_dict, output_dict, latent_code, self.current_epoch, udf_loss)
             # Calculating the metrics
 
-    # def udf_visualization(self, data_dict, output_dict, latent_code, current_epoch, udf_loss):
-
-    #     functa_modulations = self.functa_backbone(latent_code, data_dict['voxel_coords'], data_dict['voxel_indices']) # B, C
-    #     voxel_num = functa_modulations['voxel_features'].F.shape[0]
-    #     # voxel_id = torch.randint(0, voxel_num, (1,)).item()
-    #     scene_name = data_dict['scene_names'][0]
-    #     loss_type = self.hparams.model.loss.loss_type
-
-    #     if self.hparams.model.dense_generator.type == 'voxel':
-    #         original_points = data_dict["points"][data_dict['voxel_indices'] == voxel_id].cpu().numpy()
-    #     else:
-    #         original_points = data_dict["xyz"].cpu().numpy()
-
-    #     # create point cloud for original points
-    #     original_points_cloud = o3d.geometry.PointCloud()
-    #     original_points_cloud.points = o3d.utility.Vector3dVector(original_points)
-    #     # original_points_cloud.paint_uniform_color([1, 0, 0])  # red color
-
-    #     if self.hparams.model.dense_generator.type == 'voxel': 
-    #         dense_points, duration = self.dense_generator.generate_point_cloud(data_dict, functa_modulations['voxel_features'].F, voxel_id)
-    #         # Create dense point cloud
-    #         dense_points_cloud = o3d.geometry.PointCloud()
-    #         dense_points_cloud.points = o3d.utility.Vector3dVector(dense_points)
-    #         # Translate the dense point cloud along z-axis by 1 unit to avoid overlap
-
-    #     else: 
-    #         dense_points, duration = self.dense_generator.generate_all_voxel_point_clouds(data_dict, functa_modulations['voxel_features'].F)
-    #         # Create dense point cloud
-    #         dense_points_cloud = o3d.geometry.PointCloud()
-    #         dense_points_cloud.points = o3d.utility.Vector3dVector(dense_points)
-    #         # dense_points_cloud.paint_uniform_color([0.5, 0.5, 0.5])  # gray color
-
-    #     # visualize the point clouds
-    #     if self.hparams.model.inference.show_visualizations:
-    #         o3d.visualization.draw_geometries([dense_points_cloud])
-    #         o3d.visualization.draw_geometries([original_points_cloud]) # show the original point cloud for scene visualization
-
-    #     # Save the point clouds
-    #     if self.hparams.model.inference.save_predictions:
-    #         save_dir = os.path.join(
-    #             self.hparams.exp_output_root_path, 'inference', self.hparams.model.inference.split,
-    #             'udf_visualizations'
-    #         )
-    #         if self.hparams.model.dense_generator.type == 'voxel':
-    #             o3d.io.write_point_cloud(os.path.join(save_dir, 'Single_voxel_' + str(self.hparams.data.voxel_size) + '_from_' + scene_name + '_' + loss_type + 'udf_loss_' + '{:.5f}'.format(udf_loss) + '_dense.ply'), dense_points_cloud)
-    #             self.save_rotating_video_from_object(dense_points_cloud, os.path.join(save_dir, 'Single_voxel_' + str(self.hparams.data.voxel_size) + '_from_' + scene_name + '_' + loss_type + 'udf_loss_' + '{:.5f}'.format(udf_loss) + '_dense.mp4'))
-    #             o3d.io.write_point_cloud(os.path.join(save_dir, 'Single_voxel_' + str(self.hparams.data.voxel_size) + '_from_' + scene_name + '_' + loss_type + '_udf_loss_' + '{:.5f}'.format(udf_loss) + '_origin.ply'), original_points_cloud)
-    #             self.save_rotating_video_from_object(original_points_cloud, os.path.join(save_dir, 'Single_voxel_' + str(self.hparams.data.voxel_size) + '_from_' + scene_name + '_' + loss_type + '_udf_loss_' + '{:.5f}'.format(udf_loss) + '_origin.mp4'))
-    #         else:
-    #             o3d.io.write_point_cloud(os.path.join(save_dir, scene_name + '_voxel_' + str(self.hparams.data.voxel_size) + '_' + loss_type + '_udf_loss_' + '{:.5f}'.format(udf_loss) + '_dense.ply'), dense_points_cloud)
-    #             o3d.io.write_point_cloud(os.path.join(save_dir, scene_name + '_voxel_' + str(self.hparams.data.voxel_size) + '_' +  loss_type + '_udf_loss_' + '{:.5f}'.format(udf_loss) + '_origin.ply'), original_points_cloud)            
-    #         self.print(f"\nPredictions saved at {os.path.abspath(save_dir)}")
-
     def udf_visualization(self, data_dict, output_dict, latent_code, current_epoch, udf_loss):
         functa_modulations = self.functa_backbone(latent_code, data_dict['voxel_coords'], data_dict['voxel_indices']) # B, C
         voxel_num = functa_modulations['voxel_features'].F.shape[0]
@@ -590,44 +537,3 @@ class AutoDecoder(GeneralModel):
         imageio.mimsave(save_dir, frames, fps=30)
         
         vis.destroy_window()
-
-    # def save_rotating_video_from_object(self, obj: o3d.geometry.Geometry3D, save_dir: str):
-    #     """
-    #     Generates a rotating video from an Open3D object.
-
-    #     Parameters:
-    #     - obj: The Open3D object to visualize.
-    #     - save_dir: The directory (including filename) to save the video.
-    #     """
-    #     # Create a visualizer
-    #     vis = o3d.visualization.Visualizer()
-    #     vis.create_window(visible=True)  # visible window for offscreen rendering
-    #     vis.add_geometry(obj)
-        
-    #     frames = []
-        
-    #     def rotate_view(vis):
-    #         ctr = vis.get_view_control()
-    #         ctr.rotate(5.0, 0.0)  # rotate 5 degrees around z-axis
-            
-    #         frame = vis.capture_screen_float_buffer(True)
-    #         frames.append((np.asarray(frame) * 255).astype(np.uint8))
-            
-    #         # Save in intervals to not hold too much in memory
-    #         if len(frames) == 360:  # Save after capturing 360 frames, i.e., every 12 seconds at 30fps
-    #             imageio.mimsave(save_dir, frames, fps=30)
-    #             frames.clear()  # Clear the frames list
-            
-    #         return False
-        
-    #     # Set the callback function to be called before rendering
-    #     vis.register_animation_callback(rotate_view)
-        
-    #     # Run the visualizer
-    #     vis.run()
-        
-    #     # After the window is closed
-    #     if frames:  # Save any remaining frames
-    #         imageio.mimsave(save_dir, frames, fps=30)
-        
-    #     vis.destroy_window()
