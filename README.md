@@ -22,6 +22,8 @@ pip install pycarus
 ```
 source ./python-3.8/lib/python3.8/site-packages/pycarus/install_torch.sh
 
+# may need uninstall torchaudio if got error
+pip uninstall torchaudio
 # install Python libraries
 pip install . 
 ```
@@ -34,7 +36,9 @@ conda install openblas-devel --no-deps -c anaconda
 
 # (computecanada) flexiblas
 module load flexiblas
+
 # install Python libraries
+cd ~/projects/MinkowskiEngine
 pip install . 
 ```
 

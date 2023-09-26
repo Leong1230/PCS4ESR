@@ -44,7 +44,10 @@ class GeneralDataset(Dataset):
         self.intake_start = cfg.data.intake_start
         self.use_relative = cfg.data.use_relative
         self.max_num_point = cfg.data.max_num_point
-        self.k_neighbors = cfg.model.network.udf_decoder.k_neighbors # 1 for no interpolation
+        if self.cfg.model.training_stage == 1:
+            self.k_neighbors = cfg.model.network.udf_decoder.k_neighbors # 1 for no interpolation
+        else:
+            self.k_neighbors = cfg.model.network.seg_decoder.k_neighbors
         self.sample_entire_scene = cfg.data.udf_queries.sample_entire_scene
         self.num_queries_on_surface = cfg.data.udf_queries.num_queries_on_surface
         self.queries_stds = cfg.data.udf_queries.queries_stds

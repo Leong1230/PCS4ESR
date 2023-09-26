@@ -27,7 +27,7 @@ intake_start: 10
 over_fitting: True # whether to use only one voxel for training and validation
 
 augmentation:
-  use_aug: False
+  use_aug: True
   method: N-times # N-times or original
   loops: 4
   color_trans_ratio: 0.1

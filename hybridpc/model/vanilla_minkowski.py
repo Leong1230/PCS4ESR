@@ -27,7 +27,7 @@ class VanillaMinkowski(GeneralModel):
         self.feature_in = cfg.model.network.feature_in # random_latent/ voxel_features
         self.use_decoder = cfg.model.network.use_decoder # whether to use decoder
         if self.use_decoder:
-            output_channel = cfg.model.network.modulation_dim
+            output_channel = cfg.model.network.seg_decoder.feature_dim
         else:
             output_channel = cfg.data.classes # use the number of classes as the output channel
         if self.feature_in == "mixed_latent":
@@ -40,11 +40,9 @@ class VanillaMinkowski(GeneralModel):
         )
         self.seg_decoder = ImplicitDecoder(
             "seg",
-            cfg.model.network.modulation_dim,
-            cfg.model.network.seg_decoder.input_dim,
-            cfg.model.network.seg_decoder.hidden_dim,
-            cfg.model.network.seg_decoder.num_hidden_layers_before_skip,
-            cfg.model.network.seg_decoder.num_hidden_layers_after_skip,
+            cfg.model.network.seg_decoder, 
+            cfg.model.network.seg_decoder.feature_dim,
+            cfg.data.voxel_size,
             cfg.data.classes
         )
         self.val_test_step_outputs = []
@@ -61,7 +59,7 @@ class VanillaMinkowski(GeneralModel):
             )
 
         if self.use_decoder:
-            backbone_output_dict['semantic_scores'] = self.seg_decoder(backbone_output_dict['voxel_features'].F, data_dict['points'], data_dict["voxel_indices"])  # embeddings (B, C) coords (N, 3) indices (N, )
+            backbone_output_dict['semantic_scores'] = self.seg_decoder(backbone_output_dict['voxel_features'].F, data_dict['xyz'], data_dict['points'], data_dict["voxel_indices"])  # embeddings (B, C) coords (N, 3) indices (N, )
         else:
             backbone_output_dict['semantic_scores'] = backbone_output_dict['point_features'] # use the point features as the semantic scores
         return backbone_output_dict

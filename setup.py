@@ -7,5 +7,5 @@ setup(
     url="https://github.com/Kaola-2115/hybridpc.git",
     description="",
     packages=find_packages(include=("lib", "model")),
-    install_requires=["tqdm", "lightning", "scipy", "open3d", "wandb", "hydra-core", "h5py", "arrgh", "plyfile", "pycarus", "ninja"]
+    install_requires=["tqdm", "lightning", "scipy", "open3d", "wandb", "hydra-core", "opencv-python", "h5py", "arrgh", "plyfile", "pycarus", "ninja"]
 )

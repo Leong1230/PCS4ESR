@@ -7,4 +7,5 @@ hydra-core
 h5py
 arrgh
 plyfile
+pycarus
 ninja

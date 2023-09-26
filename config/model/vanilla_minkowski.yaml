@@ -40,16 +40,19 @@ network:
   use_decoder: True
 
   positional_encoding: Fourier # Triplane
-  modulation_dim: 64
   latent_dim: 64 #
 
   prepare_epochs: 30
 
-  fourier_encoder:
-    embedding_dim: 32
-
   seg_decoder:
+    decoder_type: Concatenate # ConvONet or CrossAttention or Concatenate
+    interpolation_mode: inverse_distance # inverse_distance or max or trilinear
+    local_coords: True
+    normalize_encoding: True
+    k_neighbors: 1 # 1 for no interpolation
+
     input_dim: 3
+    feature_dim: 64
     hidden_dim: 64
-    num_hidden_layers_before_skip: 2
-    num_hidden_layers_after_skip: 2
+    num_hidden_layers_before_skip: 5
+    num_hidden_layers_after_skip: 1

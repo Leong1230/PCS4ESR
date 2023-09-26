@@ -3,3 +3,14 @@ Name: hybridpc
 Version: 1.0
 Home-page: https://github.com/Kaola-2115/hybridpc.git
 Author: Kaola-2115
+Requires-Dist: tqdm
+Requires-Dist: lightning
+Requires-Dist: scipy
+Requires-Dist: open3d
+Requires-Dist: wandb
+Requires-Dist: hydra-core
+Requires-Dist: h5py
+Requires-Dist: arrgh
+Requires-Dist: plyfile
+Requires-Dist: pycarus
+Requires-Dist: ninja
