@@ -46,7 +46,7 @@ class AutoEncoder(GeneralModel):
             cfg.data.voxel_size,
             1
         )
-        if self.training_stage == 2:
+        if self.training_stage != 1:
             self.seg_backbone = MinkUNetBackbone(
                 self.latent_dim + cfg.model.network.use_xyz * 3 + cfg.model.network.use_color * 3 + cfg.model.network.use_normal * 3,
                 cfg.model.network.seg_decoder.feature_dim
@@ -78,6 +78,15 @@ class AutoEncoder(GeneralModel):
                 param.requires_grad = False
             for param in self.udf_decoder.parameters():
                 param.requires_grad = False
+        # if self.training_stage==3:
+        #     for param in self.encoder.parameters():
+        #         param.requires_grad = False
+        #     for param in self.udf_decoder.parameters():
+        #         param.requires_grad = False
+        #     for param in self.seg_backbone.parameters():
+        #         param.requires_grad = False
+        #     for param in self.seg_decoder.parameters():
+        #         param.requires_grad = False
                  
     @classmethod
     def load_from_checkpoint(cls, checkpoint_path, cfg, map_location=None):
@@ -141,7 +150,7 @@ class AutoEncoder(GeneralModel):
         encodes_dict = self.encoder(data_dict)
         segmentation = 0
         values = 0
-        if self.training_stage == 2:
+        if self.training_stage != 1:
             seg_features = self.seg_backbone(encodes_dict['mixed_latent_codes'],  encodes_dict['voxel_coords'], encodes_dict['indices'][:, 0]) # B, C
             segmentation = self.seg_decoder(seg_features['voxel_features'].F, data_dict['xyz'], encodes_dict['relative_coords'], encodes_dict["indices"])
             if self.hparams.model.recompute_udf:
@@ -167,10 +176,8 @@ class AutoEncoder(GeneralModel):
     def configure_optimizers(self):
         if self.training_stage == 1:
             params_to_optimize = list(self.encoder.parameters()) + list(self.udf_decoder.parameters())
-        elif self.training_stage == 2:
+        else :
             params_to_optimize = list(self.seg_backbone.parameters()) + list(self.seg_decoder.parameters())
-        else:
-            raise ValueError(f"Invalid training stage: {self.training_stage}")
         
         optimizer = torch.optim.Adam(params_to_optimize, lr=self.hparams.model.optimizer.lr)
         return optimizer
@@ -190,7 +197,7 @@ class AutoEncoder(GeneralModel):
 
             return udf_loss
         
-        else:
+        elif self.training_stage == 2:
             """ segmentation training stage """
 
             batch_size = self.hparams.data.batch_size
@@ -211,8 +218,10 @@ class AutoEncoder(GeneralModel):
             self.log(
                 "train/semantic_mean_iou", semantic_mean_iou, on_step=False, on_epoch=True, sync_dist=True, batch_size=batch_size
             )
-        
             return seg_loss
+
+        else:
+            return 0
     
 
     def on_train_epoch_end(self):
@@ -231,9 +240,9 @@ class AutoEncoder(GeneralModel):
             udf_loss = self.udf_loss(encodes_dict, outputs)
             self.log("val/udf_loss", udf_loss, on_step=True, on_epoch=True, sync_dist=True, batch_size=batch_size)
         
-        else:
+        elif self.training_stage == 2:
             """ segmentation training stage """
-
+            
             batch_size = self.hparams.data.batch_size
             encodes_dict, values, outputs = self.forward(data_dict)
             seg_loss = self.seg_loss(data_dict, outputs)
@@ -241,6 +250,8 @@ class AutoEncoder(GeneralModel):
                 udf_loss = self.udf_loss(encodes_dict, values)
                 self.log("val/seg_loss", seg_loss, on_step=True, on_epoch=True, sync_dist=True, batch_size=batch_size)
                 self.log("val/udf_loss", udf_loss, on_step=True, on_epoch=True, sync_dist=True, batch_size=batch_size)
+                            # Print the loss for this step
+                print(f"Scene: {scene_name}, Test UDF Loss: {udf_loss.item()}")
                 
             # Calculating the metrics
             semantic_predictions = torch.argmax(outputs, dim=-1)  # (B, N)
@@ -254,10 +265,37 @@ class AutoEncoder(GeneralModel):
             )
             self.val_test_step_outputs.append((semantic_accuracy, semantic_mean_iou))
 
-        torch.set_grad_enabled(True)
-        if self.current_epoch >= self.hparams.model.dense_generator.prepare_epochs:
+        else: # test stage
+            scene_name = data_dict['scene_names'][0]  # Assume scene_names is a list of strings
+            voxel_num = data_dict["voxel_nums"][0]    # Assume voxel_nums is a list of ints
+            # Inner loop
+
+            batch_size = self.hparams.data.batch_size
+            encodes_dict, values, segmentations = self.forward(data_dict)
+            semantic_predictions = torch.argmax(segmentations, dim=-1)  # (B, N)
+            semantic_accuracy = evaluate_semantic_accuracy(semantic_predictions, data_dict["labels"], ignore_label=-1)
+            semantic_mean_iou = evaluate_semantic_miou(semantic_predictions, data_dict["labels"], ignore_label=-1)
+            self.log(
+                "val_eval/semantic_accuracy", semantic_accuracy, on_step=False, on_epoch=True, sync_dist=True, batch_size=batch_size
+            )         
+            self.log(
+                "val_eval/semantic_mean_iou", semantic_mean_iou, on_step=False, on_epoch=True, sync_dist=True, batch_size=batch_size
+            )
+
+            self.val_test_step_outputs.append((semantic_accuracy, semantic_mean_iou))
+
+            udf_loss = self.udf_loss(encodes_dict, values)
+            self.log("val/udf_loss", udf_loss, on_step=True, on_epoch=True, sync_dist=True, batch_size=batch_size)
+            # Print the loss for this step
+            print(f"Scene: {scene_name}, Test UDF Loss: {udf_loss.item()}, Semantic Accuracy: {semantic_accuracy:.4f}, Semantic Mean IoU: {semantic_mean_iou:.4f}")
+
+            # torch.set_grad_enabled(True)
+            # self.trainer.model.train()
+            # if self.hparams.model.inference.visualization:
+            #     self.udf_visualization(data_dict, encodes_dict, self.current_epoch, udf_loss)
+            torch.set_grad_enabled(True)
             if self.hparams.model.inference.visualization:
-                self.udf_visualization(data_dict, encodes_dict, self.current_epoch, udf_loss)
+                self.udf_visualization(data_dict, encodes_dict, self.current_epoch, udf_loss, semantic_predictions)
 
 
 
@@ -268,23 +306,54 @@ class AutoEncoder(GeneralModel):
         # Inner loop
         if self.hparams.model.inference.term == "UDF":
             batch_size = self.hparams.data.batch_size
-            encodes_dict, outputs = self.forward(data_dict)
-            udf_loss = self.udf_loss(encodes_dict, outputs)
+            encodes_dict, values, segmentations = self.forward(data_dict)
+            udf_loss = self.udf_loss(encodes_dict, values)
             self.log("train/udf_loss", udf_loss, on_step=True, on_epoch=True, sync_dist=True, batch_size=batch_size)
             # Print the loss for this step
-            print(f"Scene: {scene_name}, Test UDF Loss: {value_loss.item()}")
+            print(f"Scene: {scene_name}, Test UDF Loss: {udf_loss.item()}")
+            self.val_test_step_outputs.append((data_dict, encodes_dict, udf_loss))
+            # torch.set_grad_enabled(True)
+            # self.trainer.model.train()
+            # if self.hparams.model.inference.visualization:
+            #     self.udf_visualization(data_dict, encodes_dict, self.current_epoch, udf_loss)
 
-            # if self.current_epoch >= self.hparams.model.dense_generator.prepare_epochs:
-            #     if self.hparams.model.inference.visualization:
-            #         self.udf_visualization(data_dict, encodes_dict, self.current_epoch, udf_loss)
-            # Calculating the metrics
+    def on_test_epoch_end(self):
+        # evaluate instance predictions
+        if self.training_stage !=1:
+            all_pred_insts = []
+            all_gt_insts = []
+            all_gt_insts_bbox = []
+            all_sem_acc = []
+            all_sem_miou = []
+            for data_dict, encodes_dict, udf_loss in self.val_test_step_outputs:
+                torch.set_grad_enabled(True)
+                self.udf_visualization(data_dict, encodes_dict, self.current_epoch, udf_loss)
+            self.val_test_step_outputs.clear()
+
+            self.print("Evaluating semantic segmentation ...")
+
+            sem_miou_avg = np.mean(np.array(all_sem_miou))
+            sem_acc_avg = np.mean(np.array(all_sem_acc))
+            self.print(f"Semantic Accuracy: {sem_acc_avg}")
+            self.print(f"Semantic mean IoU: {sem_miou_avg}")
+
+            if self.hparams.model.inference.save_predictions:
+                save_dir = os.path.join(
+                    self.hparams.exp_output_root_path, 'inference', self.hparams.model.inference.split,
+                    'predictions'
+                )
+                # save_prediction(
+                #     save_dir, all_pred_insts, self.hparams.cfg.data.mapping_classes_ids,
+                #     self.hparams.cfg.data.ignore_classes
+                # )
+                self.print(f"\nPredictions saved at {os.path.abspath(save_dir)}")
 
     def get_unique_color(self, voxel_id, num_voxels):
         # You can customize this function further if you have a preferred color scheme
         color_map = plt.cm.jet  # You can change this to any other colormap
         return color_map(voxel_id / num_voxels)[:3]
 
-    def udf_visualization(self, data_dict, encodes_dict, current_epoch, udf_loss):
+    def udf_visualization(self, data_dict, encodes_dict, current_epoch, udf_loss, semantic_predictions):
         voxel_latents = encodes_dict['latent_codes']
         voxel_num = voxel_latents.shape[0]
         scene_name = data_dict['scene_names'][0]
@@ -292,30 +361,123 @@ class AutoEncoder(GeneralModel):
 
         save_dir = os.path.join(
             self.hparams.exp_output_root_path, 'inference', self.hparams.model.inference.split,
-            'udf_visualizations'
+            'visualizations'
         )
 
         if self.hparams.model.dense_generator.type == 'voxel':
+            voxel_id = 120
+            # Extract points and labels
+            original_points = encodes_dict['relative_coords'][:, 0, :][encodes_dict['indices'][:, 0] == voxel_id].detach().cpu().numpy()
+            gt_labels = data_dict['labels'][encodes_dict['indices'][:, 0] == voxel_id].detach().cpu().numpy()
+            predicted_labels = semantic_predictions[encodes_dict['indices'][:, 0] == voxel_id].detach().cpu().numpy()
+            # original_points = data_dict['points'][data_dict['voxel_indices'][0] == voxel_id].detach().cpu().numpy()
+            # gt_labels = data_dict['labels'][data_dict['voxel_indices'[0]] == voxel_id].detach().cpu().numpy()
+            # predicted_labels = semantic_predictions[data_dict['voxel_indices'][0] == voxel_id].detach().cpu().numpy()
+
+            # Color mapping
+            unique_labels = np.unique(np.concatenate((gt_labels, predicted_labels)))
+            mapping = {label: idx for idx, label in enumerate(unique_labels)}
+            # cmap = plt.cm.get_cmap('jet', len(unique_labels))
+
+            cmap = {
+                0: [1, 0, 0],      # Red
+                1: [0, 1, 0],      # Green
+                2: [0, 0, 1],      # Blue
+                3: [1, 1, 0],      # Yellow
+                4: [0, 1, 1],      # Cyan
+                5: [1, 0, 1],      # Magenta
+                6: [0.5, 0.5, 0],  # Olive
+                7: [0.5, 0, 0.5]   # Purple
+            }
+
+            # Number of unique classes
+            num_gt_classes = len(np.unique(gt_labels))
+            num_pred_classes = len(np.unique(predicted_labels))
+
+            # Point-level accuracy
+            correct_predictions = np.sum(gt_labels == predicted_labels)
+            total_points = len(gt_labels)
+            accuracy = correct_predictions / total_points
+
+            print(f"Number of GT classes: {num_gt_classes}, Number of predicted classes: {num_pred_classes}, Point-level accuracy: {accuracy:.4f}")
+            # overall_correct_predictions = 0
+            # overall_total_points = 0
+
             # for voxel_id in range(voxel_num):
-            voxel_id = 2
-            original_points = encodes_dict['relative_coords'][encodes_dict['indices'] == voxel_id].cpu().numpy()
+            #     # Extract points and labels
+            #     original_points = encodes_dict['relative_coords'][:, 0, :][encodes_dict['indices'][:, 0] == voxel_id].detach().cpu().numpy()
+            #     gt_labels = data_dict['labels'][encodes_dict['indices'][:, 0] == voxel_id].detach().cpu().numpy()
+            #     predicted_labels = semantic_predictions[encodes_dict['indices'][:, 0] == voxel_id].detach().cpu().numpy()
+
+            #     # Color mapping
+            #     unique_labels = np.unique(gt_labels)
+            #     cmap = plt.cm.get_cmap('jet', len(unique_labels))
+                
+            #     # Number of unique classes
+            #     num_gt_classes = len(np.unique(gt_labels))
+            #     num_pred_classes = len(np.unique(predicted_labels))
+
+            #     # Point-level accuracy for the current voxel
+            #     correct_predictions = np.sum(gt_labels == predicted_labels)
+            #     total_points = len(gt_labels)
+            #     accuracy = correct_predictions / total_points
+
+            #     # Accumulate the overall counts for accuracy computation
+            #     overall_correct_predictions += correct_predictions
+            #     overall_total_points += total_points
+
+            #     print(f"Voxel {voxel_id}: Number of GT classes: {num_gt_classes}, Number of predicted classes: {num_pred_classes}, Point-level accuracy: {accuracy:.4f}")
+
+            # overall_accuracy = overall_correct_predictions / overall_total_points
+            # print(f"Overall Point-level accuracy for all voxels: {overall_accuracy:.4f}")
+
+            # 1. Original Point Cloud colored by GT labels
+            original_colors = np.array([cmap[mapping[labels]] for labels in gt_labels])[:, :3]
             original_points_cloud = o3d.geometry.PointCloud()
             original_points_cloud.points = o3d.utility.Vector3dVector(original_points)
+            original_points_cloud.colors = o3d.utility.Vector3dVector(original_colors)
 
-            dense_points, duration = self.dense_generator.generate_point_cloud(data_dict, encodes_dict, voxel_latents, voxel_id)
+            # 2. Prediction Point Cloud colored by predicted labels
+            pred_colors = np.array([cmap[mapping[labels]] for labels in predicted_labels])[:, :3]
+            prediction_pointcloud = o3d.geometry.PointCloud()
+            prediction_pointcloud.points = o3d.utility.Vector3dVector(original_points)
+            prediction_pointcloud.colors = o3d.utility.Vector3dVector(pred_colors)
+
+            # 3. Error Point Cloud
+            error_colors = np.array([[0.5, 0.5, 0.5] if gt == pred else [1, 0, 0] for gt, pred in zip(gt_labels, predicted_labels)])
+            error_pointcloud = o3d.geometry.PointCloud()
+            error_pointcloud.points = o3d.utility.Vector3dVector(original_points)
+            error_pointcloud.colors = o3d.utility.Vector3dVector(error_colors)
+
+            # 4. Dense Point Cloud colored uniformly
+            dense_points, _ = self.dense_generator.generate_point_cloud(data_dict, encodes_dict, voxel_latents, voxel_id)
+            uniform_color = [0, 0, 1]  # e.g. blue color
             dense_points_cloud = o3d.geometry.PointCloud()
             dense_points_cloud.points = o3d.utility.Vector3dVector(dense_points)
+            dense_points_cloud.colors = o3d.utility.Vector3dVector(np.tile(uniform_color, (len(dense_points), 1)))
 
             if self.hparams.model.inference.show_visualizations:
-                o3d.visualization.draw_geometries([dense_points_cloud])
                 o3d.visualization.draw_geometries([original_points_cloud])
+                o3d.visualization.draw_geometries([prediction_pointcloud])
+                o3d.visualization.draw_geometries([error_pointcloud])
+                o3d.visualization.draw_geometries([dense_points_cloud])
+
 
             if self.hparams.model.inference.save_predictions:
                 filename_base = f'Single_voxel_{self.hparams.model.network.encoder.voxel_size_out}_from_{scene_name}_voxelid_{voxel_id}_{loss_type}_udf_loss_{udf_loss:.5f}'
+                
+                # Save the visualizations with modified filenames
+                o3d.io.write_point_cloud(os.path.join(save_dir, f'{filename_base}_origin_class_num_{num_gt_classes}.ply'), original_points_cloud)
+                o3d.io.write_point_cloud(os.path.join(save_dir, f'{filename_base}_prediction_class_num_{num_pred_classes}.ply'), prediction_pointcloud)
+                o3d.io.write_point_cloud(os.path.join(save_dir, f'{filename_base}_error_accuracy_{accuracy:.4f}.ply'), error_pointcloud)
                 o3d.io.write_point_cloud(os.path.join(save_dir, f'{filename_base}_dense.ply'), dense_points_cloud)
+
+                # Save rotating videos with modified filenames
+                self.save_rotating_video_from_object(original_points_cloud, os.path.join(save_dir, f'{filename_base}_origin_class_num_{num_gt_classes}.mp4'))
+                self.save_rotating_video_from_object(prediction_pointcloud, os.path.join(save_dir, f'{filename_base}_prediction_class_num_{num_pred_classes}.mp4'))
+                self.save_rotating_video_from_object(error_pointcloud, os.path.join(save_dir, f'{filename_base}_error_accuracy_{accuracy:.4f}.mp4'))
                 self.save_rotating_video_from_object(dense_points_cloud, os.path.join(save_dir, f'{filename_base}_dense.mp4'))
-                o3d.io.write_point_cloud(os.path.join(save_dir, f'{filename_base}_origin.ply'), original_points_cloud)
-                self.save_rotating_video_from_object(original_points_cloud, os.path.join(save_dir, f'{filename_base}_origin.mp4'))
+
 
         elif self.hparams.model.dense_generator.type == 'multiple_voxels':
             # for voxel_id in range(voxel_num):

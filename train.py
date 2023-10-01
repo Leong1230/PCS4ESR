@@ -34,7 +34,7 @@ def main(cfg):
     print("==> initializing monitor ...")
     callbacks = init_callbacks(cfg)
 
-    output_path = os.path.join(cfg.exp_output_root_path, "inference", cfg.model.inference.split, "udf_visualizations")
+    output_path = os.path.join(cfg.exp_output_root_path, "inference", cfg.model.inference.split, "visualizations")
     os.makedirs(output_path, exist_ok=True)
 
 

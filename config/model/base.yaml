@@ -1,6 +1,7 @@
 # Managed by Hydra
 
 # ckpt_path: /localhome/zla247/projects/data/output/Scannet/AutoDecoder/stage-1_AutoDecoder_overfit-True_intake-10_0.5_latent-64_norm-initial_inner-steps-300_lr-0.002-0.001-0.005_reg-True_reg-lambda-0.0001_L1-blocks-[1, 2, 3]-[1, 2, 3]_run_1/training/epoch=149.ckpt
+# ckpt_path: '/home/zhenli/projects/data/output/Scannet/AutoEncoder/Narval_checkpoints/Decoder-selecting_stage-2_voxel-0.5_overfit-False_intake--1_udf-queries-0.01-2_decoder-Concatenate_local-coords-True_normalize-encoding-True_inverse_distance-1-blocks-5_latent-64-64-64_lr-0.002_cc-narval_run_1_epoch=99.ckpt' 
 ckpt_path: 
 
 logger:
@@ -37,6 +38,6 @@ inference:
   term: UDF # UDF or Seg
   split: val
   evaluate: True
-  save_predictions: False
+  save_predictions: True
   visualization: False
   show_visualizaitons: True

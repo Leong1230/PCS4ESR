@@ -7,6 +7,10 @@ defaults:
 stage1_ckpt_path: None
 # stage1_ckpt_path: 
 stage2_ckpt_path: None
+
+# ckpt_path: '/home/zhenli/projects/data/output/Scannet/AutoEncoder/Narval_checkpoints/VanillaMinkowski_Fixed-Unet-voxel-0.5_overfit-False_intake--1_use-decoder-True_neighbors-1-blocks-5_latent-64-64_lr-0.002_cc-narval_run_1_epoch=9.ckpt' 
+
+
 # log:
 #   WandbLogger:
 #     project: HybridPC
@@ -25,7 +29,7 @@ optimizer:
 lr_decay:
   decay_start_epoch: 350
 
-training_stage: 0
+training_stage: 3
 
 network:
   module: VanillaMinkowski
@@ -37,12 +41,12 @@ network:
   use_normal: False
   use_xyz: False
   feature_in: mixed_latent # random_latent, voxel_features or mixed_latent 
-  use_decoder: True
+  use_decoder: False
 
   positional_encoding: Fourier # Triplane
   latent_dim: 64 #
 
-  prepare_epochs: 30
+  prepare_epochs: 0
 
   seg_decoder:
     decoder_type: Concatenate # ConvONet or CrossAttention or Concatenate
@@ -56,3 +60,13 @@ network:
     hidden_dim: 64
     num_hidden_layers_before_skip: 5
     num_hidden_layers_after_skip: 1
+
+inference:
+  split: val
+  type: voxel # voxel or multiple_voxels or voxel or scene
+  evaluate: True
+  save_predictions: True
+  visualization: False
+  show_visualizations: True
+  visualize_given_voxels: False
+  visualize_ids: [406, 405, 366, 365, 403, 402, 410, 363, 409, 362]

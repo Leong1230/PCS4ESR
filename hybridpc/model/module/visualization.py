@@ -48,11 +48,11 @@ class Dense_Generator(pl.LightningModule):
 
             i = 0
             while len(samples_cpu) < self.num_points:
-                print('iteration', i)
+                # print('iteration', i)
 
                 for j in range(self.num_steps):
-                    print('refinement', j)
-                    df_pred = torch.clamp(self.model(voxel_latents.detach(), samples[0], index), max=self.threshold).unsqueeze(0)
+                    # print('refinement', j)
+                    df_pred = torch.clamp(self.model(voxel_latents.detach(), samples[0].unsqueeze(1), samples[0].unsqueeze(1), index.unsqueeze(1)), max=self.threshold).unsqueeze(0)
                     df_pred.sum().backward(retain_graph=True)
                     gradient = samples.grad.detach()
                     samples = samples.detach()
@@ -61,7 +61,7 @@ class Dense_Generator(pl.LightningModule):
                     samples = samples.detach()
                     samples.requires_grad = True
 
-                print('finished refinement')
+                # print('finished refinement')
 
                 if not i == 0:
                     # Move samples to CPU, detach from computation graph, convert to numpy array, and stack to samples_cpu
@@ -112,7 +112,7 @@ class Dense_Generator(pl.LightningModule):
                     samples_relative = samples.unsqueeze(2) - voxel_center_transfer.unsqueeze(0).unsqueeze(0) 
                     N = samples.shape[1]  # The number of samples
                     indices = voxel_id.unsqueeze(0).repeat(N, 1)
-                    df_pred = torch.clamp(self.model(voxel_latents.detach(), samples_relative[0], indices), max=self.threshold).unsqueeze(0)
+                    df_pred = torch.clamp(self.model(voxel_latents.detach(), samples[0], samples_relative[0], indices), max=self.threshold).unsqueeze(0)
                     df_pred.sum().backward(retain_graph=True)
                     gradient = samples.grad.detach()
                     samples = samples.detach()

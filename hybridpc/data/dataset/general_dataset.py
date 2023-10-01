@@ -34,7 +34,7 @@ class GeneralDataset(Dataset):
     def __init__(self, cfg, split):
         self.cfg = cfg
         self.split = 'train' if self.cfg.data.over_fitting else split # use only train set for overfitting
-        # self.split = split
+        self.split = 'val'
         self.dataset_root_path = cfg.data.dataset_path
         self.voxel_size = cfg.data.voxel_size
         self.num_point = cfg.data.num_point
@@ -42,7 +42,7 @@ class GeneralDataset(Dataset):
         self.take = cfg.data.take
         self.loops = cfg.data.augmentation.loops
         self.intake_start = cfg.data.intake_start
-        self.use_relative = cfg.data.use_relative
+        self.use_relative = cfg.data.use_relative 
         self.max_num_point = cfg.data.max_num_point
         if self.cfg.model.training_stage == 1:
             self.k_neighbors = cfg.model.network.udf_decoder.k_neighbors # 1 for no interpolation
@@ -375,13 +375,13 @@ class GeneralDataset(Dataset):
         query_points = scene['query_absolute_points']
         query_indices = scene['query_voxel_indices']
 
-        # if self.cfg.data.augmentation.method=='original':
-        #     if self.split == "train" and self.cfg.data.augmentation.use_aug:
-        #         locs = self.prevoxel_transforms(locs_in)
-        #         locs, feats, labels, inds_reconstruct = self.voxelizer.voxelize(locs, point_features, labels_in)
-        #         voxel_coords, feats, labels = self.input_transforms(locs, feats, labels)
-        #     else:
-        #         voxel_coords, feats, labels, inds_reconstruct = self.voxelizer.voxelize(locs_in, point_features, labels_in)
+        if self.cfg.data.augmentation.method=='original':
+            if self.split == "train" and self.cfg.data.augmentation.use_aug:
+                locs = self.prevoxel_transforms(locs_in)
+                locs, feats, labels, inds_reconstruct = self.voxelizer.voxelize(locs, point_features, labels_in)
+                voxel_coords, feats, labels = self.input_transforms(locs, feats, labels)
+            else:
+                voxel_coords, feats, labels, inds_reconstruct = self.voxelizer.voxelize(locs, point_features, labels_in)
 
         if not self.cfg.data.udf_queries.pre_sampling:
             query_absolute_points, values, unmasked_values, query_indices = self.sample_points(xyz, voxel_coords)
