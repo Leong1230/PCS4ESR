@@ -134,19 +134,19 @@ class ImplicitDecoder(pl.LightningModule):
             #     for _ in range(self.num_hidden_layers_before_skip)
             # ])
         else:
-            self.in_layer = nn.Sequential(nn.Linear(embed_dim + enc_dim, hidden_dim), nn.ReLU())
-            self.skip_proj = nn.Sequential(nn.Linear(embed_dim + enc_dim, hidden_dim), nn.ReLU())
+            self.in_layer = nn.Sequential(nn.Linear(embed_dim + enc_dim, hidden_dim), nn.LeakyReLU())
+            self.skip_proj = nn.Sequential(nn.Linear(embed_dim + enc_dim, hidden_dim), nn.LeakyReLU())
             before_skip = []
             for _ in range(self.num_hidden_layers_before_skip):
-                before_skip.append(nn.Sequential(nn.Linear(hidden_dim, hidden_dim), nn.ReLU()))
+                before_skip.append(nn.Sequential(nn.Linear(hidden_dim, hidden_dim), nn.LeakyReLU()))
             self.before_skip = nn.Sequential(*before_skip)
 
         after_skip = []
         for _ in range(self.num_hidden_layers_after_skip):
-            after_skip.append(nn.Sequential(nn.Linear(hidden_dim, hidden_dim), nn.ReLU()))
+            after_skip.append(nn.Sequential(nn.Linear(hidden_dim, hidden_dim), nn.LeakyReLU()))
         after_skip.append(nn.Linear(hidden_dim, out_dim))
         if self.type == 'functa':
-            after_skip.append(nn.ReLU())
+            after_skip.append(nn.LeakyReLU())
         self.after_skip = nn.Sequential(*after_skip)
 
 
