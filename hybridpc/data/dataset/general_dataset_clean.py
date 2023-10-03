@@ -62,7 +62,7 @@ class GeneralDataset(Dataset):
         self.voxelizer = Voxelizer(
             voxel_size=self.voxel_size,
             clip_bound=None,
-            use_augmentation=True if self.cfg.data.augmentation.method == 'original' else False,
+            use_augmentation=False,
             scale_augmentation_bound=self.SCALE_AUGMENTATION_BOUND,
             rotation_augmentation_bound=self.ROTATION_AUGMENTATION_BOUND,
             translation_augmentation_ratio_bound=self.TRANSLATION_AUGMENTATION_RATIO_BOUND)
@@ -217,13 +217,13 @@ class GeneralDataset(Dataset):
         labels = scene['labels']
         inds_reconstruct  = scene['voxel_indices']
         voxel_center =  voxel_coords * self.voxel_size + self.voxel_size / 2.0
-        relative_coords = xyz[:, np.newaxis] - voxel_center[inds_reconstruct] # N, K, 3
+        relative_coords = xyz[:, np.newaxis, :] - voxel_center[inds_reconstruct] # N, K, 3
         
         if self.cfg.model.training_stage == 2:
             if self.cfg.data.augmentation.method == 'N-times':
                 data = {
                     "xyz": xyz,  # N, 3
-                    "points": relative_coords,  # N, K , 3
+                    "points": relative_coords[:, np.newaxis, :],  # N, K , 3
                     "point_features": scene['point_features'],  # N, 3
                     "labels": scene['labels'],  # N,
                     "voxel_indices": inds_reconstruct,  # N, or N, K
@@ -241,13 +241,13 @@ class GeneralDataset(Dataset):
                 else:
                     voxel_coords, feats, labels, inds_reconstruct = self.voxelizer.voxelize(xyz, point_features, labels)
                 voxel_center =  voxel_coords * self.voxel_size + self.voxel_size / 2.0
-                relative_coords = xyz[:, np.newaxis] - voxel_center[inds_reconstruct] # N, K, 3
+                relative_coords = xyz - voxel_center[inds_reconstruct] # N, K, 3
                 data = {
                     "xyz": xyz,  # N, 3
-                    "points": relative_coords,  # N, K , 3
+                    "points": relative_coords[:, np.newaxis, :],  # N, K , 3
                     "point_features": scene['point_features'],  # N, 3
-                    "labels": labels,  # N,
-                    "voxel_indices": inds_reconstruct,  # N, or N, K
+                    "labels": scene['labels'],  # N,
+                    "voxel_indices": inds_reconstruct[:, np.newaxis],  # N, or N, K
                     "voxel_coords": voxel_coords,  # K, 3
                     "voxel_features": feats,  # K, ?
                     "scene_name": scene['scene_name']

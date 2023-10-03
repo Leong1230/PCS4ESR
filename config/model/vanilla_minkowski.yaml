@@ -29,7 +29,7 @@ optimizer:
 lr_decay:
   decay_start_epoch: 350
 
-training_stage: 3
+training_stage: 2
 
 network:
   module: VanillaMinkowski
