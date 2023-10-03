@@ -12,7 +12,7 @@
             "console": "integratedTerminal",
             "justMyCode": true,
             "args": [
-                "model=vanilla_minkowski",
+                "model=auto_encoder",
                 "data=scannet",
                 "model.trainer.max_epochs=900"
             ]

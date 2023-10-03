@@ -38,6 +38,7 @@ class AutoEncoder(GeneralModel):
         self.latent_dim = cfg.model.network.latent_dim
 
         self.encoder = Encoder(cfg)
+        self.use_decoder = cfg.model.network.use_decoder
 
         self.udf_decoder = ImplicitDecoder(
             "functa",
@@ -144,15 +145,17 @@ class AutoEncoder(GeneralModel):
         imageio.mimsave(save_dir, img_array, fps=30)
 
 
-
-
     def forward(self, data_dict):
         encodes_dict = self.encoder(data_dict)
         segmentation = 0
         values = 0
         if self.training_stage != 1:
             seg_features = self.seg_backbone(encodes_dict['mixed_latent_codes'],  encodes_dict['voxel_coords'], encodes_dict['indices'][:, 0]) # B, C
-            segmentation = self.seg_decoder(seg_features['voxel_features'].F, data_dict['xyz'], encodes_dict['relative_coords'], encodes_dict["indices"])
+            if self.use_decoder:
+                segmentation = self.seg_decoder(seg_features['voxel_features'].F, data_dict['xyz'], encodes_dict['relative_coords'], encodes_dict["indices"])
+            else:
+                segmentation = seg_features['point_features']
+
             if self.hparams.model.recompute_udf:
                 values = self.udf_decoder(encodes_dict['latent_codes'], encodes_dict['query_absolute_coords'], encodes_dict['query_relative_coords'], encodes_dict['query_indices'])
         else:

@@ -41,7 +41,7 @@ network:
 
   positional_encoding: Fourier # Triplane
   latent_dim: 64 #
-
+  use_decoder: False
 
   prepare_epochs: 10
 
@@ -53,7 +53,7 @@ network:
     pn_hidden_dim: 64
     pn_n_blocks: 6
     use_unet: True
-    voxel_size_out: 0.1
+    voxel_size_out: 0.5
     feature_in: voxel_features
     unet_blocks: [1, 2, 3, 4, 5]
     unet_block_reps: 2
@@ -63,7 +63,7 @@ network:
     interpolation_mode: inverse_distance # inverse_distance or max or trilinear
     local_coords: True
     normalize_encoding: True
-    k_neighbors: 8 # 1 for no interpolation
+    k_neighbors: 1 # 1 for no interpolation
 
     input_dim: 3
     hidden_dim: 64
