@@ -1,6 +1,6 @@
 # Managed by Hydra
 
-dataset_root_path: ${project_root_path}/../../data
+dataset_root_path: ${project_root_path}/../../local_data
 # dataset_root_path: ${project_root_path}/../../zla247/data
 batch_size: 2
 num_workers: 2
@@ -28,8 +28,8 @@ over_fitting: True # whether to use only one voxel for training and validation
 
 augmentation:
   use_aug: True
-  method: original # N-times or original
-  loops: 4
+  method: N-times # N-times or original
+  loops: 2
   color_trans_ratio: 0.1
   color_jitter_std: 0.05
   hue_max: 0.5

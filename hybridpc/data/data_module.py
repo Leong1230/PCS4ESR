@@ -51,7 +51,6 @@ def _sparse_collate_fn(batch):
     query_points = []
     absolute_query_points = []
     values = []
-    unmasked_values = []
     query_voxel_indices = []
     voxel_coords_list = []
     voxel_features_list = []
@@ -76,7 +75,6 @@ def _sparse_collate_fn(batch):
             query_points.append(torch.from_numpy(b["query_points"]))
             absolute_query_points.append(torch.from_numpy(b["absolute_query_points"]))
             values.append(torch.from_numpy(b["values"]))
-            unmasked_values.append(torch.from_numpy(b["unmasked_values"]))
             query_voxel_indices.append(torch.from_numpy(b["query_voxel_indices"] + cumulative_voxel_coords_len))
 
         # Create a batch ID for each point and query point in the batch
@@ -94,7 +92,6 @@ def _sparse_collate_fn(batch):
         data['query_points'] = torch.cat(query_points, dim=0)
         data['absolute_query_points'] = torch.cat(absolute_query_points, dim=0)
         data['values'] = torch.cat(values, dim=0)
-        data['unmasked_values'] = torch.cat(unmasked_values, dim=0)
         data['query_voxel_indices'] = torch.cat(query_voxel_indices, dim=0)
     data["voxel_coords"], data["voxel_features"] = ME.utils.sparse_collate(
         coords=voxel_coords_list, feats=voxel_features_list

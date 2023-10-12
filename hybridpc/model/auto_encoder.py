@@ -45,7 +45,8 @@ class AutoEncoder(GeneralModel):
             cfg.model.network.udf_decoder,
             cfg.model.network.latent_dim,
             cfg.data.voxel_size,
-            1
+            1,
+            cfg.model.network.udf_decoder.activation        
         )
         if self.training_stage != 1:
             self.seg_backbone = MinkUNetBackbone(
@@ -58,7 +59,8 @@ class AutoEncoder(GeneralModel):
                 cfg.model.network.seg_decoder, 
                 cfg.model.network.seg_decoder.feature_dim,
                 cfg.data.voxel_size,
-                cfg.data.classes
+                cfg.data.classes,
+                cfg.model.network.seg_decoder.activation        
             )
 
         self.dense_generator = Dense_Generator(

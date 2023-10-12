@@ -5,12 +5,12 @@ defaults:
   - base
 
 
-stage1_ckpt_path: '/home/zhenli/projects/data/output/Scannet/AutoEncoder/Decoder-selecting_stage-1_voxel-0.5_overfit-True_intake-2_udf-queries-0.02-2_decoder-ConvONet_local-coords-True_normalize-encoding-True_inverse_distance-1-blocks-5_latent-64-64-16_lr-0.002_run_1/training/epoch=9.ckpt'
-# stage1_ckpt_path: None
+# stage1_ckpt_path: '/home/zhenli/projects/data/output/Scannet/AutoEncoder/Decoder-selecting_stage-1_voxel-0.5_overfit-True_intake-2_udf-queries-0.02-2_decoder-ConvONet_local-coords-True_normalize-encoding-True_inverse_distance-1-blocks-5_latent-64-64-16_lr-0.002_run_1/training/epoch=9.ckpt'
+stage1_ckpt_path: None
 
 # ckpt_path: '/home/zhenli/projects/data/output/Scannet/AutoEncoder/Narval_checkpoints/Decoder-selecting_stage-2_voxel-0.5_overfit-False_intake--1_udf-queries-0.01-2_decoder-Concatenate_local-coords-True_normalize-encoding-True_inverse_distance-1-blocks-5_latent-64-64-64_lr-0.002_cc-narval_run_1_epoch=99.ckpt' 
 
-training_stage: 2 # 3 for test
+training_stage: 1 # 3 for test
 recompute_udf: True
 
 trainer:
@@ -18,7 +18,7 @@ trainer:
 
 optimizer:
     target_: torch.optim.Adam
-    lr: 0.002
+    lr: 0.001
     decreased_by: 10
 
 loss:
@@ -47,7 +47,7 @@ network:
 
   encoder:
     design: local-pointnet-unet
-    save_every_epoches: 200
+    save_every_epoches: 500
     local_pointnet: True
     down_sampler: None # None, MaxPool, Conv
     pn_hidden_dim: 64
@@ -59,29 +59,30 @@ network:
     unet_block_reps: 2
 
   udf_decoder:
-    decoder_type: ConvONet # ConvONet or CrossAttention or Concatenate
+    decoder_type: Convcatenate # ConvONet or CrossAttention or Concatenate
     interpolation_mode: inverse_distance # inverse_distance or max or trilinear
+    activation: LeakyReLU # LeakyReLU or ReLU or Softplus or ShiftedSoftplus
     local_coords: True
     normalize_encoding: True
-    k_neighbors: 1 # 1 for no interpolation
+    k_neighbors: 8 # 1 for no interpolation
 
     input_dim: 3
     hidden_dim: 64
-    num_hidden_layers_before_skip: 5
-    num_hidden_layers_after_skip: 1
+    num_hidden_layers_before_skip: 2
+    num_hidden_layers_after_skip: 2
 
   seg_decoder:
     decoder_type: Concatenate
     interpolation_mode: inverse_distance # inverse_distance or max or trilinear
     local_coords: True
     normalize_encoding: True
-    k_neighbors: 1 # 1 for no interpolation
+    k_neighbors: 8 # 1 for no interpolation
 
     input_dim: 3
     feature_dim: 64
     hidden_dim: 64
-    num_hidden_layers_before_skip: 5
-    num_hidden_layers_after_skip: 1
+    num_hidden_layers_before_skip: 2
+    num_hidden_layers_after_skip: 2
 
 
 dense_generator:
