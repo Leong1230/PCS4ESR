@@ -106,7 +106,7 @@ class GeneralDataset(Dataset):
         for scene_name in tqdm(self.scene_names, desc=f"Loading {self.split} data from disk"):
             scene_path = os.path.join(self.cfg.data.dataset_path, self.split, f"{scene_name}.pth")
             scene = torch.load(scene_path)
-            scene["xyz"] -= scene["xyz"].mean(axis=0)
+            scene["xyz"] -= scene["xyz"].astype(np.float32) .mean(axis=0)
             scene["rgb"] = scene["rgb"].astype(np.float32) / 127.5 - 1
             scene['scene_name'] = scene_name
             self.scenes_in.append(scene) 
@@ -223,7 +223,7 @@ class GeneralDataset(Dataset):
             if self.cfg.data.augmentation.method == 'N-times':
                 data = {
                     "xyz": xyz,  # N, 3
-                    "points": relative_coords[:, np.newaxis, :],  # N, K , 3
+                    "points": relative_coords,  # N, K , 3                    
                     "point_features": scene['point_features'],  # N, 3
                     "labels": scene['labels'],  # N,
                     "voxel_indices": inds_reconstruct,  # N, or N, K
@@ -235,11 +235,12 @@ class GeneralDataset(Dataset):
             
             else: 
                 if self.split == 'train':
-                    xyz = self.prevoxel_transforms(xyz)
+                    xyz = self.prevoxel_transforms(xyz).astype(np.float32)
                     voxel_coords, feats, labels, inds_reconstruct = self.voxelizer.voxelize(xyz, point_features, labels)
                     voxel_coords, feats, labels = self.input_transforms(voxel_coords, feats, labels)
                 else:
                     voxel_coords, feats, labels, inds_reconstruct = self.voxelizer.voxelize(xyz, point_features, labels)
+                voxel_coords = voxel_coords.astype(np.float32)
                 voxel_center =  voxel_coords * self.voxel_size + self.voxel_size / 2.0
                 relative_coords = xyz - voxel_center[inds_reconstruct] # N, K, 3
                 data = {
