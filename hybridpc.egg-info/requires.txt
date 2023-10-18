@@ -4,8 +4,10 @@ scipy
 open3d
 wandb
 hydra-core
+opencv-python
 h5py
 arrgh
 plyfile
+imageio-ffmpeg
 pycarus
 ninja

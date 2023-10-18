@@ -40,6 +40,12 @@ class GeneralModel(pl.LightningModule):
         # evaluate instance predictions
         if self.training_stage !=1:
             if self.current_epoch > self.hparams.model.network.prepare_epochs:
+                confusion_matrix = self.metric.compute().cpu().numpy()
+                self.metric.reset()
+                ious = per_class_iou(confusion_matrix) * 100
+                accs = confusion_matrix.diagonal() / confusion_matrix.sum(1) * 100
+                miou = np.nanmean(ious)
+                macc = np.nanmean(accs)
                 all_pred_insts = []
                 all_gt_insts = []
                 all_gt_insts_bbox = []
@@ -56,6 +62,8 @@ class GeneralModel(pl.LightningModule):
                 sem_acc_avg = np.mean(np.array(all_sem_acc))
                 self.print(f"Semantic Accuracy: {sem_acc_avg}")
                 self.print(f"Semantic mean IoU: {sem_miou_avg}")
+                self.print(f"mAcc: {macc}")
+                self.print(f"mIoU: {miou}")
 
                 if self.hparams.model.inference.save_predictions:
                     save_dir = os.path.join(
@@ -68,8 +76,6 @@ class GeneralModel(pl.LightningModule):
                     # )
                     self.print(f"\nPredictions saved at {os.path.abspath(save_dir)}")
 
-                # if self.hparams.model.inference.visualize_udf:
-                #     self.udf_visualization(data_dict, output_dict, latent_code, self.current_epoch, udf_loss)
 
     def test_step(self, data_dict, idx):
         pass

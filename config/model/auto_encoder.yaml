@@ -5,11 +5,11 @@ defaults:
   - base
 
 
-stage1_ckpt_path: '/localhome/zla247/projects/data/output/Scannet/AutoEncoder/LeakyReLU_AutoEncoder_stage-1_voxel-0.1_max-dist-0.1_overfit-True_intake-2_encoder-blocks-pn-6_decoder-inverse_distance-8_latent_64-64_64_lr-0.001_RTX-3090_debug_1/training/epoch=39.ckpt' 
+# ckpt_path: '/localhome/zla247/data/output/Scannet/AutoEncoder/Narval_checkpoints/LeakyReLU_AutoEncoder_stage-1_voxel-0.1_max-dist-0.1_overfit-False_intake--1_encoder-blocks-pn-6_decoder-inverse_distance-8_latent_64-64_64_lr-0.001_Lambda-A6000Ada_run_1_epoch=49.ckpt' 
 
-# stage1_ckpt_path: None
+stage1_ckpt_path: None
 
-# ckpt_path: '/home/zhenli/projects/data/output/Scannet/AutoEncoder/Narval_checkpoints/Decoder-selecting_stage-2_voxel-0.5_overfit-False_intake--1_udf-queries-0.01-2_decoder-Concatenate_local-coords-True_normalize-encoding-True_inverse_distance-1-blocks-5_latent-64-64-64_lr-0.002_cc-narval_run_1_epoch=99.ckpt' 
+ckpt_path: '/localhome/zla247/data/output/Scannet/AutoEncoder/Stage2_checkpoints/LeakyReLU_AutoEncoder_stage-2_voxel-0.1_max-dist-0.1_overfit-False_intake--1_encoder-blocks-pn-6_decoder-inverse_distance-8_latent_64-64_64_lr-0.001_Lambda-RTX6000Ada_run_1_219.ckpt' 
 
 training_stage: 2 # 3 for test
 recompute_udf: False
@@ -54,13 +54,13 @@ network:
     pn_hidden_dim: 64
     pn_n_blocks: 6
     use_unet: True
-    voxel_size_out: 0.5
+    voxel_size_out: 0.1
     feature_in: voxel_features
-    unet_blocks: [1, 2, 3, 4, 5]
+    unet_blocks: [1, 2, 3, 4, 5, 6, 7]
     unet_block_reps: 2
 
   udf_decoder:
-    decoder_type: Concatenate # ConvONet or CrossAttention or Concatenate
+    decoder_type: ConvONet # ConvONet or CrossAttention or Concatenate
     interpolation_mode: inverse_distance # inverse_distance or max or trilinear
     activation: LeakyReLU # LeakyReLU or ReLU or Softplus or ShiftedSoftplus
     local_coords: True
@@ -73,7 +73,7 @@ network:
     num_hidden_layers_after_skip: 2
 
   seg_decoder:
-    decoder_type: Concatenate
+    decoder_type: ConvONet
     interpolation_mode: inverse_distance # inverse_distance or max or trilinear
     activation: ReLU # LeakyReLU or ReLU or Softplus or ShiftedSoftplus
     local_coords: True

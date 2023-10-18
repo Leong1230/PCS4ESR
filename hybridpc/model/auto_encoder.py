@@ -1,5 +1,6 @@
 from pyexpat import features
 from sklearn.metrics import jaccard_score
+import torchmetrics
 import torch
 import time
 import os
@@ -71,6 +72,11 @@ class AutoEncoder(GeneralModel):
             cfg.model.dense_generator.threshold,
             cfg.model.dense_generator.filter_val,
             cfg.model.dense_generator.type
+        )
+
+        self.metric = torchmetrics.ConfusionMatrix(
+            task = 'multiclass',
+            num_classes=cfg.data.classes
         )
 
         # Initialize an empty dictionary to store the latent codes
@@ -260,6 +266,8 @@ class AutoEncoder(GeneralModel):
                 
             # Calculating the metrics
             semantic_predictions = torch.argmax(outputs, dim=-1)  # (B, N)
+            mask = data_dict['labels'] != -1
+            self.metric(semantic_predictions[mask], data_dict['labels'][mask])
             semantic_accuracy = evaluate_semantic_accuracy(semantic_predictions, data_dict["labels"], ignore_label=-1)
             semantic_mean_iou = evaluate_semantic_miou(semantic_predictions, data_dict["labels"], ignore_label=-1)
             self.log(

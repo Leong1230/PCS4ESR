@@ -1,4 +1,5 @@
 import torch
+import numpy as np
 
 
 def evaluate_semantic_accuracy(pred, gt, ignore_label):
@@ -22,3 +23,7 @@ def evaluate_semantic_miou(pred, gt, ignore_label):
         union = torch.count_nonzero(((valid_gt == gt_id) | (valid_pred == gt_id)))
         ious[i] = intersection / union if union != 0 else 0.0  # Avoid division by zero
     return ious.mean().item() * 100 if len(ious) > 0 else 0.0  # Return 0.0 if there is no valid ground truth data
+
+def per_class_iou(hist):
+    with np.errstate(divide='ignore', invalid='ignore'):
+        return np.diag(hist) / (hist.sum(1) + hist.sum(0) - np.diag(hist))

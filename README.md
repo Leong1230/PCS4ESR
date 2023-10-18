@@ -5,13 +5,15 @@
 ### Installed cuda and pytorch
 
 ```
-#module load cuda/11.7 or install cudatoolkit-11.7
+#module load cuda/11.7 or install cudatoolkit-11.7 after conda activate
+
 # create and activate the conda environment
 conda create -n python-3.8 python=3.8
 conda activate python-3.8
+conda install -c "nvidia/label/cuda-11.7.0" cuda-toolkit 
 
 # install PyTorch 2.0
-conda install pytorch pytorch-cuda=11.7 -c pytorch -c nvidia
+# conda install pytorch pytorch-cuda=11.7 -c pytorch -c nvidia
 
 # installpycarus
 pip install pycarus 

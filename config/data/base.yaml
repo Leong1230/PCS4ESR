@@ -2,8 +2,8 @@
 
 dataset_root_path: ${project_root_path}/../../local_data
 # dataset_root_path: ${project_root_path}/../../zla247/data
-batch_size: 2
-num_workers: 2
+batch_size: 4
+num_workers: 4
 voxel_size: 0.1 #scannet default: 0.02
 num_point: 200
 full_scale: [128, 512]
@@ -28,8 +28,8 @@ over_fitting: False # whether to use only one voxel for training and validation
 
 augmentation:
   use_aug: True
-  method: N-times # N-times or original
-  loops: 2
+  method: original # N-times or original
+  loops: 1
   color_trans_ratio: 0.1
   color_jitter_std: 0.05
   hue_max: 0.5
