@@ -7,20 +7,13 @@ defaults:
 
 # ckpt_path: '/localhome/zla247/data/output/Scannet/AutoEncoder/Narval_checkpoints/LeakyReLU_AutoEncoder_stage-1_voxel-0.1_max-dist-0.1_overfit-False_intake--1_encoder-blocks-pn-6_decoder-inverse_distance-8_latent_64-64_64_lr-0.001_Lambda-A6000Ada_run_1_epoch=49.ckpt' 
 
-stage1_ckpt_path: None
+# stage1_ckpt_path: None
 
-ckpt_path: '/localhome/zla247/data/output/Scannet/AutoEncoder/Stage2_checkpoints/LeakyReLU_AutoEncoder_stage-2_voxel-0.1_max-dist-0.1_overfit-False_intake--1_encoder-blocks-pn-6_decoder-inverse_distance-8_latent_64-64_64_lr-0.001_Lambda-RTX6000Ada_run_1_219.ckpt' 
+stage1_ckpt_path: /localhome/zla247/data/output/Scannet/AutoEncoder/Stage1_checkpoints/Interpolated_LeakyReLU_AutoEncoder_stage-1_voxel-0.1_max-dist-0.1_overfit-False_intake--1_encoder-blocks-pn-6_decoder-ConvONet-inverse_distance-8_latent_64-64_64_lr-0.001_Lambda-RTX6000Ada_run_1_epoch=349.ckpt
+# ckpt_path: '/localhome/zla247/data/output/Scannet/AutoEncoder/Stage2_checkpoints/LeakyReLU_AutoEncoder_stage-2_voxel-0.1_max-dist-0.1_overfit-False_intake--1_encoder-blocks-pn-6_decoder-inverse_distance-8_latent_64-64_64_lr-0.001_Lambda-RTX6000Ada_run_1_219.ckpt' 
 
 training_stage: 2 # 3 for test
 recompute_udf: False
-
-trainer:
-  max_epochs: 700
-
-optimizer:
-    target_: torch.optim.Adam
-    lr: 0.001
-    decreased_by: 10
 
 loss:
   norm_initialization: True # initialize latent code by norm distirbution
@@ -28,8 +21,6 @@ loss:
   use_reg: True # whether to use regularization
   code_reg_lambda: 1e-4 # regularization lambda
 
-lr_decay:
-  decay_start_epoch: 350
 
 network:
   module: AutoEncoder
@@ -42,7 +33,7 @@ network:
 
   positional_encoding: Fourier # Triplane
   latent_dim: 64 #
-  use_decoder: False
+  use_decoder: True
 
   prepare_epochs: 10
 

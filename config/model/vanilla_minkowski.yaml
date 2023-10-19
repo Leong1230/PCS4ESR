@@ -18,16 +18,14 @@ stage2_ckpt_path: None
 #   TensorBoardLogger:
 #     name: HybrdPC
 
-trainer:
-  max_epochs: 512
 
-optimizer:
-    target_: torch.optim.Adam
-    lr: 0.002
-    inner_loop_steps: 3
+# optimizer:
+#     target_: torch.optim.Adam
+#     lr: 0.002
+#     inner_loop_steps: 3
 
-lr_decay:
-  decay_start_epoch: 350
+# lr_decay:
+#   decay_start_epoch: 350
 
 training_stage: 2
 
@@ -58,8 +56,8 @@ network:
     input_dim: 3
     feature_dim: 64
     hidden_dim: 64
-    num_hidden_layers_before_skip: 5
-    num_hidden_layers_after_skip: 1
+    num_hidden_layers_before_skip: 2
+    num_hidden_layers_after_skip: 2
 
 inference:
   split: val

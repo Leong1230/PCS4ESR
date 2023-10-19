@@ -74,7 +74,7 @@ class GeneralDataset(Dataset):
             input_transforms = [
                 # t.RandomDropout(0.2),
                 # t.RandomHorizontalFlip(self.ROTATION_AXIS, is_temporal=False),
-                # t.ChromaticAutoContrast(),
+                t.ChromaticAutoContrast(),
                 t.ChromaticTranslation(cfg.data.augmentation.color_trans_ratio),
                 t.ChromaticJitter(cfg.data.augmentation.color_jitter_std),
                 t.HueSaturationTranslation(

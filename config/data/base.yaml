@@ -2,8 +2,8 @@
 
 dataset_root_path: ${project_root_path}/../../local_data
 # dataset_root_path: ${project_root_path}/../../zla247/data
-batch_size: 4
-num_workers: 4
+batch_size: 2
+num_workers: 2
 voxel_size: 0.1 #scannet default: 0.02
 num_point: 200
 full_scale: [128, 512]
@@ -22,9 +22,9 @@ udf_queries:
   queries_ratio_per_std: 0.5
   max_dist: 0.1
 in_memory: True # whether precompute voxel indices and load voxel into memory
-take: -1 # how many data to take for training and validation, -1 means all
+take: 2 # how many data to take for training and validation, -1 means all
 intake_start: 0
-over_fitting: False # whether to use only one voxel for training and validation
+over_fitting: True # whether to use only one voxel for training and validation
 
 augmentation:
   use_aug: True

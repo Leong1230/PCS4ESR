@@ -13,8 +13,7 @@
             "justMyCode": true,
             "args": [
                 "model=auto_encoder",
-                "data=scannet",
-                "model.trainer.max_epochs=900"
+                "data=scannet"
             ]
         }
     ]

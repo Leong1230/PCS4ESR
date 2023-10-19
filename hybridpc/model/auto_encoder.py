@@ -74,11 +74,6 @@ class AutoEncoder(GeneralModel):
             cfg.model.dense_generator.type
         )
 
-        self.metric = torchmetrics.ConfusionMatrix(
-            task = 'multiclass',
-            num_classes=cfg.data.classes
-        )
-
         # Initialize an empty dictionary to store the latent codes
         self.latent_codes = {}
         self.frames = {}
@@ -184,14 +179,7 @@ class AutoEncoder(GeneralModel):
 
         return loss
 
-    def configure_optimizers(self):
-        if self.training_stage == 1:
-            params_to_optimize = list(self.encoder.parameters()) + list(self.udf_decoder.parameters())
-        else :
-            params_to_optimize = list(self.seg_backbone.parameters()) + list(self.seg_decoder.parameters())
-        
-        optimizer = torch.optim.Adam(params_to_optimize, lr=self.hparams.model.optimizer.lr)
-        return optimizer
+
     
     def training_step(self, data_dict):
         if self.training_stage == 1:
@@ -235,12 +223,12 @@ class AutoEncoder(GeneralModel):
             return 0
     
 
-    def on_train_epoch_end(self):
-        # Update the learning rates for both optimizers
-        cosine_lr_decay(
-            self.trainer.optimizers[0], self.hparams.model.optimizer.lr, self.current_epoch,
-            self.hparams.model.lr_decay.decay_start_epoch, self.hparams.model.trainer.max_epochs, 1e-6
-        )
+    # def on_train_epoch_end(self):
+    #     # Update the learning rates for both optimizers
+    #     cosine_lr_decay(
+    #         self.trainer.optimizers[0], self.hparams.model.optimizer.lr, self.current_epoch,
+    #         self.hparams.model.lr_decay.decay_start_epoch, self.hparams.model.trainer.max_epochs, 1e-6
+    #     )
 
     def validation_step(self, data_dict, idx):
         torch.set_grad_enabled(False)
@@ -257,9 +245,9 @@ class AutoEncoder(GeneralModel):
             batch_size = self.hparams.data.batch_size
             encodes_dict, values, outputs = self.forward(data_dict)
             seg_loss = self.seg_loss(data_dict, outputs)
+            self.log("val/seg_loss", seg_loss, on_step=True, on_epoch=True, sync_dist=True, batch_size=batch_size)
             if self.hparams.model.recompute_udf:
                 udf_loss = self.udf_loss(encodes_dict, values)
-                self.log("val/seg_loss", seg_loss, on_step=True, on_epoch=True, sync_dist=True, batch_size=batch_size)
                 self.log("val/udf_loss", udf_loss, on_step=True, on_epoch=True, sync_dist=True, batch_size=batch_size)
                             # Print the loss for this step
                 print(f"Scene: {scene_name}, Test UDF Loss: {udf_loss.item()}")

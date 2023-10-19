@@ -10,6 +10,7 @@ import torchmetrics
 import open3d as o3d
 import pytorch_lightning as pl
 import matplotlib.pyplot as plt
+import pl_bolts
 import hydra
 from hybridpc.optimizer.optimizer import cosine_lr_decay
 from hybridpc.model.module import Backbone, ImplicitDecoder, Dense_Generator
@@ -22,16 +23,52 @@ class GeneralModel(pl.LightningModule):
         self.save_hyperparameters()
         self.training_stage = cfg.model.training_stage
         self.val_test_step_outputs = []
+        self.best_metric_value = -np.inf
+        self.metric = torchmetrics.ConfusionMatrix(
+            task = 'multiclass',
+            num_classes=cfg.data.classes
+        )
 
+
+    def configure_optimizers(self):
+        if self.training_stage == 1:
+            params_to_optimize = list(self.encoder.parameters()) + list(self.udf_decoder.parameters())
+        else :
+            params_to_optimize = list(self.seg_backbone.parameters()) + list(self.seg_decoder.parameters())
+        
+        if self.hparams.model.optimizer.name == "SGD":
+            optimizer = torch.optim.SGD(
+                params_to_optimize,
+                lr=self.hparams.model.optimizer.lr,
+                momentum=0.9,
+                weight_decay=1e-4,
+            )
+        elif self.hparams.model.optimizer.name == 'Adam':
+            optimizer = torch.optim.Adam(
+                params_to_optimize,
+                lr=self.hparams.model.optimizer.lr,
+                betas=(0.9, 0.999),
+                weight_decay=1e-4
+            )
+        else:
+            logging.error('Optimizer type not supported')
+
+        scheduler = pl_bolts.optimizers.LinearWarmupCosineAnnealingLR(
+            optimizer,
+            warmup_epochs=int(self.hparams.model.optimizer.warmup_steps_ratio * self.hparams.model.trainer.max_steps),
+            max_epochs=self.hparams.model.trainer.max_steps,
+            eta_min=0,
+        )
+        return {
+            "optimizer": optimizer,
+            "lr_scheduler": {
+                "scheduler": scheduler,
+                "interval": "step"
+            }
+        }
     
     def training_step(self, data_dict):
         pass 
-
-    # def on_train_epoch_end(self):
-    #     cosine_lr_decay(
-    #         self.trainer.optimizers[0], self.hparams.model.optimizer.lr, self.current_epoch,
-    #         self.hparams.model.lr_decay.decay_start_epoch, self.hparams.model.trainer.max_epochs, 1e-6
-    #     )
 
     def validation_step(self, data_dict, idx):
         pass
@@ -46,6 +83,16 @@ class GeneralModel(pl.LightningModule):
                 accs = confusion_matrix.diagonal() / confusion_matrix.sum(1) * 100
                 miou = np.nanmean(ious)
                 macc = np.nanmean(accs)
+                def compare(prev, cur):
+                    return prev < cur 
+                
+                if compare(self.best_metric_value, miou):
+                    self.best_metric_value = miou
+                self.log("val_best_mIoU", self.best_metric_value, logger=True)
+                self.print(f"mAcc: {macc}")
+                self.print(f"mIoU: {miou}")
+
+                # scene level averaged metrics
                 all_pred_insts = []
                 all_gt_insts = []
                 all_gt_insts_bbox = []
@@ -62,19 +109,18 @@ class GeneralModel(pl.LightningModule):
                 sem_acc_avg = np.mean(np.array(all_sem_acc))
                 self.print(f"Semantic Accuracy: {sem_acc_avg}")
                 self.print(f"Semantic mean IoU: {sem_miou_avg}")
-                self.print(f"mAcc: {macc}")
-                self.print(f"mIoU: {miou}")
 
-                if self.hparams.model.inference.save_predictions:
-                    save_dir = os.path.join(
-                        self.hparams.exp_output_root_path, 'inference', self.hparams.model.inference.split,
-                        'predictions'
-                    )
-                    # save_prediction(
-                    #     save_dir, all_pred_insts, self.hparams.cfg.data.mapping_classes_ids,
-                    #     self.hparams.cfg.data.ignore_classes
-                    # )
-                    self.print(f"\nPredictions saved at {os.path.abspath(save_dir)}")
+
+                # if self.hparams.model.inference.save_predictions:
+                #     save_dir = os.path.join(
+                #         self.hparams.exp_output_root_path, 'inference', self.hparams.model.inference.split,
+                #         'predictions'
+                #     )
+                #     # save_prediction(
+                #     #     save_dir, all_pred_insts, self.hparams.cfg.data.mapping_classes_ids,
+                #     #     self.hparams.cfg.data.ignore_classes
+                #     # )
+                #     self.print(f"\nPredictions saved at {os.path.abspath(save_dir)}")
 
 
     def test_step(self, data_dict, idx):

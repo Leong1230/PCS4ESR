@@ -35,7 +35,7 @@ class VanillaMinkowski(GeneralModel):
             input_channel = cfg.model.network.latent_dim + cfg.model.network.use_xyz * 3 + cfg.model.network.use_color * 3 + cfg.model.network.use_normal * 3 
         else: 
             input_channel = cfg.model.network.use_xyz * 3 + cfg.model.network.use_color * 3 + cfg.model.network.use_normal * 3
-        self.backbone = MinkUNetBackbone(
+        self.seg_backbone = MinkUNetBackbone(
             input_channel,
             output_channel
         )
@@ -51,11 +51,11 @@ class VanillaMinkowski(GeneralModel):
 
     def forward(self, data_dict, latent_code):
         if self.feature_in == "mixed_latent":
-            backbone_output_dict = self.backbone(
+            backbone_output_dict = self.seg_backbone(
             torch.cat((latent_code, data_dict['voxel_features']), dim=1), data_dict["voxel_coords"], data_dict["voxel_indices"][:, 0]
         )
         else:
-            backbone_output_dict = self.backbone(
+            backbone_output_dict = self.seg_backbone(
                 data_dict["voxel_features"], data_dict["voxel_coords"], data_dict["voxel_indices"]
             )
 
@@ -71,10 +71,10 @@ class VanillaMinkowski(GeneralModel):
 
         return seg_loss
 
-    def configure_optimizers(self):
-        outer_optimizer = torch.optim.Adam(self.parameters(), lr=self.hparams.model.optimizer.lr)
+    # def configure_optimizers(self):
+    #     outer_optimizer = torch.optim.Adam(self.parameters(), lr=self.hparams.model.optimizer.lr)
 
-        return outer_optimizer
+    #     return outer_optimizer
 
     
     def training_step(self, data_dict):
@@ -97,15 +97,15 @@ class VanillaMinkowski(GeneralModel):
 
         return seg_loss
 
-    def on_train_epoch_end(self):
-        # Update the learning rates for both optimizers
-        cosine_lr_decay(
-            self.trainer.optimizers[0], self.hparams.model.optimizer.lr, self.current_epoch,
-            self.hparams.model.lr_decay.decay_start_epoch, self.hparams.model.trainer.max_epochs, 1e-6
-        )
+    # def on_train_epoch_end(self):
+    #     # Update the learning rates for both optimizers
+    #     cosine_lr_decay(
+    #         self.trainer.optimizers[0], self.hparams.model.optimizer.lr, self.current_epoch,
+    #         self.hparams.model.lr_decay.decay_start_epoch, self.hparams.model.trainer.max_epochs, 1e-6
+    #     )
 
     def validation_step(self, data_dict, idx):
-        torch.set_grad_enabled(False)
+        # torch.set_grad_enabled(False)
         scene_name = data_dict['scene_names'][0]  # Assume scene_names is a list of strings
         voxel_num = data_dict["voxel_coords"].shape[0] # B voxels
         latent_code = torch.ones(voxel_num, self.hparams.model.network.latent_dim, requires_grad=True, device=self.device)
@@ -116,6 +116,8 @@ class VanillaMinkowski(GeneralModel):
 
       # Calculating the metrics
         semantic_predictions = torch.argmax(output_dict['semantic_scores'], dim=-1)  # (B, N)
+        mask = data_dict['labels'] != -1
+        self.metric(semantic_predictions[mask], data_dict['labels'][mask])
         semantic_accuracy = evaluate_semantic_accuracy(semantic_predictions, data_dict["labels"], ignore_label=-1)
         semantic_mean_iou = evaluate_semantic_miou(semantic_predictions, data_dict["labels"], ignore_label=-1)
         self.log(
@@ -125,10 +127,9 @@ class VanillaMinkowski(GeneralModel):
             "val_eval/semantic_mean_iou", semantic_mean_iou, on_step=False, on_epoch=True, sync_dist=True, batch_size=1
         )
         self.val_test_step_outputs.append((semantic_accuracy, semantic_mean_iou))
-        print(f"Scene: {scene_name}, Semantic Accuracy: {semantic_accuracy:.4f}, Semantic Mean IoU: {semantic_mean_iou:.4f}")
-        torch.set_grad_enabled(True)
-        if self.hparams.model.inference.visualization:
-                self.udf_visualization(data_dict, self.current_epoch, semantic_predictions)
+        # torch.set_grad_enabled(True)
+        # if self.hparams.model.inference.visualization:
+        #         self.udf_visualization(data_dict, self.current_epoch, semantic_predictions)
 
 
     def udf_visualization(self, data_dict, current_epoch, semantic_predictions):

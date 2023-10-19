@@ -21,11 +21,11 @@ defaults:
 # experiment_name: ${model.network.udf_decoder.activation}_${model.network.module}_stage-${model.training_stage}_voxel-${data.voxel_size}_max-dist-${data.udf_queries.max_dist}_overfit-${data.over_fitting}_intake-${data.take}_encoder-blocks-pn-${model.network.encoder.pn_n_blocks}_decoder-${model.network.udf_decoder.interpolation_mode}-${model.network.udf_decoder.k_neighbors}_latent_${model.network.encoder.pn_hidden_dim}-${model.network.latent_dim}_${model.network.udf_decoder.hidden_dim}_lr-${model.optimizer.lr}_RTX-3090_debug_1
 
 #Auto-Encoder stage 2
-experiment_name: ${model.network.seg_decoder.activation}_${model.network.module}_stage-${model.training_stage}_voxel-${data.voxel_size}_max-dist-${data.udf_queries.max_dist}_overfit-${data.over_fitting}_intake-${data.take}_encoder-blocks-pn-${model.network.encoder.pn_n_blocks}_${model.network.seg_decoder.interpolation_mode}-${model.network.udf_decoder.k_neighbors}_latent-${model.network.encoder.pn_hidden_dim}-${model.network.latent_dim}-${model.network.seg_decoder.feature_dim}_${model.network.seg_decoder.hidden_dim}_lr-${model.optimizer.lr}_RTX-3090_debug_1
+experiment_name: lr-scheduler_mAcc_${model.network.seg_decoder.activation}_${model.network.module}_stage-${model.training_stage}_voxel-${data.voxel_size}_max-dist-${data.udf_queries.max_dist}_overfit-${data.over_fitting}_intake-${data.take}_encoder-blocks-pn-${model.network.encoder.pn_n_blocks}_${model.network.seg_decoder.interpolation_mode}-${model.network.udf_decoder.k_neighbors}_latent-${model.network.encoder.pn_hidden_dim}-${model.network.latent_dim}-${model.network.seg_decoder.feature_dim}_${model.network.seg_decoder.hidden_dim}_lr-${model.optimizer.lr}_RTX-3090_debug_1
 
 # experiment_name: Auto_encoder_debug_1
 #Vanilla-Minkowski
-# experiment_name: LeakyReLU_${model.network.module}_Fixed-Unet-voxel-${data.voxel_size}_overfit-${data.over_fitting}_intake-${data.take}_use-decoder-${model.network.use_decoder}_neighbors-${model.network.seg_decoder.k_neighbors}-blocks-${model.network.seg_decoder.num_hidden_layers_before_skip}_latent-${model.network.latent_dim}-${model.network.seg_decoder.hidden_dim}_lr-${model.optimizer.lr}_test
+# experiment_name: lr-scheduler_mAcc_${model.network.module}_Fixed-Unet-voxel-${data.voxel_size}_overfit-${data.over_fitting}_intake-${data.take}_use-decoder-${model.network.use_decoder}_neighbors-${model.network.seg_decoder.k_neighbors}-blocks-${model.network.seg_decoder.num_hidden_layers_before_skip}_latent-${model.network.latent_dim}-${model.network.seg_decoder.hidden_dim}_lr-${model.optimizer.lr}_debug
 # experiment_name: debug
 project_root_path: ${hydra:runtime.cwd}
 exp_output_root_path: ${project_root_path}/../data/output/${data.dataset}/${model.network.module}/${experiment_name}
