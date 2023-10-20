@@ -43,6 +43,20 @@ class GeneralModel(pl.LightningModule):
                 momentum=0.9,
                 weight_decay=1e-4,
             )
+            scheduler = pl_bolts.optimizers.LinearWarmupCosineAnnealingLR(
+                optimizer,
+                warmup_epochs=int(self.hparams.model.optimizer.warmup_steps_ratio * self.hparams.model.trainer.max_steps),
+                max_epochs=self.hparams.model.trainer.max_steps,
+                eta_min=0,
+            )
+            return {
+                "optimizer": optimizer,
+                "lr_scheduler": {
+                    "scheduler": scheduler,
+                    "interval": "step"
+                }
+            }
+
         elif self.hparams.model.optimizer.name == 'Adam':
             optimizer = torch.optim.Adam(
                 params_to_optimize,
@@ -50,26 +64,22 @@ class GeneralModel(pl.LightningModule):
                 betas=(0.9, 0.999),
                 weight_decay=1e-4
             )
+            return optimizer
+
         else:
             logging.error('Optimizer type not supported')
 
-        scheduler = pl_bolts.optimizers.LinearWarmupCosineAnnealingLR(
-            optimizer,
-            warmup_epochs=int(self.hparams.model.optimizer.warmup_steps_ratio * self.hparams.model.trainer.max_steps),
-            max_epochs=self.hparams.model.trainer.max_steps,
-            eta_min=0,
-        )
-        return {
-            "optimizer": optimizer,
-            "lr_scheduler": {
-                "scheduler": scheduler,
-                "interval": "step"
-            }
-        }
     
     def training_step(self, data_dict):
         pass 
 
+    def on_train_epoch_end(self):
+        if self.hparams.model.optimizer.name == 'Adam':
+            # Update the learning rates for Adam optimizers
+            cosine_lr_decay(
+                self.trainer.optimizers[0], self.hparams.model.optimizer.lr, self.current_epoch,
+                self.hparams.model.lr_decay.decay_start_epoch, self.hparams.model.trainer.max_epochs, 1e-6
+            )
     def validation_step(self, data_dict, idx):
         pass
 

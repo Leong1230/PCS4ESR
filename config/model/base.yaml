@@ -16,8 +16,8 @@ trainer:
   devices: auto
   strategy: ddp
   num_nodes: 1
-  max_epochs: 800
-  max_steps: 500
+  max_epochs: 80
+  max_steps: 100000
   num_sanity_val_steps: 8
   log_every_n_steps: 10
   check_val_every_n_epoch: 5
@@ -35,9 +35,12 @@ checkpoint_monitor:
 
 
 optimizer:
-  name: SGD # SGD or Adam
-  lr: 0.1
+  name: Adam # SGD or Adam
+  lr: 0.001
   warmup_steps_ratio: 0.1
+
+lr_decay: # for Adam
+  decay_start_epoch: 25
 
 inference:
   term: UDF # UDF or Seg
