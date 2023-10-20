@@ -99,6 +99,8 @@ class GeneralModel(pl.LightningModule):
                 if compare(self.best_metric_value, miou):
                     self.best_metric_value = miou
                 self.log("val_best_mIoU", self.best_metric_value, logger=True)
+                self.log("val_mIoU", miou, logger=True)
+                self.log("val_mAcc", macc, logger=True)
                 self.print(f"mAcc: {macc}")
                 self.print(f"mIoU: {miou}")
 

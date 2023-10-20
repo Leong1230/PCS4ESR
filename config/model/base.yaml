@@ -16,7 +16,7 @@ trainer:
   devices: auto
   strategy: ddp
   num_nodes: 1
-  max_epochs: 80
+  max_epochs: 700
   max_steps: 100000
   num_sanity_val_steps: 8
   log_every_n_steps: 10
@@ -40,7 +40,7 @@ optimizer:
   warmup_steps_ratio: 0.1
 
 lr_decay: # for Adam
-  decay_start_epoch: 25
+  decay_start_epoch: 250
 
 inference:
   term: UDF # UDF or Seg
