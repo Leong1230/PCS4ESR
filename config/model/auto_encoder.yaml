@@ -4,13 +4,19 @@
 defaults:
   - base
 
-
-# ckpt_path: '/localhome/zla247/data/output/Scannet/AutoEncoder/Narval_checkpoints/LeakyReLU_AutoEncoder_stage-1_voxel-0.1_max-dist-0.1_overfit-False_intake--1_encoder-blocks-pn-6_decoder-inverse_distance-8_latent_64-64_64_lr-0.001_Lambda-A6000Ada_run_1_epoch=49.ckpt' 
-
 # stage1_ckpt_path: None
 
-stage1_ckpt_path: /localhome/zla247/data/output/Scannet/AutoEncoder/Stage1_checkpoints/Interpolated_LeakyReLU_AutoEncoder_stage-1_voxel-0.1_max-dist-0.1_overfit-False_intake--1_encoder-blocks-pn-6_decoder-ConvONet-inverse_distance-8_latent_64-64_64_lr-0.001_Lambda-RTX6000Ada_run_1_epoch=349.ckpt
-# ckpt_path: '/localhome/zla247/data/output/Scannet/AutoEncoder/Stage2_checkpoints/LeakyReLU_AutoEncoder_stage-2_voxel-0.1_max-dist-0.1_overfit-False_intake--1_encoder-blocks-pn-6_decoder-inverse_distance-8_latent_64-64_64_lr-0.001_Lambda-RTX6000Ada_run_1_219.ckpt' 
+# local machine
+# stage1_ckpt_path: /localhome/zla247/data/output/Scannet/AutoEncoder/Stage1_checkpoints/Interpolated_LeakyReLU_AutoEncoder_stage-1_voxel-0.1_max-dist-0.1_overfit-False_intake--1_encoder-blocks-pn-6_decoder-ConvONet-inverse_distance-8_latent_64-64_64_lr-0.001_Lambda-RTX6000Ada_run_1_epoch=349.ckpt
+
+#0.5
+# stage1_ckpt_path: '/home/zla247/scratch/data/output/Scannet/AutoEncoder/NarvalCheckpoints/Interpolated_LeakyReLU_AutoEncoder_stage-1_voxel-0.5_max-dist-0.1_overfit-False_intake--1_encoder-blocks-pn-6_decoder-Concatenate-inverse_distance-8_latent_64-64_64_lr-0.001_Lambda-RTX6000Ada_run_1_epoch=309.ckpt'
+
+#0.1
+stage1_ckpt_path: '/home/zla247/scratch/data/output/Scannet/AutoEncoder/NarvalCheckpoints/Interpolated_LeakyReLU_AutoEncoder_stage-1_voxel-0.1_max-dist-0.1_overfit-False_intake--1_encoder-blocks-pn-6_decoder-ConvONet-inverse_distance-8_latent_64-64_64_lr-0.001_Lambda-RTX6000Ada_run_1_epoch=349.ckpt'
+
+#0.02 Concatenate
+# stage1_ckpt_path: '/home/zla247/scratch/data/output/Scannet/AutoEncoder/LeakyReLU_AutoEncoder_stage-1_voxel-0.02_max-dist-0.5_overfit-False_intake--1_encoder-blocks-pn-3_decoder-inverse_distance-8_latent_64-64_64_lr-0.0005_cc-narval_run_1/training/epoch=129.ckpt'
 
 training_stage: 2 # 3 for test
 recompute_udf: False
