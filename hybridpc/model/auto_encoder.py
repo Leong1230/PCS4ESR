@@ -11,7 +11,6 @@ import imageio
 import math
 import torchmetrics
 import open3d as o3d
-import cv2
 import pytorch_lightning as pl
 import matplotlib
 matplotlib.use('Agg')
