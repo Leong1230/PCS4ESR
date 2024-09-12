@@ -1,0 +1,7 @@
+# Managed by Hydra
+
+defaults:
+  - base
+
+dataset: SceneNN
+dataset_path: ${data.dataset_root_path}/scenenn_seg_76_raw/scenenn_sub_data

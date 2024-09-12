@@ -5,27 +5,15 @@
 ### Installed cuda and pytorch
 
 ```
-#module load cuda/11.7 or install cudatoolkit-11.7 after conda activate
 
 # create and activate the conda environment
-conda create -n python-3.8 python=3.8
-conda activate python-3.8
-conda install -c "nvidia/label/cuda-11.7.0" cuda-toolkit 
+conda create -n python-3.10 python=3.10
+conda activate python-3.10
+conda install -c "nvidia/label/cuda-11.8.0" cuda-toolkit 
 
-# install PyTorch 2.0
-# conda install pytorch pytorch-cuda=11.7 -c pytorch -c nvidia
+# install PyTorch 2.x.x
+conda install pytorch==2.0.0 torchvision==0.15.0 torchaudio==2.0.0 pytorch-cuda=11.8 -c pytorch -c nvidia
 
-# installpycarus
-pip install pycarus 
-```
-
-### Installed torch dependencies for pycarus(changed torch version) 
-
-```
-source ./python-3.8/lib/python3.8/site-packages/pycarus/install_torch.sh
-
-# may need uninstall torchaudio if got error
-pip uninstall torchaudio
 # install Python libraries
 pip install . 
 ```
@@ -39,19 +27,31 @@ conda install openblas-devel --no-deps -c anaconda
 # (computecanada) flexiblas
 module load flexiblas
 
-# install Python libraries
+# install Minkowski Engine
 cd ~/projects/MinkowskiEngine
 pip install . 
+
+#install torch-scatter, nksr, pytorch3d
+pip install torch-scatter -f https://data.pyg.org/whl/torch-2.0.0+cu118.html 
+pip install nksr -f https://nksr.huangjh.tech/whl/torch-2.0.0+cu118.html 
+pip install "git+https://github.com/facebookresearch/pytorch3d.git@stable"
+
+
+# compile FPT cuda source code
+cd ~/projects/HybridPCLearning_new
+cd hybridpc/cuda_ops
+pip3 install .
+
+# compile nearest_neighbor source code
+cd ~/projects/hybridpc/tools/nearest_neighbors
+python setup.py install
+
+# install PointTransformer requirement
+
+pip install spconv-cu118 timm  
+pip install flash-attn --no-build-isolation
+
 ```
-
-### replace pcd.py
-
-```
-# /local-scratch/localhome/zla247/anaconda3/envs/python-3.8/lib/python3.8/site-packages/pycarus/geometry/pcd.py 
-
-```
-
-
 
 
 

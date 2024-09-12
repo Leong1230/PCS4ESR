@@ -31,7 +31,7 @@ class Voxelizer:
           rotation_augmentation_bound: None or ((np.pi / 6, np.pi / 6), None, None) for 3 axis.
             Use random order of x, y, z to prevent bias.
           translation_augmentation_bound: ((-5, 5), (0, 0), (-10, 10))
-          : label assigned for ignore (not a training label).
+          ignore_label: label assigned for ignore (not a training label).
         '''
         self.voxel_size = voxel_size
         self.clip_bound = clip_bound
@@ -139,4 +139,4 @@ class Voxelizer:
         if link is not None:
             return coords_aug, feats, labels, np.array(inds_reconstruct), link[inds]
 
-        return coords_aug, feats, labels, np.array(inds_reconstruct)
+        return coords_aug.astype(np.float32), feats.astype(np.float32), labels.astype(np.float32), np.array(inds_reconstruct)

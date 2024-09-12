@@ -68,11 +68,11 @@ network:
   seg_decoder:
     input_dim: 3
     hidden_dim: 64
-    num_hidden_layers_before_skip: 2
-    num_hidden_layers_after_skip: 2
+    num_hidden_layers_before: 2
+    num_hidden_layers_after: 2
 
   functa_decoder:
     input_dim: 3
     hidden_dim: 64
-    num_hidden_layers_before_skip: 2
-    num_hidden_layers_after_skip: 2
+    num_hidden_layers_before: 2
+    num_hidden_layers_after: 2

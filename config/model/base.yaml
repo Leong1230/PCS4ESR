@@ -1,13 +1,11 @@
 # Managed by Hydra
 
-# ckpt_path: /localhome/zla247/projects/data/output/Scannet/AutoDecoder/stage-1_AutoDecoder_overfit-True_intake-10_0.5_latent-64_norm-initial_inner-steps-300_lr-0.002-0.001-0.005_reg-True_reg-lambda-0.0001_L1-blocks-[1, 2, 3]-[1, 2, 3]_run_1/training/epoch=149.ckpt
-# ckpt_path: '/home/zhenli/projects/data/output/Scannet/AutoEncoder/Narval_checkpoints/Decoder-selecting_stage-2_voxel-0.5_overfit-False_intake--1_udf-queries-0.01-2_decoder-Concatenate_local-coords-True_normalize-encoding-True_inverse_distance-1-blocks-5_latent-64-64-64_lr-0.002_cc-narval_run_1_epoch=99.ckpt' 
 ckpt_path: 
 
 logger:
   # https://pytorch-lightning.readthedocs.io/en/stable/extensions/generated/pytorch_lightning.loggers.WandbLogger.html
   _target_: pytorch_lightning.loggers.WandbLogger
-  project: HybridPC
+  project: Stage-1-Reconstruction
   name: ${experiment_name}
 
 # https://pytorch-lightning.readthedocs.io/en/stable/common/trainer.html
@@ -16,31 +14,29 @@ trainer:
   devices: auto
   strategy: ddp
   num_nodes: 1
-  max_epochs: 700
-  max_steps: 100000
+  max_epochs: 800
+  max_steps: 200000
   num_sanity_val_steps: 8
-  log_every_n_steps: 10
-  check_val_every_n_epoch: 5
+  check_val_every_n_epoch: 4
   profiler: simple
 
 # https://pytorch-lightning.readthedocs.io/en/stable/api/pytorch_lightning.callbacks.ModelCheckpoint.html
 checkpoint_monitor:
   _target_: pytorch_lightning.callbacks.ModelCheckpoint
   save_top_k: -1
-  every_n_epochs: 5              
+  every_n_epochs: 4
   filename: "{epoch}"
   dirpath: ${exp_output_root_path}/training
 
 
-
-
 optimizer:
   name: Adam # SGD or Adam
-  lr: 0.001
+  lr: 0.004
   warmup_steps_ratio: 0.1
 
 lr_decay: # for Adam
   decay_start_epoch: 250
+
 
 inference:
   term: UDF # UDF or Seg

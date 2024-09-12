@@ -8,14 +8,19 @@ import numpy as np
 import math
 import torchmetrics
 import open3d as o3d
+import importlib
 import pytorch_lightning as pl
 import matplotlib.pyplot as plt
 import pl_bolts
 import hydra
+from collections import OrderedDict
+from typing import Mapping, Any, Optional
+from pycg import exp, image
 from hybridpc.optimizer.optimizer import cosine_lr_decay
-from hybridpc.model.module import Backbone, ImplicitDecoder, Dense_Generator
-from hybridpc.evaluation.semantic_segmentation import *
+from hybridpc.model.module import Backbone, Dense_Generator
 from torch.nn import functional as F
+from lightning.pytorch.utilities import grad_norm
+
 
 class GeneralModel(pl.LightningModule):
     def __init__(self, cfg):
@@ -23,18 +28,20 @@ class GeneralModel(pl.LightningModule):
         self.save_hyperparameters()
         self.training_stage = cfg.model.training_stage
         self.val_test_step_outputs = []
-        self.best_metric_value = -np.inf
-        self.metric = torchmetrics.ConfusionMatrix(
-            task = 'multiclass',
-            num_classes=cfg.data.classes
-        )
-
+        # For recording test information
+        # step -> log_name -> log_value (list of ordered-dict)
+        self.test_logged_values = []
+        self.record_folder = None
+        self.record_headers = []
+        self.record_data_cache = {}
+        self.last_test_valid = False
 
     def configure_optimizers(self):
-        if self.training_stage == 1:
-            params_to_optimize = list(self.encoder.parameters()) + list(self.udf_decoder.parameters())
-        else :
-            params_to_optimize = list(self.seg_backbone.parameters()) + list(self.seg_decoder.parameters())
+        # params_to_optimize = list(self.encoder.parameters()) + list(self.mask_decoder.parameters()) + list(self.udf_decoder.parameters())
+        # if hasattr(self, 'mask_decoder'):
+        #     params_to_optimize += list(self.mask_decoder.parameters())
+    
+        params_to_optimize = self.parameters()
         
         if self.hparams.model.optimizer.name == "SGD":
             optimizer = torch.optim.SGD(
@@ -62,16 +69,25 @@ class GeneralModel(pl.LightningModule):
                 params_to_optimize,
                 lr=self.hparams.model.optimizer.lr,
                 betas=(0.9, 0.999),
-                weight_decay=1e-4
+                weight_decay=1e-4,
             )
             return optimizer
 
         else:
             logging.error('Optimizer type not supported')
 
-    
     def training_step(self, data_dict):
         pass 
+
+    # def on_before_optimizer_step(self, optimizer, optimizer_idx):
+    #     # Compute the 2-norm for each layer
+    #     # If using mixed precision, the gradients are already unscaled here
+    #     udf_norms = grad_norm(self.udf_decoder, norm_type=2)
+    #     mask_norms = grad_norm(self.mask_decoder, norm_type=2)
+    #     encoder_norms = grad_norm(self.encoder, norm_type=2)
+    #     # self.log_dict("train/udf_norms", udf_norms)
+    #     # self.log_dict("train/mask_norms", mask_norms)
+    #     # self.log_dict("train/encoder_norms", encoder_norms)
 
     def on_train_epoch_end(self):
         if self.hparams.model.optimizer.name == 'Adam':
@@ -80,107 +96,93 @@ class GeneralModel(pl.LightningModule):
                 self.trainer.optimizers[0], self.hparams.model.optimizer.lr, self.current_epoch,
                 self.hparams.model.lr_decay.decay_start_epoch, self.hparams.model.trainer.max_epochs, 1e-6
             )
+
     def validation_step(self, data_dict, idx):
         pass
 
-    def on_validation_epoch_end(self):
-        # evaluate instance predictions
-        if self.training_stage !=1:
-            if self.current_epoch > self.hparams.model.network.prepare_epochs:
-                confusion_matrix = self.metric.compute().cpu().numpy()
-                self.metric.reset()
-                ious = per_class_iou(confusion_matrix) * 100
-                accs = confusion_matrix.diagonal() / confusion_matrix.sum(1) * 100
-                miou = np.nanmean(ious)
-                macc = np.nanmean(accs)
-                def compare(prev, cur):
-                    return prev < cur 
-                
-                if compare(self.best_metric_value, miou):
-                    self.best_metric_value = miou
-                self.log("val_best_mIoU", self.best_metric_value, logger=True)
-                self.log("val_mIoU", miou, logger=True)
-                self.log("val_mAcc", macc, logger=True)
-                self.print(f"mAcc: {macc}")
-                self.print(f"mIoU: {miou}")
+    def validation_epoch_end(self, outputs):
+        metrics_to_log = ['chamfer-L1', 'f-score', 'f-score-20']
+        if outputs:
+            avg_metrics = {metric: np.mean([x[metric] for x in outputs]) for metric in metrics_to_log if metric in outputs[0]}
+            for key, value in avg_metrics.items():
+                self.log(f"val_reconstruction/{key}", value, logger=True)
 
-                # scene level averaged metrics
-                all_pred_insts = []
-                all_gt_insts = []
-                all_gt_insts_bbox = []
-                all_sem_acc = []
-                all_sem_miou = []
-                for semantic_accuracy, semantic_mean_iou in self.val_test_step_outputs:
-                    all_sem_acc.append(semantic_accuracy)
-                    all_sem_miou.append(semantic_mean_iou)
-                self.val_test_step_outputs.clear()
-
-                self.print("Evaluating semantic segmentation ...")
-
-                sem_miou_avg = np.mean(np.array(all_sem_miou))
-                sem_acc_avg = np.mean(np.array(all_sem_acc))
-                self.print(f"Semantic Accuracy: {sem_acc_avg}")
-                self.print(f"Semantic mean IoU: {sem_miou_avg}")
-
-
-                # if self.hparams.model.inference.save_predictions:
-                #     save_dir = os.path.join(
-                #         self.hparams.exp_output_root_path, 'inference', self.hparams.model.inference.split,
-                #         'predictions'
-                #     )
-                #     # save_prediction(
-                #     #     save_dir, all_pred_insts, self.hparams.cfg.data.mapping_classes_ids,
-                #     #     self.hparams.cfg.data.ignore_classes
-                #     # )
-                #     self.print(f"\nPredictions saved at {os.path.abspath(save_dir)}")
 
 
     def test_step(self, data_dict, idx):
         pass
 
-    # def on_test_epoch_end(self):
-    #     # evaluate instance predictions
-    #     if self.current_epoch > self.hparams.cfg.model.network.prepare_epochs:
-    #         all_pred_insts = []
-    #         all_gt_insts = []
-    #         all_gt_insts_bbox = []
-    #         all_sem_acc = []
-    #         all_sem_miou = []
-    #         for semantic_accuracy, semantic_mean_iou, pred_instances, gt_instances, gt_instances_bbox in self.val_test_step_outputs:
-    #             all_sem_acc.append(semantic_accuracy)
-    #             all_sem_miou.append(semantic_mean_iou)
-    #             all_gt_insts_bbox.append(gt_instances_bbox)
-    #             all_gt_insts.append(gt_instances)
-    #             all_pred_insts.append(pred_instances)
+    # def log(self, name: str, value: Any, *args, **kwargs):
+    #     """
+    #         Override PL's default log function, to better support test-time or overfit-time no-logger logging
+    #     (using various types including string).
+    #     """
+    #     # For overfitting, we leave the log to the log_dict monkey_patch.
+    #     # if isinstance(self.trainer, omegaconf.dictconfig.DictConfig):
+    #     #     return
+    #     if self.trainer.testing:
+    #         if name == 'batch-idx':
+    #             self.test_logged_values.append(OrderedDict([(name, value)]))
+    #         else:
+    #             if isinstance(value, torch.Tensor):
+    #                 value = value.item()
+    #             self.test_logged_values[-1][name] = value
+    #     else:
+    #         super().log(name=name, value=value, *args, **kwargs)
 
-    #         self.val_test_step_outputs.clear()
+    def log_dict_prefix(
+        self,
+        prefix: str,
+        dictionary: Mapping[str, Any],
+        prog_bar: bool = False,
+        logger: bool = True,
+        on_step: Optional[bool] = None,
+        on_epoch: Optional[bool] = None
+    ):
+        """
+        This overrides fixes if dict key is not a string...
+        """
+        dictionary = {
+            prefix + "/" + str(k): v for k, v in dictionary.items()
+        }
+        self.log_dict(dictionary=dictionary,
+                      prog_bar=prog_bar,
+                      logger=logger, on_step=on_step, on_epoch=on_epoch)
 
-    #         if self.hparams.cfg.model.inference.evaluate:
-    #             inst_seg_evaluator = GeneralDatasetEvaluator(
-    #                 self.hparams.cfg.data.class_names, -1, self.hparams.cfg.data.ignore_classes
-    #             )
-    #             self.print("Evaluating instance segmentation ...")
-    #             inst_seg_eval_result = inst_seg_evaluator.evaluate(all_pred_insts, all_gt_insts, print_result=True)
-    #             obj_detect_eval_result = evaluate_bbox_acc(
-    #                 all_pred_insts, all_gt_insts_bbox,
-    #                 self.hparams.cfg.data.class_names, self.hparams.cfg.data.ignore_classes, print_result=True
-    #             )
+    def log_image(self, name: str, img: np.ndarray):
+        if self.trainer.logger is not None:
+            # if self.logger_type == 'tb':
+            #     if img.shape[2] <= 4:
+            #         # WHC -> CWH
+            #         img = np.transpose(img, (2, 0, 1))
+            #     self.trainer.logger.experiment.add_image(name, img, self.trainer.global_step)
+            # elif self.logger_type == 'wandb':
+            self.trainer.logger.log_image(key=name, images=[img])
 
-    #             sem_miou_avg = np.mean(np.array(all_sem_miou))
-    #             sem_acc_avg = np.mean(np.array(all_sem_acc))
-    #             self.print(f"Semantic Accuracy: {sem_acc_avg}")
-    #             self.print(f"Semantic mean IoU: {sem_miou_avg}")
+    # def log_plot(self, name: str, fig: matplotlib.figure.Figure, close: bool = True):
+    #     img = image.from_mplot(fig, close)
+    #     self.log_image(name, img)
+    #     if close:
+    #         plt.close(fig)
 
-    #         if self.hparams.cfg.model.inference.save_predictions:
-    #             save_dir = os.path.join(
-    #                 self.hparams.cfg.exp_output_root_path, 'inference', self.hparams.cfg.model.inference.split,
-    #                 'predictions'
-    #             )
-    #             save_prediction(
-    #                 save_dir, all_pred_insts, self.hparams.cfg.data.mapping_classes_ids,
-    #                 self.hparams.cfg.data.ignore_classes
-    #             )
-    #             self.print(f"\nPredictions saved at {os.path.abspath(save_dir)}")
+    def log_geometry(self, name: str, geom, draw_color: bool = False):
+        if self.trainer.logger is None:
+            return
+        if isinstance(geom, o3d.geometry.TriangleMesh):
+            try:
+                from pycg import render
+                mv_img = render.multiview_image(
+                    [geom], viewport_shading='LIT' if draw_color else 'NORMAL', backend='filament')
+                # mv_img = render.multiview_image(
+                    # [geom], viewport_shading='LIT' if draw_color else 'NORMAL', backend='opengl')
+                self.log_image("mesh" + name, mv_img)
+            except Exception:
+                exp.logger.warning("Not able to render mesh during training.")
+        else:
+            raise NotImplementedError
 
-
-
+    def test_log_data(self, data_dict: dict):
+        # Output artifact data only when there is no focus.
+        # if self.record_folder is None or self.hparams.focus == "none":
+        #     return
+        self.record_data_cache.update(data_dict)

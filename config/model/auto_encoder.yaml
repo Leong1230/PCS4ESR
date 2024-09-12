@@ -4,93 +4,254 @@
 defaults:
   - base
 
-# stage1_ckpt_path: None
+# ckpt_path: '/localhome/zla247/theia1_data/output/HybridPCLearning/Scannet/AutoEncoder/Channel-wise-feat-mlp_ScanNet_PointTransformer-KNN_Epoch-160-100_Point-Nerf-Layer-1-1_Feat_8-32-32_stride-2-2-4-4_KNN_neighbor-4-3-2-2_Theia-1_After-sum_run_1/training/epoch=159.ckpt'
+# ckpt_path: '/localhome/zla247/theia1_data/output/HybridPCLearning/Scannet/AutoEncoder/Feat-mlp_ScanNet_PointTransformer-KNN_Epoch-160-100_Point-Nerf-Layer-1-1_Feat_8-32-32_stride-2-2-4-4_KNN_neighbor-4-3-2-2_Theia-1_After-sum_run_1/training/epoch=159.ckpt'
+# ckpt_path: '/localhome/zla247/theia2_data/HybridPCLearning/Scannet/AutoEncoder/Serial-Method-Mixture -z-z-trans_ScanNet_PointTransformerV3_Epoch-160-100_Point-Nerf-Layer-1-1_Feat_8-32-32_stride-2-2-4-4_Serial_neighbor-4-3-2-2_Theia-2_After-sum_run_1/training/epoch=159.ckpt'
+# ckpt_path: '/localhome/zla247/theia2_data/HybridPCLearning/Scannet/AutoEncoder/Serial-Method-Mixture -all-4_ScanNet_PointTransformerV3_Epoch-160-100_Point-Nerf-Layer-1-1_Feat_8-32-32_stride-2-2-4-4_Serial_neighbor-4-3-2-2_Theia-2_After-sum_run_1/training/epoch=155.ckpt'
+# ckpt_path: '/localhome/zla247/theia2_data/HybridPCLearning/Scannet/AutoEncoder/Serial-Method-Mixture -z-z-trans_ScanNet_PointTransformerV3_Epoch-160-100_Point-Nerf-Layer-1-1_Feat_8-32-32_stride-2-2-4-4_Serial_neighbor-4-3-2-2_Theia-2_After-sum_run_1/training/epoch=155.ckpt'
 
-# local machine
-# stage1_ckpt_path: /localhome/zla247/data/output/Scannet/AutoEncoder/Stage1_checkpoints/Interpolated_LeakyReLU_AutoEncoder_stage-1_voxel-0.1_max-dist-0.1_overfit-False_intake--1_encoder-blocks-pn-6_decoder-ConvONet-inverse_distance-8_latent_64-64_64_lr-0.001_Lambda-RTX6000Ada_run_1_epoch=349.ckpt
+ckpt_path: '/localhome/zla247/theia2_data/HybridPCLearning/Scannet/AutoEncoder/Mixture-neighbor_3-z-order-Layer_ScanNet_PointTransformerV3_Epoch-160-100_Point-Nerf-Layer-1-1_Feat_8-32-32_stride-2-2-4-4_Serial_neighbor-4-3-2-2_Theia-2_After-sum_run_1/training/epoch=159.ckpt' 
+# ScanNet
+# ckpt_path: '/localhome/zla247/theia2_data/HybridPCLearning/Scannet/AutoEncoder/Mixture-neighbor_2-z-order-Layer_ScanNet_PointTransformerV3_Epoch-160-100_Point-Nerf-Layer-1-1_Feat_8-32-32_stride-2-2-4-4_Serial_neighbor-4-3-2-2_Theia-2_After-sum_run_1/training/epoch=91.ckpt'
+# ckpt_path: '/localhome/zla247/theia1_data/output/HybridPCLearning/Scannet/AutoEncoder/ScanNet_PointTransformerV3-stride-2-2-4-4_No-Input-Splat-No-normal-padding_Correct-lr_KNN_neighbor-8-6-4-4_Theia-1_Abs-SDF-decoder_FC-end_Large-weight-150_UDF_Max-Dist-0.2_run_2/training/epoch=119.ckpt' # KNN 
+# ckpt_path: '/localhome/zla247/theia1_data/output/HybridPCLearning/Scannet/AutoEncoder/ScanNet_PointTransformerV3_Epoch-160-100_stride-2-2-4-4_No-Input-Splat-No-normal-padding_Correct-lr_12-Serial_neighbor-8-6-4-4_Theia-1_Abs-SDF-decoder_FC-end_Large-weight-150_UDF_Max-Dist_run_2/training/epoch=67.ckpt' # Serial
+# ckpt_path: '/localhome/zla247/theia2_data/HybridPCLearning/Scannet/AutoEncoder/Larger_MinkUNet-No-Splat_No-xyz_input_Correct-lr_KNN_neighbor_Theia-2_Abs-SDF-decoder_FC-end_Large-weight-150_UDF_Max-Dist-0.2_run_2/training/epoch=123.ckpt' # KNN
 
-#0.5
-# stage1_ckpt_path: '/home/zla247/scratch/data/output/Scannet/AutoEncoder/NarvalCheckpoints/Interpolated_LeakyReLU_AutoEncoder_stage-1_voxel-0.5_max-dist-0.1_overfit-False_intake--1_encoder-blocks-pn-6_decoder-Concatenate-inverse_distance-8_latent_64-64_64_lr-0.001_Lambda-RTX6000Ada_run_1_epoch=309.ckpt'
+# Synthetic
+# ckpt_path: '/localhome/zla247/theia1_data/output/HybridPCLearning/Synthetic/AutoEncoder/Synthetic_PointTransformerV3_Epoch-160-100_stride-2-2-4-4_No-Input-Splat-No-normal-padding_Correct-lr_8-Serial_neighbor-8-6-4-4_Theia-1_Abs-SDF-decoder_FC-end_Large-weight-150_UDF_Max-Dist_run_2/training/epoch=127.ckpt' # Serial
+# ckpt_path: '/localhome/zla247/theia2_data/HybridPCLearning/Synthetic/AutoEncoder/Synthetic_PointTransformerV3_Voxel-0.02_Epoch-160-100_Correct-lr_KNN_neighbor-8-6-4-4_Stride-2-2-4-4_Theia-2_Abs-SDF-decoder_FC-end_Large-weight-150_UDF_Max-Dist-0.2_run_2/training/epoch=51.ckpt' # KNN
 
-#0.1
-stage1_ckpt_path: '/home/zla247/scratch/data/output/Scannet/AutoEncoder/NarvalCheckpoints/Interpolated_LeakyReLU_AutoEncoder_stage-1_voxel-0.1_max-dist-0.1_overfit-False_intake--1_encoder-blocks-pn-6_decoder-ConvONet-inverse_distance-8_latent_64-64_64_lr-0.001_Lambda-RTX6000Ada_run_1_epoch=349.ckpt'
+# Mixture: stride 2-2-2-2
+# ckpt_path: '/localhome/zla247/theia2_data/output/HybridPCLearning/Mixture/AutoEncoder/Mixture_Mask-4-3-2-2_Theia-2_Abs-SDF-decoder_FC-end_Large-weight-150_UDF_Max-Dist-0.2_run_1/training/epoch=27.ckpt'
 
-#0.02 Concatenate
-# stage1_ckpt_path: '/home/zla247/scratch/data/output/Scannet/AutoEncoder/LeakyReLU_AutoEncoder_stage-1_voxel-0.02_max-dist-0.5_overfit-False_intake--1_encoder-blocks-pn-3_decoder-inverse_distance-8_latent_64-64_64_lr-0.0005_cc-narval_run_1/training/epoch=129.ckpt'
+# Ablations: model capacity
+# ckpt_path: '/localhome/zla247/theia1_data/output/HybridPCLearning/Scannet/AutoEncoder/ScanNet_PointTransformerV3_Epoch-160-100_Point-Nerf-Layer-2-3_Feat_8-32-32_stride-2-2-4-4_Serial_neighbor-8-6-4-4_Theia-1_After-sum_run_1/training/epoch=111.ckpt'
+# ckpt_path:  '/localhome/zla247/theia2_data/HybridPCLearning/Scannet/AutoEncoder/ScanNet_PointTransformerV3_Epoch-160-100_Point-Nerf-Layer-1-1_Feat_8-32-32_stride-2-2-4-4_Serial_neighbor-8-6-4-4_Theia-2_After-sum_run_1/training/epoch=87.ckpt'
+# ckpt_path: '/localhome/zla247/theia2_data/HybridPCLearning/Scannet/AutoEncoder/ScanNet_PointTransformerV3_Epoch-160-100_Point-Nerf-Layer-0-0_Feat_8-32-32_stride-2-2-4-4_Serial_neighbor-8-6-4-4_Theia-2_After-sum_run_1/training/epoch=67.ckpt'
+# ckpt_path: '/localhome/zla247/theia2_data/HybridPCLearning/Scannet/AutoEncoder/ScanNet_PointTransformerV3_Epoch-160-100_Point-Nerf-Layer-0-1_Feat_8-32-32_stride-2-2-4-4_Serial_neighbor-8-6-4-4_Theia-2_After-sum_run_1/training/epoch=67.ckpt'
+# ckpt_path: '/localhome/zla247/theia2_data/HybridPCLearning/Scannet/AutoEncoder/
+# ckpt_path: '/localhome/zla247/theia2_data/HybridPCLearning/Scannet/AutoEncoder/ScanNet_PointTransformerV3_Epoch-160-100_Point-Nerf-Layer-1-1_Feat_32-32-32_stride-2-2-4-4_Serial_neighbor-4-3-2-2_Theia-2_After-sum_run_1/training/epoch=51.ckpt'
+# ckpt_path: '/localhome/zla247/theia1_data/output/HybridPCLearning/Scannet/AutoEncoder/Larger_point-nerf_ScanNet_PointTransformerV3_Epoch-160-100_stride-2-2-4-4_No-Input-Splat-No-normal-padding_Correct-lr_KNN_neighbor-8-6-4-4_Theia-1_Abs-SDF-decoder_FC-end_Large-weight-150_UDF_Max-Dist_run_2/training/epoch=67.ckpt'
+# ckpt_path: '/localhome/zla247/theia2_data/HybridPCLearning/Scannet/AutoEncoder/24-feat-dim_ScanNet_PointTransformerV3_Epoch-160-100_stride-2-2-4-4_No-Input-Splat-No-normal-padding_Correct-lr_Serial_neighbor-8-6-4-4_Theia-2_Abs-SDF-decoder_FC-end_Large-weight-150_UDF_Max-Dist_run_2/training/epoch=159.ckpt'
+# ckpt_path: '/localhome/zla247/theia1_data/output/HybridPCLearning/Scannet/AutoEncoder/Correct-per-scale-in_ScanNet_PointTransformerV3_Epoch-160-100_Point-Nerf-Layer-1-1_Feat_8-64-32_stride-2-2-4-4_Serial_neighbor-8-6-4-4_Theia-1_After-sum_run_1/training/epoch=87.ckpt'
 
-training_stage: 2 # 3 for test
-recompute_udf: False
+# Ablations: Multi-level pooling
+# ckpt_path: '/localhome/zla247/theia1_data/output/HybridPCLearning/Scannet/AutoEncoder/Attentive-pooling_ScanNet_PointTransformerV3_Epoch-160-100_Point-Nerf-Layer-1-1_Feat_8-32-32_stride-2-2-4-4_Serial_neighbor-8-6-4-4_Theia-1_After-sum_run_1/training/epoch=159.ckpt' 
+# ckpt_path: '/localhome/zla247/theia1_data/output/HybridPCLearning/Scannet/AutoEncoder/Cat-pooling_ScanNet_PointTransformerV3_Epoch-160-100_Point-Nerf-Layer-1-1_Feat_8-32-32_stride-2-2-4-4_Serial_neighbor-8-6-4-4_Theia-1_After-sum_run_1/training/epoch=159.ckpt' 
+# ckpt_path: '/localhome/zla247/theia1_data/output/HybridPCLearning/Scannet/AutoEncoder/Gate-pooling_ScanNet_PointTransformerV3_Epoch-160-100_Point-Nerf-Layer-1-1_Feat_8-32-32_stride-2-2-4-4_Serial_neighbor-8-6-4-4_Theia-1_After-sum_run_1/training/epoch=159.ckpt'
+# ckpt_path: '/localhome/zla247/theia2_data/HybridPCLearning/Scannet/AutoEncoder/Average-pooling_ScanNet_PointTransformerV3_Epoch-160-100_Point-Nerf-Layer-1-1_Feat_8-32-32_stride-2-2-4-4_Serial_neighbor-8-6-4-4_Theia-2_After-sum_run_1/training/epoch=159.ckpt'
 
-loss:
-  norm_initialization: True # initialize latent code by norm distirbution
-  loss_type: L1 # L1 or L2
-  use_reg: True # whether to use regularization
-  code_reg_lambda: 1e-4 # regularization lambda
+# Others
+# ckpt_path: '/localhome/zla247/theia1_data/output/HybridPCLearning/Scannet/AutoEncoder/ScanNet_PointTransformer_Epoch-160-100_stride-8-2-2-2_No-Input-Splat-No-normal-padding_Correct-lr_KNN_neighbor-4-3-2-2_Theia-1_Abs-SDF-decoder_FC-end_Large-weight-150_UDF_Max-Dist_run_2/training/epoch=91.ckpt' # different strides
 
+# ckpt_path: '/localhome/zla247/theia1_data/output/HybridPCLearning/Scannet/AutoEncoder/ScanNet_PointTransformerV3_Epoch-160-100_stride-4-4-4-2_No-Input-Splat-No-normal-padding_Correct-lr_KNN_neighbor-8-6-4-4_Theia-1_Abs-SDF-decoder_FC-end_Large-weight-150_UDF_Max-Dist-0.2_run_2/training/epoch=143.ckpt' # different strides
+
+# ckpt_path: '/localhome/zla247/theia1_data/output/HybridPCLearning/Scannet/AutoEncoder/Correct-Pos-Enc_ScanNet_PointTransformerV3_Epoch-160-100_stride-2-2-4-4_12-Serial_neighbor_4-3-2-2_Theia-1_After-Sub_run_1/training/epoch=71.ckpt'
+
+# ckpt_path: '/localhome/zla247/theia1_data/output/HybridPCLearning/Scannet/AutoEncoder/ScanNet_Largest-MinkUNet_Epoch-160-100_stride-2-2-4-4_No-Input-Splat-No-normal-padding_Correct-lr_KNN_neighbor-4-3-2-2_Theia-1_Abs-SDF-decoder_FC-end_Large-weight-150_UDF_Max-Dist_run_2/training/epoch=87.ckpt' # Largest MinkUNet (6 layers 2^n dim)
+
+# ckpt_path: '/localhome/zla247/theia2_data/HybridPCLearning/Scannet/AutoEncoder/PointTransformerV3-patch-64_Correct-lr_Serial-16-8-6-4-4-neighbor_Theia-2_Abs-SDF-decoder_FC-end_Large-weight-150_UDF_Max-Dist-0.2_run_1/training/epoch=111.ckpt' # Best Serial trained on larger neighbor number
+
+## ckpt_path: '/localhome/zla247/theia1_data/output/HybridPCLearning/Scannet/AutoEncoder/Corrected_ScanNet_PointTransformerV3_Normal-supervision_Epoch-160-100_stride-2-2-4-4_No-Input-Splat-No-normal-padding_Correct-lr_KNN_neighbor-4-3-2-2_Theia-1_Abs-SDF-decoder_FC-end_Large-weight-150_UDF_Max-Dist-0.2_run_2/training/epoch=63.ckpt' # Normal supervision
+
+# ckpt_path: '/localhome/zla247/theia2_data/HybridPCLearning/Carla/AutoEncoder/Carla_PointTransformerV3_Voxel-0.1_Epoch-100-60_Correct-lr_KNN_neighbor-8-6-4-4_Stride-4-4-4-4_Theia-2_Abs-SDF-decoder_FC-end_Large-weight-150_UDF_Max-Dist-0.2_run_2/training/epoch=75.ckpt'
+# ckpt_path: '/localhome/zla247/theia1_data/output/HybridPCLearning/Scannet/AutoEncoder/ScanNet_PointTransformerV3_Epoch-160-100_stride-2-2-4-4_No-Input-Splat-No-normal-padding_Correct-lr_KNN_neighbor-4-3-2-2_Theia-1_Abs-SDF-decoder_FC-end_Large-weight-150_UDF_Max-Dist-0.2_run_2/training/epoch=159.ckpt'
+# ckpt_path: '/localhome/zla247/theia1_data/output/HybridPCLearning/Scannet/AutoEncoder/ScanNet_PointTransformerV3_Epoch-160-100_stride-4-4-4-2_No-Input-Splat-No-normal-padding_Correct-lr_KNN_neighbor-8-6-4-4_Theia-1_Abs-SDF-decoder_FC-end_Large-weight-150_UDF_Max-Dist-0.2_run_2/training/epoch=159.ckpt'
+# ckpt_path: '/localhome/zla247/theia2_data/HybridPCLearning/Carla/AutoEncoder/Carla_MinkUNet-6-layers_Epoch-60-35_No-Input-Splat_Correct-lr_KNN_4-neighbor-4-3-2-2_Theia-2_Abs-SDF-decoder_FC-end_Large-weight-150_UDF_Max-Dist-0.2_run_2/training/epoch=47.ckpt'
+
+
+# ckpt_path: '/localhome/zla247/theia2_data/HybridPCLearning/Carla/AutoEncoder/Carla_PointTransformerV3_Voxel-0.1_Epoch-100-60_Correct-lr_KNN_neighbor-8-6-4-4_Stride-4-4-4-4_Theia-2_Abs-SDF-decoder_FC-end_Large-weight-150_UDF_Max-Dist-0.2_run_2/training/epoch=43.ckpt'
+
+# ckpt_path:  '/localhome/zla247/theia1_data/output/HybridPCLearning/Scannet/AutoEncoder/ScanNet_PointTransformerV3_Normal-supervision_Epoch-160-100_stride-2-2-4-4_No-Input-Splat-No-normal-padding_Correct-lr_KNN_neighbor-4-3-2-2_Theia-1_Abs-SDF-decoder_FC-end_Large-weight-150_UDF_Max-Dist-0.2_run_2/training/epoch=91.ckpt'
+# ckpt_path: '/localhome/zla247/theia2_data/HybridPCLearning/Carla/AutoEncoder/Carla_Small-MinkUNet-No-Input-Splat_Correct-lr_KNN_neighbor-4-3-2-2_Theia-2_Abs-SDF-decoder_FC-end_Large-weight-150_UDF_Max-Dist-0.2_run_2/training/epoch=27.ckpt'
+# ckpt_path: '/localhome/zla247/theia2_data/HybridPCLearning/Carla/AutoEncoder/Carla_Small-PointTransformerV3-No-Input-Splat_Correct-lr_KNN_neighbor-4-3-2-2_Theia-2_Abs-SDF-decoder_FC-end_Large-weight-150_UDF_Max-Dist-0.2_run_2/training/epoch=23.ckpt'
+# ckpt_path: '/localhome/zla247/theia2_data/HybridPCLearning/Scannet/AutoEncoder/ScanNet_PointTransformerV3_Input-Splat-No-normal-padding_Correct-lr_KNN_neighbor-8-6-4-4_Theia-2_Abs-SDF-decoder_FC-end_Large-weight-150_UDF_Max-Dist-0.2_run_2/training/epoch=67.ckpt'
+
+
+# ckpt_path: '/localhome/zla247/theia2_data/HybridPCLearning/Scannet/AutoEncoder/MinkUNet-No-Splat_Correct-lr_KNN_neighbor_Theia-2_Abs-SDF-decoder_FC-end_Large-weight-150_UDF_Max-Dist-0.2_run_1/training/epoch=119.ckpt' 
+
+
+
+# ckpt_path: '/localhome/zla247/theia2_data/output/HybridPCLearning/Scannet/AutoEncoder/Serial-16-neighbors_Mask-12-8-6-6_MinkUNet_Theia-2_Abs-SDF-decoder_FC-end_Large-weight-150_UDF_Max-Dist-0.2_run_1/training/epoch=119.ckpt'
+# ckpt_path: '/localhome/zla247/theia2_data/output/HybridPCLearning/Scannet/AutoEncoder/Serial-8-neighbors_Mask-4-3-2-2_No-xyz-input_MinkUNet_Theia-2_Abs-SDF-decoder_FC-end_Large-weight-150_UDF_Max-Dist-0.2_run_1/training/epoch=71.ckpt'
+# ckpt_path: '/localhome/zla247/theia2_data/output/HybridPCLearning/Scannet/AutoEncoder/Serial-8-neighbors_Mask-4-3-2-2_MinkUNet_Theia-2_Abs-SDF-decoder_FC-end_Large-weight-150_UDF_Max-Dist-0.2_run_1/training/epoch=151.ckpt'
+# ckpt_path: '/localhome/zla247/theia2_data/output/HybridPCLearning/Scannet/AutoEncoder/Serial-8-neighbors_Mask-2-2-2-2_MinkUNet_Theia-2_Abs-SDF-decoder_FC-end_Large-weight-150_UDF_Max-Dist-0.2_run_1/training/epoch=55.ckpt' 
+
+# ckpt_path: '/localhome/zla247/theia2_data/output/HybridPCLearning/Scannet/AutoEncoder/Serial-8-neighbors_Mask-4-3-2-2_PointTransformerV3_Theia-2_Abs-SDF-decoder_FC-end_Large-weight-150_UDF_Max-Dist-0.2_run_1/training/epoch=147.ckpt'
+# ckpt_path: '/localhome/zla247/theia2_data/theia2_data/output/HybridPCLearning/Scannet/AutoEncoder/Sum_Filter-out-Correct-dist_Mink-neighbor_Theia-2_Abs-SDF-decoder_FC-end_Large-weight-150_UDF_Max-Dist-0.2_run_1/training/epoch=71.ckpt' 
+# ckpt_path: '/localhome/zla247/theia2_data/theia2_data/output/HybridPCLearning/Scannet/AutoEncoder/Sum_Filter-out-Correct-dist_KNN_Theia-2_Abs-SDF-decoder_FC-end_Large-weight-150_UDF_Max-Dist-0.2_run_1/training/epoch=171.ckpt' 
+# ckpt_path: '/localhome/zla247/theia2_data/output/HybridPCLearning/Scannet/AutoEncoder/PointNeRF-pos-enc-4-neighbors_Mask-4-3-2-2_Theia-2_Abs-SDF-decoder_FC-end_Large-weight-150_UDF_Max-Dist-0.2_run_1/training/epoch=347.ckpt' 
+# ckpt_path: '/localhome/zla247/theia2_data/output/HybridPCLearning/Scannet/AutoEncoder/PointNeRF-pos-enc-6-neighbors_Mask-4-3-2-2_Theia-2_Abs-SDF-decoder_FC-end_Large-weight-150_UDF_Max-Dist-0.2_run_1/training/epoch=347.ckpt'
+# ckpt_path: '/localhome/zla247/theia2_data/output/HybridPCLearning/Scannet/AutoEncoder/4K-Input_PointNeRF-pos-enc_Mask-4-3-2-2_Theia-2_Abs-SDF-decoder_FC-end_Large-weight-150_UDF_Max-Dist-0.2_run_1/training/epoch=347.ckpt' # from 4K input
+# ckpt_path: '/localhome/zla247/theia2_data/output/HybridPCLearning/Scannet/AutoEncoder/PointNeRF-pos-enc_Mask-4-3-2-2_Theia-2_Abs-SDF-decoder_FC-end_Large-weight-150_UDF_Max-Dist-0.2_run_1/training/epoch=343.ckpt'
+
+stage1_ckpt_path: None
+
+training_stage: 1
 
 network:
   module: AutoEncoder
+  use_color: False
+  use_normal: True # True for SDF supervision
+  use_xyz: True # True only for PointTransformerV3 debugging
 
-  # m: 16 # 16 or 32 (U-Net hidden dimension)
+  latent_dim: 32 #
+  prepare_epochs: 350
+  eval_CD_frequency: 1
+  eval_algorithm: DMC # DMC or DensePC or MC
+  eikonal_loss: True
+  eikonal_weight: 0.02
+  grad_type: Analytical # Analytical or Numerical
+  backbone: &default_backbone PointTransformerV3 # PointTransformerV3 or MinkUNet
 
-  use_color: True
-  use_normal: False
-  use_xyz: False
+  # point_transformerv3: # default
+  #   in_channels: 6
+  #   order: ["z", "z-trans", "hilbert", "hilbert-trans"]
+  #   stride: &stride [4, 4, 4, 4]
+  #   enc_depths: [2, 2, 1, 1, 1]
+  #   enc_channels: [32, 64, 128, 256, 256]
+  #   enc_num_head: [2, 4, 8, 16, 32]
+  #   # enc_patch_size: [16, 16, 16, 16, 16]
+  #   enc_patch_size: [64, 64, 64, 64, 64] # [1024, 1024, 1024, 1024, 1024]
+  #   # enc_patch_size: [1024, 1024, 1024, 1024, 1024]
 
-  positional_encoding: Fourier # Triplane
-  latent_dim: 64 #
-  use_decoder: True
+  #   dec_depths: [2, 2, 2, 1]
+  #   dec_channels: &dec_channels [32, 64, 128, 256]
+  #   dec_num_head: [4, 4, 8, 16]
+  #   # dec_patch_size: [16, 16, 16, 16]
+  #   dec_patch_size: [64, 64, 64, 64]  # [1024, 1024, 1024, 1024]
+  #   # dec_patch_size: [1024, 1024, 1024, 1024]
 
-  prepare_epochs: 10
+  # point_transformerv3:
+  #   in_channels: 6
+  #   order: ["z", "z-trans", "hilbert", "hilbert-trans"]
+  #   stride: &stride [2, 2, 2, 2]
+  #   enc_depths: [2, 2, 2, 1, 1]
+  #   enc_channels: [32, 64, 128, 256, 256]
+  #   enc_num_head: [2, 4, 8, 16, 32]
+  #   # enc_patch_size: [16, 16, 16, 16, 16]
+  #   enc_patch_size: [64, 64, 64, 64, 64] # [1024, 1024, 1024, 1024, 1024]
+  #   # enc_patch_size: [1024, 1024, 1024, 1024, 1024]
+
+  #   dec_depths: [2, 2, 2, 2]
+  #   dec_channels: &dec_channels [32, 64, 128, 256]
+  #   dec_num_head: [4, 4, 8, 8]
+  #   # dec_patch_size: [16, 16, 16, 16]
+  #   dec_patch_size: [64, 64, 64, 64] # [1024, 1024, 1024, 1024]
+  #   # dec_patch_size: [1024, 1024, 1024, 1024]
+
+  point_transformerv3: # default
+    in_channels: 6
+    order: ["z", "z-trans", "hilbert", "hilbert-trans"]
+    stride: &stride [2, 2, 4, 4]
+    enc_depths: [2, 2, 2, 6, 2]
+    enc_channels: [32, 64, 128, 256, 512]
+    enc_num_head: [2, 4, 8, 16, 32]
+    # enc_patch_size: [16, 16, 16, 16, 16]
+    enc_patch_size: [64, 64, 64, 64, 64] # [1024, 1024, 1024, 1024, 1024]
+    # enc_patch_size: [1024, 1024, 1024, 1024, 1024]
+
+    dec_depths: [2, 2, 2, 2]
+    dec_channels: &dec_channels [64, 64, 128, 256]
+    dec_num_head: [4, 4, 8, 16]
+    # dec_patch_size: [16, 16, 16, 16]
+    dec_patch_size: [64, 64, 64, 64]  # [1024, 1024, 1024, 1024]
+    # dec_patch_size: [1024, 1024, 1024, 1024]
+
+    mlp_ratio: 4
+    qkv_bias: true
+    qk_scale: null
+    attn_drop: 0.0
+    proj_drop: 0.0
+    drop_path: 0.3
+    pre_norm: true
+    shuffle_orders: true
+    enable_rpe: false
+    enable_flash: true
+    upcast_attention: false
+    upcast_softmax: false
+    cls_mode: false
+    pdnorm_bn: false
+    pdnorm_ln: false
+    pdnorm_decouple: true
+    pdnorm_adaptive: false
+    pdnorm_affine: true
+    pdnorm_conditions: ["ScanNet", "S3DIS", "Structured3D"]
 
   encoder:
-    design: local-pointnet-unet
-    save_every_epoches: 500
-    local_pointnet: True
-    down_sampler: None # None, MaxPool, Conv
-    pn_hidden_dim: 64
-    pn_n_blocks: 6
-    use_unet: True
-    voxel_size_out: 0.1
-    feature_in: voxel_features
-    unet_blocks: [1, 2, 3, 4, 5, 6, 7]
+    input_splat: False # encodes input splatted voxels
+    multi_scale_encoder: False
+    add_n_scale_pn: 2 # add pointnet feature in n-th scale
+    only_large_pn: False # only use features from large scale local pointnet
+    larger_unet: &default_larger_unet False
+    pn_hidden_dim: 32
+    pn_n_blocks: 2
+    unet_blocks_num: 5
     unet_block_reps: 2
 
-  udf_decoder:
-    decoder_type: ConvONet # ConvONet or CrossAttention or Concatenate
-    interpolation_mode: inverse_distance # inverse_distance or max or trilinear
+  # Define common settings as an anchor
+  default_settings: &default_settings
+    decoder_type: LargeDecoder # or Decoder or SimpleDecoder or SimpleInterpolatedDecoder or InterpolatedDecoder or MultiScaleInterpolatedDecoder
+    scale_visualization: -1 # 0, 1, 2, 3 or -1
+    dist_mask: True
+    filter_by_mask: True # filter out point features by mask
+    learnable_alpha: False # learnable alpha from latents
+    larger_point_nerf: False
+    larger_unet: *default_larger_unet
+    backbone: *default_backbone
+    decoder_channels: *dec_channels
+    stride: *stride
+    coords_enc: Fourier # MLP or Fourier (16 dim MLP or 63 dim Fourier)
+    architecture: point_nerf # attentive_pooling or transformer_encoder or point_nerf
+    inter: inverse_dist # trilinear or inverse_dist or feat_mlp or channel_wise_feat_mlp
+    negative_slope: 0.01 # for LeakyReLU, default: 0.01
+    use_bn: True
+    multi_scale_aggregation: sum # cat or sum or attention or average or gate or attentive_pooling
+
+    neighboring: Mixture # KNN or Mink or Serial or Mixture
+    serial_neighbor_layers: 3 # number of serial neighbor layers
+    k_neighbors: 8 # 1 for no interpolation
+    kernel_size: 2 # for cm neighbors
+    no_pos_enc_noramalization: False
+    correct_pos_enc_noramalization: False
+    pos_enc_dist_factor: [4, 3, 2, 2]
+    dist_factor: [4, 3, 2, 2]  # N times voxel size
+    serial_orders: ['hilbert'] # 'z', 'hilbert', 'z-trans', 'hilbert-trans'
+    last_n_layers: 4 # decodes features from last n layers of the Unet backbone
+    per_scale_in: True # Map backbone features to point_nerf inputs or not
+    feature_dim: [8, 8, 8, 8]
+    point_nerf_hidden_dim: 32
+    point_nerf_before_skip: 1
+    point_nerf_after_skip: 1
+
+    num_hidden_layers_before: 2
+    num_hidden_layers_after: 2
+    hidden_dim: 32
+
+    interpolation_mode: attention # inverse_distance or max or attention
     activation: LeakyReLU # LeakyReLU or ReLU or Softplus or ShiftedSoftplus
-    local_coords: True
-    normalize_encoding: True
-    k_neighbors: 8 # 1 for no interpolation
+    after_dims: [512, 32, 32]
+    neighbor_type: knn # knn or ball_query or cm
 
-    input_dim: 3
-    hidden_dim: 64
-    num_hidden_layers_before_skip: 2
-    num_hidden_layers_after_skip: 2
+  # Specific decoder configurations
+  udf_decoder:
+    <<: *default_settings
+    scale_visualization: 3 # Overriding specific setting
 
-  seg_decoder:
-    decoder_type: ConvONet
-    interpolation_mode: inverse_distance # inverse_distance or max or trilinear
-    activation: ReLU # LeakyReLU or ReLU or Softplus or ShiftedSoftplus
-    local_coords: True
-    normalize_encoding: True
-    k_neighbors: 8 # 1 for no interpolation
-
-    input_dim: 3
-    feature_dim: 64
-    hidden_dim: 64
-    num_hidden_layers_before_skip: 2
-    num_hidden_layers_after_skip: 2
-
+  mask_decoder:
+    <<: *default_settings
+    interpolation_mode: None # Overriding specific setting
 
 dense_generator:
-  num_steps: 10
-  threshold: 0.1
-  num_points: 900000
-  filter_val: 0.005
-  prepare_epochs: 900
-  type: voxel # multiple_voxels or voxel or scene
+  num_steps: 9
+  threshold: 0.4
+  # num_points: 1600000
+  num_points: 200000
+  filter_val: 0.0002
+  # filter_val: 0.05 # larger value for sign visualization near surface
+  prepare_epochs: 0
+  k_neighbors: 8
+  type: scene # voxel or scene or multiple_voxels
 
 inference:
   term: UDF # UDF or Seg
@@ -98,6 +259,5 @@ inference:
   evaluate: True
   save_predictions: True
   visualization: False
+  log_visualization: True
   show_visualizations: True
-  visualize_given_voxels: False
-  visualize_ids: [406, 405, 366, 365, 403, 402, 410, 363, 409, 362]

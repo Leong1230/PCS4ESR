@@ -1,0 +1,21 @@
+# Managed by Hydra
+
+defaults:
+  - base
+
+dataset: Carla
+
+base_path: ${data.dataset_root_path}/carla-lidar/dataset-no-patch
+input_path: ${data.dataset_root_path}/carla-lidar/dataset-p1n2-no-patch
+
+drives: ['Town01-0', 'Town01-1', 'Town01-2',
+                'Town02-0', 'Town02-1', 'Town02-2',
+                'Town10-0', 'Town10-1', 'Town10-2', 'Town10-3', 'Town10-4']
+                
+supervision:
+  gt_type: "PointTSDFVolume"
+
+transforms:
+  name: "Centralize"
+  args: {}
+

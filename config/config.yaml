@@ -10,25 +10,21 @@ defaults:
   - data: base
   - model: base
 
-# experiment_name: ${model.network.module}_Fixed-Unet-voxel-${data.voxel_size}_stage-${model.training_stage}_overfit-${data.over_fitting}_intake-${data.take}_${data.voxel_size}_latent-${model.network.latent_dim}_norm-initial_inner-steps-${model.optimizer.inner_loop_steps}_lr-${model.optimizer.lr}-${model.optimizer.latent_lr}-${model.optimizer.inner_loop_lr}_reg-lambda-${model.loss.code_reg_lambda}_${model.loss.loss_type}-blocks-${model.network.functa_blocks}_run_1
+# # Reconstruction
+# experiment_name: Batch-4_NKSR_Queries_RTX-3090_SDF_Mask-${model.network.mask_decoder.distance_mask}-${model.network.mask_decoder.mask_weight}_Eikonal-loss-${model.network.eikonal_loss}-${model.network.eikonal_weight}_Overfit-${data.over_fitting}_voxel-${data.voxel_size}_${data.num_query_points}_Encoder-blocks-pn-${model.network.encoder.pn_n_blocks}-unet-${model.network.encoder.unet_blocks_num}_Decoder-${model.network.udf_decoder.decoder_type}-last-${model.network.udf_decoder.last_n_layers}-layers-${model.network.udf_decoder.neighbor_type}-${model.network.udf_decoder.k_neighbors}_activation-${model.network.udf_decoder.activation}-${model.network.udf_decoder.negative_slope}_latent_${model.network.encoder.pn_hidden_dim}-${model.network.latent_dim}_${model.network.udf_decoder.hidden_dim}_lr-${model.optimizer.lr}_run_1
+# experiment_name: Shifted-centers_all-features_Batch-4_NKSR_Queries_layer-2_Theia-1_All-losses_Distance-query-mask_run_1
 
-# experiment_name: ${model.network.module}_stage-${model.training_stage}_voxel-in-out-${data.voxel_size}-${model.network.encoder.voxel_size_out}_overfit-${data.over_fitting}_intake-${data.take}_${model.network.encoder.feature_in}_use-unet-${model.network.encoder.use_unet}_latent-${model.network.latent_dim}-${model.network.seg_decoder.feature_dim}_lr-${model.optimizer.lr}_${model.loss.loss_type}-blocks-${model.network.encoder.blocks}_run_1
+# experiment_name: Over-fit_Sum_Filter-out_Correct-dist_Mink_Pointnerf_ScanNet_run_1
+# experiment_name: Over-fit_PointTransformerV3-stride-2-2-4-4-Input-splats_Zero-normals-padding_Non-uniform-samples_ScanNet_run_2
+# experiment_name: Over-fit_MinkUNet_Batch-2_Carla-Voxel-0.1_Splats_No-Input-splat_run_1
 
-#Auto-Encoder
-# experiment_name: ${model.network.module}_stage-${model.training_stage}_voxel-in-out-${data.voxel_size}-${model.network.encoder.voxel_size_out}_overfit-${data.over_fitting}_intake-${data.take}_use-decoder-${model.network.use_decoder}_${model.network.encoder.feature_in}_encoder-${model.network.encoder.design}_${model.network.interpolation_mode}-${model.network.k_neighbors}-latent-${model.network.latent_dim}-${model.network.encoder.pn_hidden_dim}-${model.network.latent_dim}-${model.network.seg_decoder.feature_dim}_lr-${model.optimizer.lr}_ratio-sampling_debug
+experiment_name: Over-fit_ScanNet_Attentive-pooling_debug_1
+#Vanilla Minkowski
+# experiment_name: mAcc_${model.network.module}_voxel-${data.voxel_size}_overfit-${data.over_fitting}_intake-${data.take}_use-decoder-${model.network.use_decoder}_latent-${model.network.latent_dim}-${model.network.feature_dim}_lr-${model.optimizer.lr}_early-decay_on-narval_run_1
 
-#Auto-Encoder stage 1
-# experiment_name: ${model.network.udf_decoder.activation}_${model.network.module}_stage-${model.training_stage}_voxel-${data.voxel_size}_max-dist-${data.udf_queries.max_dist}_overfit-${data.over_fitting}_intake-${data.take}_encoder-blocks-pn-${model.network.encoder.pn_n_blocks}_decoder-${model.network.udf_decoder.interpolation_mode}-${model.network.udf_decoder.k_neighbors}_latent_${model.network.encoder.pn_hidden_dim}-${model.network.latent_dim}_${model.network.udf_decoder.hidden_dim}_lr-${model.optimizer.lr}_RTX-3090_debug_1
-
-#Auto-Encoder stage 2
-experiment_name: mAcc_${model.network.seg_decoder.activation}_${model.network.module}_stage-${model.training_stage}_voxel-${data.voxel_size}_max-dist-${data.udf_queries.max_dist}_overfit-${data.over_fitting}_intake-${data.take}_encoder-blocks-pn-${model.network.encoder.pn_n_blocks}_${model.network.seg_decoder.interpolation_mode}-${model.network.udf_decoder.k_neighbors}_latent-${model.network.encoder.pn_hidden_dim}-${model.network.latent_dim}-${model.network.seg_decoder.feature_dim}_${model.network.seg_decoder.hidden_dim}_lr-${model.optimizer.lr}_RTX-3090_debug_1
-
-# experiment_name: Auto_encoder_debug_1
-#Vanilla-Minkowski
-# experiment_name: lr-scheduler_mAcc_${model.network.module}_Fixed-Unet-voxel-${data.voxel_size}_overfit-${data.over_fitting}_intake-${data.take}_use-decoder-${model.network.use_decoder}_neighbors-${model.network.seg_decoder.k_neighbors}-blocks-${model.network.seg_decoder.num_hidden_layers_before_skip}_latent-${model.network.latent_dim}-${model.network.seg_decoder.hidden_dim}_lr-${model.optimizer.lr}_debug
 # experiment_name: debug
 project_root_path: ${hydra:runtime.cwd}
-exp_output_root_path: ${project_root_path}/../data/output/${data.dataset}/${model.network.module}/${experiment_name}
+exp_output_root_path: ${project_root_path}/../../theia2_data/output/HybridPCLearning/${data.dataset}/${model.network.module}/${experiment_name}
 
-global_train_seed: 123
-global_test_seed: 321
+global_train_seed: 12345
+global_test_seed: 32102

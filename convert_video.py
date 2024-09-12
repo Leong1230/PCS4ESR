@@ -2,7 +2,7 @@ import os
 import subprocess
 
 # Define the directory containing the videos
-video_directory = '/localhome/zla247/projects/data/Visualizations'
+video_directory = '/localhome/zla247/projects/data/output/Scannet/AutoDecoder/Visualizations/Scene_level'
 
 # Iterate over each file in the directory
 for filename in os.listdir(video_directory):

@@ -1,39 +1,106 @@
 # Managed by Hydra
 
-dataset_root_path: ${project_root_path}/../../local_data
-# dataset_root_path: ${project_root_path}/../../zla247/data
-batch_size: 2
-num_workers: 2
-voxel_size: 0.1 #scannet default: 0.02
-num_point: 200
-full_scale: [128, 512]
-max_num_point: 250000
-rotate_num: 100
-use_relative: True # use relative query coordinates within each voxel
+dataset_root_path: ${project_root_path}/../../theia2_data
 
-udf_queries:
-  pre_sampling: True # True for pre sampling in dataloader initialization
-  sample_entire_scene: True
-  num_queries_on_surface: 100
-  ratio_per_epoch: 0.2
-  queries_ratio_on_surface: 0.5
-  queries_stds: [0.001, 0.01, 0.1]
-  # num_queries_per_std: [400, 320, 400, 400]
-  queries_ratio_per_std: 0.5
-  max_dist: 0.1
+batch_size: 1
+num_workers: 4
+voxel_size: 0.02 #scannet default: 0.02
+
+# supervision: SDF
+
+sdf_queries: 
+  queries_ratio_on_surface: 0.005 #0.5
+  queries_ratio_off_surface: 0.02 # 2
+  queries_stds: [0.024, 0.16, 0.64]
+  queries_ratio_per_std: [0.5, 0.49, 0.01, 0.01] # The last number refers to query points sampled uniformly in the given range
+
+
+udf_queries: 
+  use_mask_queries: False
+  queries_stds: [0.024, 0.16, 0.64]
+  max_dist: 1
+
+supervision:
+  only_l1_sdf_loss: false
+  structure_weight: 20.0
+
+  gt_type: "PointTSDFVolume"
+
+  on_surface:
+    normal_loss: False # supervised normal by nksr style loss
+    weight: 0.0
+    normal_weight: 100.0
+    subsample: 10000
+    svh_tree_depth: 4
+
+  sdf:
+    max_dist: 0.2
+    weight: 300.0
+    reg_sdf_weight: 0.0
+    svh_tree_depth: 4
+    samplers:
+      - type: "uniform"
+        n_samples: 10000
+        expand: 1
+        expand_top: 3
+      - type: "band"
+        n_samples: 10000
+        eps: 0.5    # Times voxel size.
+
+    truncate: False # whether to truncate the SDF values
+    gt_type: "l1"   # or 'l1'
+    gt_soft: true
+    gt_band: 1.0        # times voxel size.
+    pd_transform: true
+    # (For AV Supervision)
+    vol_sup: true
+
+  udf:
+    max_dist: 0.2
+    abs_sdf: True
+    weight: 150.0
+    svh_tree_depth: 4
+    # weight: 0.0
+    samplers:
+      - type: "uniform"
+        n_samples: 10000
+        expand: 1
+        expand_top: 5
+      - type: "band"
+        n_samples: 10000
+        eps: 0.5    # Times voxel size.
+
+  eikonal:
+    loss: True
+    flip: True # flip the gradient sign
+    weight: 0.0
+
+num_input_points: 10000
+uniform_sampling: True
+input_splats: False
+num_query_points: 50000
+std_dev: 0.00 # noise to add to the input points
 in_memory: True # whether precompute voxel indices and load voxel into memory
-take: 2 # how many data to take for training and validation, -1 means all
-intake_start: 0
-over_fitting: True # whether to use only one voxel for training and validation
+take: -1 # how many data to take for training and validation, -1 means all
+intake_start: 51
+over_fitting: False # whether to use only one voxel for training and validation
 
 augmentation:
-  use_aug: True
-  method: original # N-times or original
-  loops: 1
-  color_trans_ratio: 0.1
-  color_jitter_std: 0.05
-  hue_max: 0.5
-  saturation_max: 0.5
-has_normal: True
-has_color: True
-has_label: True
+  use_aug: False
+  loops: 4
+
+reconstruction:
+  trim: True
+  gt_mask: False
+  gt_sdf: False
+  mask_threshold: 0.015
+  regular_grid: False
+  build_on_splated_points: False
+  visualization:
+    visualize: False
+    Mesh: True
+    Input_points: True
+    Pooled_points: False
+    Dense_points: False
+
+

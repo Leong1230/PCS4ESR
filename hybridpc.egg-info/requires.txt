@@ -1,5 +1,6 @@
 tqdm
 lightning
+lightning-bolts
 scipy
 open3d
 wandb
@@ -9,5 +10,12 @@ h5py
 arrgh
 plyfile
 imageio-ffmpeg
-pycarus
 ninja
+gin-config
+torchviz
+trimesh
+thop
+cython
+imageio
+torch-scatter
+scikit-image

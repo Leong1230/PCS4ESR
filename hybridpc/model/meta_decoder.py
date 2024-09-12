@@ -12,9 +12,8 @@ import pytorch_lightning as pl
 import matplotlib.pyplot as plt
 import hydra
 from hybridpc.optimizer.optimizer import cosine_lr_decay
-from hybridpc.model.module import Backbone, ImplicitDecoder, Dense_Generator
+from hybridpc.model.module import Backbone, Dense_Generator
 from hybridpc.model.general_model import GeneralModel
-from hybridpc.evaluation.semantic_segmentation import *
 from torch.nn import functional as F
 
 class MetaDecoder(GeneralModel):
@@ -46,8 +45,8 @@ class MetaDecoder(GeneralModel):
             cfg.model.network.modulation_dim,
             cfg.model.network.seg_decoder.input_dim,
             cfg.model.network.seg_decoder.hidden_dim,
-            cfg.model.network.seg_decoder.num_hidden_layers_before_skip,
-            cfg.model.network.seg_decoder.num_hidden_layers_after_skip,
+            cfg.model.network.seg_decoder.num_hidden_layers_before,
+            cfg.model.network.seg_decoder.num_hidden_layers_after,
             cfg.data.classes
         )
         self.functa_decoder = ImplicitDecoder(
@@ -55,8 +54,8 @@ class MetaDecoder(GeneralModel):
             cfg.model.network.modulation_dim,
             cfg.model.network.functa_decoder.input_dim,
             cfg.model.network.functa_decoder.hidden_dim,
-            cfg.model.network.functa_decoder.num_hidden_layers_before_skip,
-            cfg.model.network.functa_decoder.num_hidden_layers_after_skip,
+            cfg.model.network.functa_decoder.num_hidden_layers_before,
+            cfg.model.network.functa_decoder.num_hidden_layers_after,
             1
         )
 

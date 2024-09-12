@@ -808,7 +808,7 @@ def compute_sdf_from_pcd(
     num_queries_on_surface: int = 10_000,
     queries_stds: List[float] = [0.003, 0.01, 0.1],
     num_queries_per_std: List[int] = [5_000, 4_000, 500, 500],
-    coords_range: Tuple[Tensor, Tensor] = ([-1, -1, -1], [1, 1, 1]),
+    coords_range: Tuple[float, float] = (-1, 1),
     max_dist: float = 0.1,
     compute_occupancy: bool = False,
     use_cuda: bool = True,

@@ -8,12 +8,12 @@ defaults:
 # stage1_ckpt_path: /localhome/zla247/projects/data/output/Scannet/AutoDecoder/stage-1_AutoDecoder_overfit-True_intake-10_0.5_latent-64_inner-steps-300_lr-0.002-0.001-0.001_blocks-[1, 2, 3]-[1, 2, 3]_run_1/training/epoch=509.ckpt
 # stage1_ckpt_path: /localhome/zla247/projects/data/output/Scannet/AutoDecoder/stage-1_AutoDecoder_overfit-True_intake-10_0.5_latent-64_norm-initial_inner-steps-300_lr-0.002-0.001-0.005_reg-True_reg-lambda-0.0001_L1-blocks-[1, 2, 3]-[1, 2, 3]_run_1/training/epoch=499.ckpt
 # stage1_ckpt_path: /localhome/zla247/projects/data/output/Scannet/AutoDecoder/stage-1_AutoDecoder_overfit-True_intake-10_2_latent-64_norm-initial_inner-steps-300_lr-0.002-0.001-0.005_reg-True_reg-lambda-0.0001_L1-blocks-[1, 2]-[1, 2, 3]_test_1/training/epoch=499.ckpt
-stage1_ckpt_path: '/home/zhenli/projects/data/output/Scannet/AutoEncoder/Decoder-selecting_stage-1_voxel-0.5_overfit-True_intake-2_udf-queries-0.02-2_decoder-ConvONet_local-coords-True_normalize-encoding-True_inverse_distance-1-blocks-5_latent-64-64-16_lr-0.002_run_1/training/epoch=9.ckpt'
+# stage1_ckpt_path: /localhome/zla247/projects/data/output/Scannet/CC_checkpoints/voxel-0.5_latent-64_reg_epoch=299.ckpt 
 
 
-# stage1_ckpt_path: None
+stage1_ckpt_path: None
 
-training_stage: 2
+training_stage: 1
 
 trainer:
   max_epochs: 700
@@ -63,14 +63,14 @@ network:
   seg_decoder:
     input_dim: 3
     hidden_dim: 64
-    num_hidden_layers_before_skip: 2
-    num_hidden_layers_after_skip: 2
+    num_hidden_layers_before: 2
+    num_hidden_layers_after: 2
 
   functa_decoder:
     input_dim: 3
     hidden_dim: 64
-    num_hidden_layers_before_skip: 2
-    num_hidden_layers_after_skip: 2
+    num_hidden_layers_before: 2
+    num_hidden_layers_after: 2
 
 dense_generator:
   num_steps: 10

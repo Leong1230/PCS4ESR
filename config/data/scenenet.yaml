@@ -1,0 +1,7 @@
+# Managed by Hydra
+
+defaults:
+  - base
+
+dataset: Scenenet
+dataset_path: ${data.dataset_root_path}/watertight_processed_500000_points_density1000
