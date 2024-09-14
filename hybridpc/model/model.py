@@ -19,7 +19,7 @@ from hybridpc.optimizer.optimizer import cosine_lr_decay, adjust_learning_rate
 from MinkowskiEngine.MinkowskiKernelGenerator import KernelGenerator
 import MinkowskiEngine as ME
 from hybridpc.evaluation import UnitMeshEvaluator
-from hybridpc.model.module import Encoder, Dense_Generator, Interpolated_Dense_Generator, MultiScale_Interpolated_Dense_Generator, visualize_tool, MultiScaleInterpolatedDecoder, PointTransformerV3
+from hybridpc.model.module import Encoder, Generator, Dense_Generator, visualize_tool, MultiScaleInterpolatedDecoder, PointTransformerV3
 from hybridpc.utils.samples import BatchedSampler
 from lightning.pytorch.utilities import grad_norm
 from pytorch3d.ops import knn_points
@@ -31,7 +31,7 @@ from nksr.svh import SparseFeatureHierarchy
 from hybridpc.model.general_model import GeneralModel
 from torch.nn import functional as F
 
-class AutoEncoder(GeneralModel):
+class PCS4ESR(GeneralModel):
     def __init__(self, cfg):
         super().__init__(cfg)
         self.save_hyperparameters(cfg)
@@ -78,44 +78,15 @@ class AutoEncoder(GeneralModel):
             activation=cfg.model.network.mask_decoder.activation
         )
 
-        if "MultiScale" in self.decoder_type:
-            self.dense_generator = MultiScale_Interpolated_Dense_Generator(
-                self.udf_decoder,
-                None,
-                self.decoder_type,
-                cfg.data.voxel_size,
-                cfg.model.dense_generator.num_steps,
-                cfg.model.dense_generator.num_points,
-                cfg.model.dense_generator.threshold,
-                cfg.model.dense_generator.filter_val,
-                cfg.model.network.udf_decoder.neighbor_type,
-                cfg.model.network.udf_decoder.k_neighbors,
-                cfg.model.network.udf_decoder.last_n_layers
-            )
-
-        elif "Interpolated" in self.decoder_type:
-            self.dense_generator = Interpolated_Dense_Generator(
-                self.udf_decoder,
-                self.decoder_type,
-                cfg.data.voxel_size,
-                cfg.model.dense_generator.num_steps,
-                cfg.model.dense_generator.num_points,
-                cfg.model.dense_generator.threshold,
-                cfg.model.dense_generator.filter_val,
-                cfg.model.network.udf_decoder.neighbor_type,
-                cfg.model.network.udf_decoder.k_neighbors,
-            )
-
-        else:
-            self.dense_generator = Dense_Generator(
-                self.udf_decoder,
-                cfg.data.voxel_size,
-                cfg.model.dense_generator.num_steps,
-                cfg.model.dense_generator.num_points,
-                cfg.model.dense_generator.threshold,
-                cfg.model.dense_generator.filter_val,
-                cfg.model.dense_generator.type
-            )
+        self.dense_generator = Dense_Generator(
+            self.udf_decoder,
+            cfg.data.voxel_size,
+            cfg.model.dense_generator.num_steps,
+            cfg.model.dense_generator.num_points,
+            cfg.model.dense_generator.threshold,
+            cfg.model.dense_generator.filter_val,
+            cfg.model.dense_generator.type
+        )
 
         self.kernel_generator = KernelGenerator(kernel_size=cfg.model.network.udf_decoder.kernel_size,
                                                 stride=1,

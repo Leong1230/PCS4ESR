@@ -10,21 +10,10 @@ defaults:
   - data: base
   - model: base
 
-# # Reconstruction
-# experiment_name: Batch-4_NKSR_Queries_RTX-3090_SDF_Mask-${model.network.mask_decoder.distance_mask}-${model.network.mask_decoder.mask_weight}_Eikonal-loss-${model.network.eikonal_loss}-${model.network.eikonal_weight}_Overfit-${data.over_fitting}_voxel-${data.voxel_size}_${data.num_query_points}_Encoder-blocks-pn-${model.network.encoder.pn_n_blocks}-unet-${model.network.encoder.unet_blocks_num}_Decoder-${model.network.udf_decoder.decoder_type}-last-${model.network.udf_decoder.last_n_layers}-layers-${model.network.udf_decoder.neighbor_type}-${model.network.udf_decoder.k_neighbors}_activation-${model.network.udf_decoder.activation}-${model.network.udf_decoder.negative_slope}_latent_${model.network.encoder.pn_hidden_dim}-${model.network.latent_dim}_${model.network.udf_decoder.hidden_dim}_lr-${model.optimizer.lr}_run_1
-# experiment_name: Shifted-centers_all-features_Batch-4_NKSR_Queries_layer-2_Theia-1_All-losses_Distance-query-mask_run_1
+experiment_name: ScanNet_Serial_run_1
 
-# experiment_name: Over-fit_Sum_Filter-out_Correct-dist_Mink_Pointnerf_ScanNet_run_1
-# experiment_name: Over-fit_PointTransformerV3-stride-2-2-4-4-Input-splats_Zero-normals-padding_Non-uniform-samples_ScanNet_run_2
-# experiment_name: Over-fit_MinkUNet_Batch-2_Carla-Voxel-0.1_Splats_No-Input-splat_run_1
-
-experiment_name: Over-fit_ScanNet_Attentive-pooling_debug_1
-#Vanilla Minkowski
-# experiment_name: mAcc_${model.network.module}_voxel-${data.voxel_size}_overfit-${data.over_fitting}_intake-${data.take}_use-decoder-${model.network.use_decoder}_latent-${model.network.latent_dim}-${model.network.feature_dim}_lr-${model.optimizer.lr}_early-decay_on-narval_run_1
-
-# experiment_name: debug
-project_root_path: ${hydra:runtime.cwd}
-exp_output_root_path: ${project_root_path}/../../theia2_data/output/HybridPCLearning/${data.dataset}/${model.network.module}/${experiment_name}
+output_folder: None
+exp_output_root_path: ${output_folder}/${data.dataset}/${model.network.module}/${experiment_name}
 
 global_train_seed: 12345
 global_test_seed: 32102

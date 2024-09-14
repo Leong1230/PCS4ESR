@@ -1,0 +1,212 @@
+
+# Managed by Hydra
+
+defaults:
+  - base
+
+trainer:
+  max_epochs: 1
+lr_decay: # for Adam
+  decay_start_epoch: 60
+
+network:
+  module: PCS4ESR
+  use_color: False
+  use_normal: True # True for SDF supervision
+  use_xyz: True # True only for PointTransformerV3 debugging
+
+  latent_dim: 32 #
+  prepare_epochs: 350
+  eval_CD_frequency: 1
+  eval_algorithm: DMC # DMC or DensePC or MC
+  eikonal_loss: True
+  eikonal_weight: 0.02
+  grad_type: Analytical # Analytical or Numerical
+  backbone: PointTransformerV3 # PointTransformerV3 or MinkUNet
+
+  point_transformerv3: # default
+    in_channels: 6
+    order: ["z", "z-trans", "hilbert", "hilbert-trans"]
+    stride: [8, 8, 4, 2]
+    enc_depths: [2, 2, 2, 6, 2]
+    enc_channels: [32, 64, 128, 256, 512]
+    enc_num_head: [2, 4, 8, 16, 32]
+    enc_patch_size: [64, 64, 64, 64, 64]
+
+
+    dec_depths: [2, 2, 2, 2]
+    dec_channels: [64, 64, 128, 256]
+    dec_num_head: [4, 4, 8, 16]
+    dec_patch_size: [64, 64, 64, 64] 
+
+    mlp_ratio: 4
+    qkv_bias: true
+    qk_scale: null
+    attn_drop: 0.0
+    proj_drop: 0.0
+    drop_path: 0.3
+    pre_norm: true
+    shuffle_orders: true
+    enable_rpe: false
+    enable_flash: true
+    upcast_attention: false
+    upcast_softmax: false
+    cls_mode: false
+    pdnorm_bn: false
+    pdnorm_ln: false
+    pdnorm_decouple: true
+    pdnorm_adaptive: false
+    pdnorm_affine: true
+    pdnorm_conditions: ["ScanNet", "S3DIS", "Structured3D"]
+
+  encoder:
+    input_splat: False # encodes input splatted voxels
+    multi_scale_encoder: False
+    add_n_scale_pn: 2 # add pointnet feature in n-th scale
+    only_large_pn: False # only use features from large scale local pointnet
+    larger_unet: False
+    pn_hidden_dim: 32
+    pn_n_blocks: 2
+    unet_blocks_num: 5
+    unet_block_reps: 2
+
+  # Define common settings as an anchor
+  default_decoder:
+    decoder_type: LargeDecoder # or Decoder or SimpleDecoder or SimpleInterpolatedDecoder or InterpolatedDecoder or MultiScaleInterpolatedDecoder
+    scale_visualization: -1 # 0, 1, 2, 3 or -1
+    dist_mask: True
+    filter_by_mask: True # filter out point features by mask
+    learnable_alpha: False # learnable alpha from latents
+    larger_point_nerf: False
+    larger_unet: ${model.network.encoder.larger_unet}
+    backbone: ${model.network.backbone}
+    decoder_channels: ${model.network.point_transformerv3.dec_channels}
+    stride: ${model.network.point_transformerv3.stride}
+    coords_enc: Fourier # MLP or Fourier (16 dim MLP or 63 dim Fourier)
+    architecture: point_nerf # attentive_pooling or transformer_encoder or point_nerf
+    inter: inverse_dist # trilinear or inverse_dist or feat_mlp or channel_wise_feat_mlp
+    negative_slope: 0.01 # for LeakyReLU, default: 0.01
+    use_bn: True
+    multi_scale_aggregation: sum # cat or sum or attention or average or gate or attentive_pooling
+
+    neighboring: Serial # KNN or Mink or Serial or Mixture
+    serial_neighbor_layers: 3 # number of serial neighbor layers
+    k_neighbors: 8 # 1 for no interpolation
+    kernel_size: 2 # for cm neighbors
+    no_pos_enc_noramalization: False
+    correct_pos_enc_noramalization: False
+    pos_enc_dist_factor: [1, 1, 1, 1]
+    dist_factor: [1, 1, 1, 1]  # N times voxel size
+    serial_orders: ['hilbert'] # 'z', 'hilbert', 'z-trans', 'hilbert-trans'
+    last_n_layers: 4 # decodes features from last n layers of the Unet backbone
+    per_scale_in: True # Map backbone features to point_nerf inputs or not
+    feature_dim: [8, 8, 8, 8]
+    point_nerf_hidden_dim: 32
+    point_nerf_before_skip: 1
+    point_nerf_after_skip: 1
+
+    num_hidden_layers_before: 2
+    num_hidden_layers_after: 2
+    hidden_dim: 32
+
+    interpolation_mode: attention # inverse_distance or max or attention
+    activation: LeakyReLU # LeakyReLU or ReLU or Softplus or ShiftedSoftplus
+    after_dims: [512, 32, 32]
+    neighbor_type: knn # knn or ball_query or cm
+
+  # Specific decoder configurations
+  udf_decoder:
+    decoder_type: ${model.network.default_decoder.decoder_type}
+    scale_visualization: 3
+    dist_mask: ${model.network.default_decoder.dist_mask}
+    filter_by_mask: ${model.network.default_decoder.filter_by_mask}
+    learnable_alpha: ${model.network.default_decoder.learnable_alpha}
+    larger_point_nerf: ${model.network.default_decoder.larger_point_nerf}
+    larger_unet: ${model.network.default_decoder.larger_unet}
+    backbone: ${model.network.default_decoder.backbone}
+    decoder_channels: ${model.network.default_decoder.decoder_channels}
+    stride: ${model.network.default_decoder.stride} 
+    coords_enc: ${model.network.default_decoder.coords_enc}
+    architecture: ${model.network.default_decoder.architecture}
+    inter: ${model.network.default_decoder.inter}
+    negative_slope: ${model.network.default_decoder.negative_slope}
+    use_bn: ${model.network.default_decoder.use_bn}
+    multi_scale_aggregation: ${model.network.default_decoder.multi_scale_aggregation}
+
+    neighboring: ${model.network.default_decoder.neighboring}
+    serial_neighbor_layers: ${model.network.default_decoder.serial_neighbor_layers}
+    k_neighbors: ${model.network.default_decoder.k_neighbors} 
+    kernel_size: ${model.network.default_decoder.kernel_size}
+    no_pos_enc_noramalization: ${model.network.default_decoder.no_pos_enc_noramalization}
+    correct_pos_enc_noramalization: ${model.network.default_decoder.correct_pos_enc_noramalization}
+    pos_enc_dist_factor: ${model.network.default_decoder.pos_enc_dist_factor}
+    dist_factor: ${model.network.default_decoder.dist_factor}
+    serial_orders: ${model.network.default_decoder.serial_orders}
+    last_n_layers: ${model.network.default_decoder.last_n_layers}
+    per_scale_in: ${model.network.default_decoder.per_scale_in}
+    feature_dim: ${model.network.default_decoder.feature_dim} 
+    point_nerf_hidden_dim: ${model.network.default_decoder.point_nerf_hidden_dim}
+    point_nerf_before_skip: ${model.network.default_decoder.point_nerf_before_skip}
+    point_nerf_after_skip: ${model.network.default_decoder.point_nerf_after_skip}
+
+    num_hidden_layers_before: ${model.network.default_decoder.num_hidden_layers_before}
+    num_hidden_layers_after: ${model.network.default_decoder.num_hidden_layers_after}
+    hidden_dim: ${model.network.default_decoder.hidden_dim}
+
+    interpolation_mode: ${model.network.default_decoder.interpolation_mode}
+    activation: ${model.network.default_decoder.activation}
+    after_dims: ${model.network.default_decoder.after_dims}
+    neighbor_type: ${model.network.default_decoder.neighbor_type}
+
+  mask_decoder: 
+    decoder_type: ${model.network.default_decoder.decoder_type}
+    scale_visualization: ${model.network.default_decoder.scale_visualization}
+    dist_mask: ${model.network.default_decoder.dist_mask}
+    filter_by_mask: ${model.network.default_decoder.filter_by_mask}
+    learnable_alpha: ${model.network.default_decoder.learnable_alpha}
+    larger_point_nerf: ${model.network.default_decoder.larger_point_nerf}
+    larger_unet: ${model.network.default_decoder.larger_unet}
+    backbone: ${model.network.default_decoder.backbone}
+    decoder_channels: ${model.network.default_decoder.decoder_channels}
+    stride: ${model.network.default_decoder.stride} 
+    coords_enc: ${model.network.default_decoder.coords_enc}
+    architecture: ${model.network.default_decoder.architecture}
+    inter: ${model.network.default_decoder.inter}
+    negative_slope: ${model.network.default_decoder.negative_slope}
+    use_bn: ${model.network.default_decoder.use_bn}
+    multi_scale_aggregation: ${model.network.default_decoder.multi_scale_aggregation}
+
+    neighboring: ${model.network.default_decoder.neighboring}
+    serial_neighbor_layers: ${model.network.default_decoder.serial_neighbor_layers}
+    k_neighbors: ${model.network.default_decoder.k_neighbors} 
+    kernel_size: ${model.network.default_decoder.kernel_size}
+    no_pos_enc_noramalization: ${model.network.default_decoder.no_pos_enc_noramalization}
+    correct_pos_enc_noramalization: ${model.network.default_decoder.correct_pos_enc_noramalization}
+    pos_enc_dist_factor: ${model.network.default_decoder.pos_enc_dist_factor}
+    dist_factor: ${model.network.default_decoder.dist_factor}
+    serial_orders: ${model.network.default_decoder.serial_orders}
+    last_n_layers: ${model.network.default_decoder.last_n_layers}
+    per_scale_in: ${model.network.default_decoder.per_scale_in}
+    feature_dim: ${model.network.default_decoder.feature_dim} 
+    point_nerf_hidden_dim: ${model.network.default_decoder.point_nerf_hidden_dim}
+    point_nerf_before_skip: ${model.network.default_decoder.point_nerf_before_skip}
+    point_nerf_after_skip: ${model.network.default_decoder.point_nerf_after_skip}
+
+    num_hidden_layers_before: ${model.network.default_decoder.num_hidden_layers_before}
+    num_hidden_layers_after: ${model.network.default_decoder.num_hidden_layers_after}
+    hidden_dim: ${model.network.default_decoder.hidden_dim}
+
+    interpolation_mode: ${model.network.default_decoder.interpolation_mode}
+    activation: ${model.network.default_decoder.activation}
+    after_dims: ${model.network.default_decoder.after_dims}
+    neighbor_type: ${model.network.default_decoder.neighbor_type}
+
+dense_generator:
+  num_steps: 9
+  threshold: 0.4
+  num_points: 200000
+  filter_val: 0.0002
+  prepare_epochs: 0
+  k_neighbors: 8
+  type: scene # voxel or scene or multiple_voxels
+

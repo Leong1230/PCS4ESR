@@ -14,119 +14,11 @@ from importlib import import_module
 import pytorch_lightning as pl
 from hybridpc.data.data_module import DataModule
 from hybridpc.evaluation import UnitMeshEvaluator, MeshEvaluator
-from hybridpc.model.module import Dense_Generator, Interpolated_Dense_Generator, MultiScale_Interpolated_Dense_Generator, visualize_tool
+from hybridpc.model.module import Generator
 from nksr.svh import SparseFeatureHierarchy
 import MinkowskiEngine as ME
 
-
-# def udf_evaluation(out_path, dataset, gen_p):
-#     global gen
-#     gen = gen_p
-
-#     if not os.path.exists(out_path):
-#         os.makedirs(out_path)
-#     print(out_path)
-
-#     # can be run on multiple machines: dataset is shuffled and already generated objects are skipped.
-#     loader = dataset.get_loader(shuffle=True)
-
-#     for i, data in tqdm(enumerate(loader)):
-#         path = os.path.normpath(data['path'][0])
-#         export_path = out_path + '/{}_df.npz'.format(path.split(os.sep)[-1])
-
-#         if os.path.exists(export_path):
-#             print('Path exists - skip! {}'.format(export_path))
-#             continue
-#         """ used for generated dense pointcloud """
-#         # else:
-#         #     os.makedirs(export_path)
-
-#         distance_field = gen.generate_df(data)
-#         np.savez(export_path, distance_field=distance_field)
-        
-#         """ used to generate dense pointcloud iteratively """
-#         for num_steps in [7]:
-#             point_cloud, duration = gen.generate_point_cloud(data, num_steps)
-#             arrgh(point_cloud, duration, num_steps)
-#             np.savez(export_path + 'dense_point_cloud_{}'.format(num_steps), point_cloud=point_cloud, duration=duration)
-#             print('num_steps', num_steps, 'duration', duration)
-
-#         # create an Open3D point cloud object
-#         pcd = o3d.geometry.PointCloud()
-#         pcd.points = o3d.utility.Vector3dVector(point_cloud)
-
-#         # estimate normals
-#         pcd.estimate_normals()
-
-#         # run Poisson surface reconstruction
-#         mesh, densities = o3d.geometry.TriangleMesh.create_from_point_cloud_poisson(pcd, depth=8)
-
-#         # remove low density vertices
-#         vertices_to_remove = densities < np.quantile(densities, 0.01)
-#         mesh.remove_vertices_by_mask(vertices_to_remove)
-
-#         # export the mesh as an .obj file
-#         mesh.export(export_path + 'dense_point_cloud_{}.obj'.format(num_steps))
-
-
-# class ScanNetDataset(Dataset):
-#     def __init__(self, split, partial_input=False, **kwargs):
-#         self.over_fitting = kwargs.get("over_fitting", False)
-#         self.num_input_points = kwargs.get("num_input_points", 5000)
-#         self.std_dev = kwargs.get("std_dev", 0.00)
-
-#         self.split = 'train' if self.over_fitting else split # use only train set for overfitting
-#         self.base_path = Path(kwargs.get("base_path", None))
-
-#         if self.split == "test":
-#             with (self.base_path / "metadata" / "scannetv2_test.txt").open() as f:
-#                 self.scenes = [t.strip() for t in f.readlines()]
-#         elif self.split == "train":
-#             with (self.base_path / "metadata" / "scannetv2_train.txt").open() as f:
-#                 self.scenes = [t.strip() for t in f.readlines()]
-#         else:
-#             with (self.base_path / "metadata" / "scannetv2_val.txt").open() as f:
-#                 self.scenes = [t.strip() for t in f.readlines()]
-        
-#         # self.scenes = self.scenes[:4]
-#         if self.over_fitting:
-#             self.split = 'val'
-#             self.scenes = ['scene0221_00']
-        
-#     def __len__(self):
-#         return len(self.scenes)
-
-#     def _get_item(self, data_id, rng):
-#         scene_name = self.scenes[data_id]
-
-#         data = {}
-#         scene_path = os.path.join(self.base_path, self.split, f"{scene_name}.pth")
-#         full_data = torch.load(scene_path)
-#         full_points = full_data['xyz'].astype(np.float32)
-#         full_normals = full_data['normal'].astype(np.float32)
-
-#         if self.num_input_points != -1:
-#             sample_indices = np.random.choice(full_points.shape[0], self.num_input_points, replace=True)
-#             partial_points = full_points[sample_indices]
-#             partial_normals = full_normals[sample_indices]
-
-#         else:
-#             partial_points = full_points
-#             partial_normals = full_normals
-
-#         if isinstance(self.std_dev, (float, int)):
-#             std_dev = [self.std_dev] * 3  # Same standard deviation for x, y, z
-#         noise = np.random.normal(0, self.std_dev, partial_points.shape)
-#         partial_points += noise
-
-#         data = {
-#             "xyz": partial_points,
-#             "partial_normal": partial_normals,
-#             "all_xyz": full_points,
-#             "full_normal": full_normals
-#         }
-
-#         return data
+                
 def convert_non_serializable(obj):
     if isinstance(obj, np.float32):
         return float(obj)
@@ -297,7 +189,7 @@ def main(cfg):
     model.eval()
 
     # if "MultiScaleInterpolated" in cfg.model.network.udf_decoder.decoder_type:
-    dense_generator = MultiScale_Interpolated_Dense_Generator(
+    dense_generator = Generator(
         model.udf_decoder,
         model.mask_decoder,
         cfg.model.network.udf_decoder.decoder_type,
@@ -311,28 +203,6 @@ def main(cfg):
         cfg.model.network.udf_decoder.last_n_layers,
         cfg.data.reconstruction
     )
-    # elif "Interpolated" in cfg.model.network.udf_decoder.decoder_type:
-    #     dense_generator = Interpolated_Dense_Generator(
-    #         model.udf_decoder,
-    #         cfg.model.network.udf_decoder.decoder_type,
-    #         cfg.data.voxel_size,
-    #         cfg.model.dense_generator.num_steps,
-    #         cfg.model.dense_generator.num_points,
-    #         cfg.model.dense_generator.threshold,
-    #         cfg.model.dense_generator.filter_val,
-    #         cfg.model.network.udf_decoder.neighbor_type,h
-    #         cfg.model.network.udf_decoder.k_neighbors
-    #     )
-    # else:
-    #     dense_generator = Dense_Generator(
-    #         model.udf_decoder,
-    #         cfg.data.voxel_size,
-    #         cfg.model.dense_generator.num_steps,
-    #         cfg.model.dense_generator.num_points,
-    #         cfg.model.dense_generator.threshold,
-    #         cfg.model.dense_generator.filter_val,
-    #         cfg.model.dense_generator.type
-    #     )
 
     # Initialize a dictionary to keep track of sums and count
     eval_sums = defaultdict(float)

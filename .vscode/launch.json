@@ -8,12 +8,15 @@
             "name": "Python: Current File",
             "type": "python",
             "request": "launch",
-            "program": "train.py",
+            "program": "eval.py",
             "console": "integratedTerminal",
             "justMyCode": true,
             "args": [
-                "model=auto_encoder",
-                "data=scannet"
+                "model=scannet_model",
+                "data=scannet",
+                "model.ckpt_path=/localhome/zla247/projects/PointcloudReconstruction/checkpoints/ScanNet_Serial_best.ckpt",
+                "data.dataset_root_path=/localhome/zla247/theia2_data",
+                "output_folder=/localhome/zla247/theia2_data/output/PCS4ESR"
             ]
         }
     ]

@@ -1,32 +1,21 @@
-from pyexpat import features
-from sklearn.metrics import jaccard_score
 import torch
-import time
-import os
 import torch.nn as nn
-import numpy as np
-import math
-import torchmetrics
 import open3d as o3d
-import importlib
+import numpy as np
 import pytorch_lightning as pl
-import matplotlib.pyplot as plt
 import pl_bolts
-import hydra
 from collections import OrderedDict
 from typing import Mapping, Any, Optional
-from pycg import exp, image
 from hybridpc.optimizer.optimizer import cosine_lr_decay
-from hybridpc.model.module import Backbone, Dense_Generator
+from hybridpc.model.module import Backbone, Generator
 from torch.nn import functional as F
-from lightning.pytorch.utilities import grad_norm
+from pycg import exp, image
 
 
 class GeneralModel(pl.LightningModule):
     def __init__(self, cfg):
         super().__init__()
         self.save_hyperparameters()
-        self.training_stage = cfg.model.training_stage
         self.val_test_step_outputs = []
         # For recording test information
         # step -> log_name -> log_value (list of ordered-dict)
@@ -36,11 +25,7 @@ class GeneralModel(pl.LightningModule):
         self.record_data_cache = {}
         self.last_test_valid = False
 
-    def configure_optimizers(self):
-        # params_to_optimize = list(self.encoder.parameters()) + list(self.mask_decoder.parameters()) + list(self.udf_decoder.parameters())
-        # if hasattr(self, 'mask_decoder'):
-        #     params_to_optimize += list(self.mask_decoder.parameters())
-    
+    def configure_optimizers(self):  
         params_to_optimize = self.parameters()
         
         if self.hparams.model.optimizer.name == "SGD":
@@ -79,16 +64,6 @@ class GeneralModel(pl.LightningModule):
     def training_step(self, data_dict):
         pass 
 
-    # def on_before_optimizer_step(self, optimizer, optimizer_idx):
-    #     # Compute the 2-norm for each layer
-    #     # If using mixed precision, the gradients are already unscaled here
-    #     udf_norms = grad_norm(self.udf_decoder, norm_type=2)
-    #     mask_norms = grad_norm(self.mask_decoder, norm_type=2)
-    #     encoder_norms = grad_norm(self.encoder, norm_type=2)
-    #     # self.log_dict("train/udf_norms", udf_norms)
-    #     # self.log_dict("train/mask_norms", mask_norms)
-    #     # self.log_dict("train/encoder_norms", encoder_norms)
-
     def on_train_epoch_end(self):
         if self.hparams.model.optimizer.name == 'Adam':
             # Update the learning rates for Adam optimizers
@@ -112,23 +87,6 @@ class GeneralModel(pl.LightningModule):
     def test_step(self, data_dict, idx):
         pass
 
-    # def log(self, name: str, value: Any, *args, **kwargs):
-    #     """
-    #         Override PL's default log function, to better support test-time or overfit-time no-logger logging
-    #     (using various types including string).
-    #     """
-    #     # For overfitting, we leave the log to the log_dict monkey_patch.
-    #     # if isinstance(self.trainer, omegaconf.dictconfig.DictConfig):
-    #     #     return
-    #     if self.trainer.testing:
-    #         if name == 'batch-idx':
-    #             self.test_logged_values.append(OrderedDict([(name, value)]))
-    #         else:
-    #             if isinstance(value, torch.Tensor):
-    #                 value = value.item()
-    #             self.test_logged_values[-1][name] = value
-    #     else:
-    #         super().log(name=name, value=value, *args, **kwargs)
 
     def log_dict_prefix(
         self,
@@ -151,19 +109,8 @@ class GeneralModel(pl.LightningModule):
 
     def log_image(self, name: str, img: np.ndarray):
         if self.trainer.logger is not None:
-            # if self.logger_type == 'tb':
-            #     if img.shape[2] <= 4:
-            #         # WHC -> CWH
-            #         img = np.transpose(img, (2, 0, 1))
-            #     self.trainer.logger.experiment.add_image(name, img, self.trainer.global_step)
-            # elif self.logger_type == 'wandb':
             self.trainer.logger.log_image(key=name, images=[img])
 
-    # def log_plot(self, name: str, fig: matplotlib.figure.Figure, close: bool = True):
-    #     img = image.from_mplot(fig, close)
-    #     self.log_image(name, img)
-    #     if close:
-    #         plt.close(fig)
 
     def log_geometry(self, name: str, geom, draw_color: bool = False):
         if self.trainer.logger is None:
@@ -182,7 +129,4 @@ class GeneralModel(pl.LightningModule):
             raise NotImplementedError
 
     def test_log_data(self, data_dict: dict):
-        # Output artifact data only when there is no focus.
-        # if self.record_folder is None or self.hparams.focus == "none":
-        #     return
         self.record_data_cache.update(data_dict)

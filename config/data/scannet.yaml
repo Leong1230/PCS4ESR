@@ -13,10 +13,11 @@ metadata:
   test_list: ${data.dataset_root_path}/scannetv2/metadata/scannetv2_test.txt
   combine_file: ${data.dataset_root_path}/scannetv2/metadata/scannetv2-labels.combined.tsv
 
-classes: 20
-# ignore_classes: [ 1, 2 ]
-class_names: [ 'floor', 'wall', 'cabinet', 'bed', 'chair', 'sofa', 'table', 'door', 'window', 'bookshelf', 'picture',
-               'counter', 'desk', 'curtain', 'refrigerator', 'shower curtain', 'toilet', 'sink',
-               'bathtub', 'otherfurniture' ]
+supervision:
+  sdf:
+    max_dist: 0.2 
+  udf:
+    max_dist: 0.2
 
-mapping_classes_ids: [ 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 14, 16, 24, 28, 33, 34, 36, 39 ]
+reconstruction:
+  mask_threshold: 0.015

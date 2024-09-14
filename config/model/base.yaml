@@ -1,6 +1,6 @@
 # Managed by Hydra
 
-ckpt_path: 
+ckpt_path: None
 
 logger:
   # https://pytorch-lightning.readthedocs.io/en/stable/extensions/generated/pytorch_lightning.loggers.WandbLogger.html
@@ -31,7 +31,7 @@ checkpoint_monitor:
 
 optimizer:
   name: Adam # SGD or Adam
-  lr: 0.004
+  lr: 0.001
   warmup_steps_ratio: 0.1
 
 lr_decay: # for Adam
@@ -41,7 +41,3 @@ lr_decay: # for Adam
 inference:
   term: UDF # UDF or Seg
   split: val
-  evaluate: True
-  save_predictions: True
-  visualization: False
-  show_visualizaitons: True

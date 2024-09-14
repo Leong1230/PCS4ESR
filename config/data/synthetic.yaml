@@ -19,3 +19,13 @@ voxels_file: null
 multi_files: 10
 unit_size: 0.005 # size of a voxel (not used)
 query_vol_size: 25
+
+supervision:
+  sdf:
+    max_dist: 0.2
+    
+  udf:
+    max_dist: 0.2
+
+reconstruction:
+  mask_threshold: 0.015
