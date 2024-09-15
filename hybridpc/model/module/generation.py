@@ -38,20 +38,16 @@ class Dense_Generator(pl.LightningModule):
         self.num_steps = num_steps
         self.num_points = num_points
         self.threshold = threshold
-        self.filter_val = filter_val
-        self.type = type # voxel or scene5
+        self.type = type # voxel or scene
 class Generator(pl.LightningModule):
-    def __init__(self, model, mask_model, decoder_type, voxel_size, num_steps, num_points, threshold, filter_val, neighbor_type, k_neighbors, last_n_layers, reconstruction_cfg):
+    def __init__(self, model, mask_model, voxel_size, threshold, k_neighbors, last_n_layers, reconstruction_cfg):
         super().__init__()
         self.model = model # the model should be the UDF Decoder
         self.mask_model = mask_model # the distance mask decoder
         self.rec_cfg = reconstruction_cfg
-        # self.model.eval()
-        self.decoder_type = decoder_type
+        # self.decoder_type = decoder_type
         self.voxel_size = voxel_size
         self.threshold = threshold
-        self.filter_val = filter_val
-        self.neighbor_type = neighbor_type
         self.k_neighbors = k_neighbors
         self.last_n_layers = last_n_layers                                      
     
@@ -86,7 +82,6 @@ class Generator(pl.LightningModule):
 
         max_depth = 100
         grid_upsample = 1
-        max_points = -1
         mise_iter = 0
         knn_time = 0
         dmc_time = 0 
@@ -97,53 +92,20 @@ class Generator(pl.LightningModule):
         grid_splat_time = 0
         mask_threshold = self.rec_cfg.mask_threshold
 
-        self.build_on_splated_points = False
-        # Initialize voxel center coordinates
-        if self.build_on_splated_points:
-            pts = data_dict['xyz'].detach()
-        else:
-            pts = data_dict['un_splats_xyz'].detach()
+        pts = data_dict['un_splats_xyz'].detach()
         self.last_n_layers = 4
         self.trim = self.rec_cfg.trim
         self.gt_mask = self.rec_cfg.gt_mask
         self.gt_sdf = self.rec_cfg.gt_sdf
-        self.build_on_splated_points = self.rec_cfg.build_on_splated_points
-        self.regular_grid = self.rec_cfg.regular_grid
         grid_splat_time -= time.time()
 
-        # Generate nksr grid structure (single depth)
+        # Generate DMC grid structure
         nksr_svh = SparseFeatureHierarchy(
             voxel_size=self.voxel_size,
             depth=self.last_n_layers,
             device= pts.device
         )
-
-        if self.regular_grid:
-            resolution = 0.2  # Define the resolution of the grid
-            distance_threshold = 1  # Define the distance threshold
-            offset = 0.5
-
-            min_xyz = torch.min(pts, dim=0).values
-            max_xyz = torch.max(pts, dim=0).values
-            # Apply the offset to the min and max coordinates
-            min_xyz = min_xyz - offset
-            max_xyz = max_xyz + offset
-            # Step 2: Create a uniform grid of points within the bounding box
-            x_range = torch.arange(min_xyz[0], max_xyz[0], resolution)
-            y_range = torch.arange(min_xyz[1], max_xyz[1], resolution)
-            z_range = torch.arange(min_xyz[2], max_xyz[2], resolution)
-            xx, yy, zz = torch.meshgrid(x_range, y_range, z_range)
-            grid_points = torch.stack([xx, yy, zz], dim=-1).reshape(-1, 3).to(torch.device("cuda"))
-            knn_output = knn_points(grid_points.unsqueeze(0).to(torch.device("cuda")),
-                                    pts.unsqueeze(0).to(torch.device("cuda")),
-                                    K=1)
-            dist = knn_output.dists.squeeze(0).squeeze(-1)
-            mask = dist <= distance_threshold
-            masked_grid_points = grid_points[mask]
-            nksr_svh.build_iterative_coarsening(masked_grid_points)
-        else:
-            nksr_svh.build_point_splatting(pts)
-
+        nksr_svh.build_point_splatting(pts)
 
         flattened_grids = []
         for d in range(min(nksr_svh.depth, max_depth + 1)):
@@ -179,14 +141,6 @@ class Generator(pl.LightningModule):
             else:
                 ref_xyz, ref_normal = data_dict['all_xyz'], data_dict['all_normals']
             dmc_value = self.compute_gt_sdf_from_pts(ref_xyz, ref_normal, dmc_vertices)
-
-        colors = torch.zeros((dmc_value.shape[0], 3)).to(dmc_value.device)
-        colors[dmc_value > 0] = torch.Tensor([1, 0, 0]).to(dmc_value.device)  # Red for positive values
-        colors[dmc_value < 0] = torch.Tensor([0, 1, 0]).to(dmc_value.device)  # Green for negative values
-
-        # Normalize the color intensity based on the magnitude of dmc_values
-        max_abs_value = torch.max(torch.abs(dmc_value))
-        colors *= torch.abs(dmc_value)[:, None] / max_abs_value
 
         for _ in range(mise_iter):
             cube_sign = dmc_value[dmc_graph] > 0
@@ -228,4 +182,4 @@ class Generator(pl.LightningModule):
         # del dual_v, dual_f
         mesh = vis.mesh(mesh_res.v, mesh_res.f)
         dmc_time += time.time()
-        return mesh, knn_time, dmc_time, attentive_time, interpolation_time, after_layers_time, decoder_time, grid_splat_time, dmc_vertices.cpu().numpy(), dmc_value.cpu().numpy(), colors.cpu().numpy(), voxel_centers.cpu().numpy()
+        return mesh, knn_time, dmc_time, attentive_time, interpolation_time, after_layers_time, decoder_time, grid_splat_time

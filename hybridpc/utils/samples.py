@@ -90,7 +90,6 @@ class Sampler:
                 else:
                     ref_xyz_inds = (torch.rand((n_subsample,), device=self.ref_xyz.device) *
                                     self.ref_xyz.size(0)).long()
-                    # ref_xyz_inds = torch.arange(self.ref_xyz.size(0), device=self.ref_xyz.device)
                 all_samples.append(self.ref_xyz[ref_xyz_inds])
 
         return torch.cat(all_samples, 0)
@@ -107,19 +106,12 @@ class Sampler:
             field[field < -truncation_size] = -truncation_size
         return field
 
-    # def compute_gt_chi_from_pts(self, query_pos: torch.Tensor):
-    #     mc_query_sdf = -ext.sdfgen.sdf_from_points(query_pos, self.ref_xyz, self.ref_normal, 8, 0.02, False)[0]
-    #     return mc_query_sdf
-
     def compute_gt_sdf_from_pts(self, query_pos: torch.Tensor):
         k = 8  
         stdv = 0.02
-        # knn_output = knn_points(query_pos.unsqueeze(0), self.ref_xyz.unsqueeze(0), K)
-        # indices = knn_output.idx.squeeze(0)
         normals = self.ref_normal
         knn_output = knn_points(query_pos.unsqueeze(0).to(torch.device("cuda")), self.ref_xyz.unsqueeze(0).to(torch.device("cuda")), K=k)
         indices = knn_output.idx.squeeze(0)
-        # dists, indices = self.kdtree.query(query_pos.detach().cpu().numpy(), k=k)
         indices = torch.tensor(indices, device=query_pos.device)
         closest_points = self.ref_xyz[indices]
         surface_to_queries_vec = query_pos.unsqueeze(1) - closest_points #N, K, 3
@@ -219,8 +211,6 @@ class BatchedSampler:
                         ref_xyz.unsqueeze(0).to(torch.device("cuda")),
                         K=1)
                 gt_udf = knn_output.dists.squeeze(0).squeeze(-1)
-            # dists, indices = sampler.kdtree.query(samples_pos.detach().cpu().numpy(), k=1)
-            # gt_udf = torch.tensor(dists, device=samples_pos.device)
 
             batch_samples_pos.append(samples_pos)
             batch_gt_udf.append(gt_udf)

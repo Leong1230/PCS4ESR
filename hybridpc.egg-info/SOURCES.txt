@@ -1,7 +1,0 @@
-README.md
-setup.py
-hybridpc.egg-info/PKG-INFO
-hybridpc.egg-info/SOURCES.txt
-hybridpc.egg-info/dependency_links.txt
-hybridpc.egg-info/requires.txt
-hybridpc.egg-info/top_level.txt

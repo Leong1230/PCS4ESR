@@ -29,3 +29,6 @@ supervision:
 
 reconstruction:
   mask_threshold: 0.015
+
+evaluation:
+  evaluator: "UnitMeshEvaluator"

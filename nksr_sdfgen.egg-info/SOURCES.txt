@@ -1,9 +1,0 @@
-README.md
-setup.py
-ext/common/kdtree_cuda.cu
-ext/sdfgen/bind.cpp
-ext/sdfgen/sdf_from_points.cu
-nksr_sdfgen.egg-info/PKG-INFO
-nksr_sdfgen.egg-info/SOURCES.txt
-nksr_sdfgen.egg-info/dependency_links.txt
-nksr_sdfgen.egg-info/top_level.txt

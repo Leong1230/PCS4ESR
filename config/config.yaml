@@ -13,7 +13,7 @@ defaults:
 experiment_name: ScanNet_Serial_run_1
 
 output_folder: None
-exp_output_root_path: ${output_folder}/${data.dataset}/${model.network.module}/${experiment_name}
+exp_output_root_path: ${output_folder}/${data.dataset}/${experiment_name}
 
 global_train_seed: 12345
 global_test_seed: 32102

@@ -6,8 +6,6 @@ batch_size: 1
 num_workers: 4
 voxel_size: 0.02 #scannet default: 0.02
 
-# supervision: SDF
-
 sdf_queries: 
   queries_ratio_on_surface: 0.005 #0.5
   queries_ratio_off_surface: 0.02 # 2
@@ -93,14 +91,11 @@ reconstruction:
   trim: True
   gt_mask: False
   gt_sdf: False
-  mask_threshold: 0.015
-  regular_grid: False
-  build_on_splated_points: False
-  visualization:
-    visualize: False
-    Mesh: True
-    Input_points: True
-    Pooled_points: False
-    Dense_points: False
+
+visualization:
+  save: True
+  Mesh: True
+  Input_points: True
+  Dense_points: False
 
 

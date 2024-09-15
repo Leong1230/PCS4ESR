@@ -42,10 +42,6 @@ def main(cfg):
     print("==> initializing model ...")
     model = getattr(import_module("hybridpc.model"), cfg.model.network.module)(cfg)
 
-    #Load the model parameters from the checkpoint and set it to the model
-    if os.path.isfile(cfg.model.stage1_ckpt_path):
-        print("==> loading model from checkpoint...")
-        model = model.load_from_checkpoint(cfg.model.stage1_ckpt_path, cfg)
 
     print("==> start training ...")
     trainer.fit(model=model, datamodule=data_module, ckpt_path=cfg.model.ckpt_path)

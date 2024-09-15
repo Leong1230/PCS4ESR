@@ -5,3 +5,15 @@ defaults:
 
 dataset: SceneNN
 dataset_path: ${data.dataset_root_path}/scenenn_seg_76_raw/scenenn_sub_data
+
+supervision:
+  sdf:
+    max_dist: 0.2 
+  udf:
+    max_dist: 0.2
+
+reconstruction:
+  mask_threshold: 0.015
+
+evaluation:
+  evaluator: "UnitMeshEvaluator"

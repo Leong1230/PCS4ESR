@@ -379,57 +379,6 @@ class MultiScaleUBlock(pl.LightningModule):
 
         return out, layer_outputs  # Return the final output and all collected outputs
 
-# class MultiScaleUBlock(pl.LightningModule):
-#     """ U-Net block with multiple output from different layers"""
-
-#     def __init__(self, n_planes, norm_fn, block_reps, block, cfg):
-#         super().__init__()
-
-#         self.nPlanes = n_planes
-#         self.D = 3
-
-#         blocks = {'block{}'.format(i): block(n_planes[0], n_planes[0], self.D, norm_fn) for i in range(block_reps)}
-#         blocks = OrderedDict(blocks)
-#         self.blocks = nn.Sequential(blocks)
-
-#         if len(n_planes) > 1:
-#             self.conv = nn.Sequential(
-#                 norm_fn(n_planes[0]),
-#                 ME.MinkowskiReLU(inplace=True),
-#                 ME.MinkowskiConvolution(n_planes[0], n_planes[1], kernel_size=2, stride=2, dimension=self.D)
-#             )
-
-#             self.u = MultiScaleUBlock(n_planes[1:], norm_fn, block_reps, block, cfg)
-
-#             self.deconv = nn.Sequential(
-#                 norm_fn(n_planes[1]),
-#                 ME.MinkowskiReLU(inplace=True),
-#                 ME.MinkowskiConvolutionTranspose(n_planes[1], n_planes[0], kernel_size=2, stride=2, dimension=self.D)
-#             )
-
-#             blocks_tail = {'block{}'.format(i): block(n_planes[0] * (2 - i), n_planes[0], self.D, norm_fn) for i in
-#                            range(block_reps)}
-#             blocks_tail = OrderedDict(blocks_tail)
-#             self.blocks_tail = nn.Sequential(blocks_tail)
-
-#     def forward(self, x, data_dict):
-#         layer_outputs = []  # Store outputs from each significant step
-#         out = self.blocks(x)
-#         identity = out
-
-#         if len(self.nPlanes) > 1:
-#             out = self.conv(out)
-#             out, sub_layer_outputs = self.u(out, data_dict)  # Recursive call to the next depth
-#             layer_outputs.extend(sub_layer_outputs)  # Collect all sub layer outputs
-
-#             out = self.deconv(out)
-#             out = ME.cat(identity, out)  # Concatenate with the first captured output
-
-#             out = self.blocks_tail(out)
-#             layer_outputs.append(out)  # Capture output after the tail blocks
-
-#         return out, layer_outputs  # Return the final output and all collected outputs
-    
 class MultiScaleEncoderUBlock(pl.LightningModule):
     """ U-Net block with multiple output from different layers"""
 

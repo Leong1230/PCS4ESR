@@ -18,8 +18,7 @@ from pycg import exp, vis
 from hybridpc.optimizer.optimizer import cosine_lr_decay, adjust_learning_rate
 from MinkowskiEngine.MinkowskiKernelGenerator import KernelGenerator
 import MinkowskiEngine as ME
-from hybridpc.evaluation import UnitMeshEvaluator
-from hybridpc.model.module import Encoder, Generator, Dense_Generator, visualize_tool, MultiScaleInterpolatedDecoder, PointTransformerV3
+from hybridpc.model.module import Encoder, Generator, Dense_Generator, visualize_tool,  PointTransformerV3
 from hybridpc.utils.samples import BatchedSampler
 from lightning.pytorch.utilities import grad_norm
 from pytorch3d.ops import knn_points
@@ -35,9 +34,6 @@ class PCS4ESR(GeneralModel):
     def __init__(self, cfg):
         super().__init__(cfg)
         self.save_hyperparameters(cfg)
-        # Shared latent code across both decoders
-        # set automatic_optimization to False
-        # self.automatic_optimization = False
         
         self.latent_dim = cfg.model.network.latent_dim
         self.decoder_type = cfg.model.network.udf_decoder.decoder_type
@@ -94,68 +90,6 @@ class PCS4ESR(GeneralModel):
                                                 dimension=3)
         self.batched_sampler = BatchedSampler(cfg)  # Instantiate the batched sampler with the configurations
 
-    # def forward(self, data_dict):
-    #     outputs = {}
-    #     query_xyz, query_gt_sdf = self.batched_sampler.batch_sdf_sample(data_dict)
-    #     voxel_centers = data_dict['voxel_coords'][:, 1:4] * self.hparams.data.voxel_size + self.hparams.data.voxel_size / 2.0
-    #     knn_output = knn_points(query_xyz.unsqueeze(0).to(torch.device("cuda")),
-    #                             voxel_centers.unsqueeze(0).to(torch.device("cuda")),
-    #                             K=1)
-    #     indices = knn_output.idx.squeeze(0)
-    #         # else:
-    #     outputs['gt_values'] = query_gt_sdf
-    #     on_surface_xyz, _ = self.batched_sampler.batch_on_surface_sample(data_dict)
-    #     voxel_centers = data_dict['voxel_coords'][:, 1:4] * self.hparams.data.voxel_size + self.hparams.data.voxel_size / 2.0
-    #     knn_output = knn_points(on_surface_xyz.unsqueeze(0).to(torch.device("cuda")),
-    #                             voxel_centers.unsqueeze(0).to(torch.device("cuda")),
-    #                             K=1)
-    #     on_surface_indices = knn_output.idx.squeeze(0)
-
-    #     if self.mask:
-    #         mask_query_xyz, mask_query_gt_udf = self.batched_sampler.batch_udf_sample(data_dict)
-    #         outputs['gt_distances'] = mask_query_gt_udf
-    #     encoder_output = self.encoder(data_dict)
-    #     if "Interpolated" in self.decoder_type and self.hparams.model.network.udf_decoder.neighbor_type == "cm":
-    #         query_indices = self.cm_neighbors(encoder_output, data_dict) # neighbor_indices
-    #         # self.visualize_neighbors(in_data['absolute_coords'].cpu(), neighbor_indices[in_data['indices']].cpu(), in_data['indices'].cpu())   
-    #         outputs['values'] = self.udf_decoder(encoder_output.F, data_dict['voxel_coords'], query_xyz, query_indices)  
-    #     elif self.decoder_type == "InterpolatedDecoder":
-    #         outputs['values'] = self.udf_decoder(encoder_output.F, data_dict['voxel_coords'], query_xyz, indices)
-    #         outputs['surface_values'] = self.udf_decoder(encoder_output.F, data_dict['voxel_coords'], on_surface_xyz, on_surface_indices)
-
-    #     elif self.decoder_type == "MultiScaleInterpolatedDecoder" or self.decoder_type == "LargeDecoder":
-    #         outputs['values'] = self.udf_decoder(encoder_output, query_xyz)
-    #         outputs['surface_values'] = self.udf_decoder(encoder_output, on_surface_xyz)
-
-    #     else:
-    #         outputs['values'] = self.udf_decoder(encoder_output.F, data_dict['query_relative_coords'], data_dict['query_indices'])
-
-    #     if self.eikonal:
-    #         if self.hparams.model.network.grad_type == "Numerical":
-    #             interval = 0.01 * self.hparams.data.voxel_size
-    #             grad_value = []
-    #             for offset in [(interval, 0, 0), (0, interval, 0), (0, 0, interval)]:
-    #                 offset_tensor = torch.tensor(offset, device=self.device)[None, :]
-    #                 res_p = self.udf_decoder(encoder_output, query_xyz + offset_tensor)
-    #                 res_n = self.udf_decoder(encoder_output, query_xyz - offset_tensor)
-    #                 grad_value.append((res_p - res_n) / (2 * interval))
-    #             outputs['grad_value'] = torch.stack(grad_value, dim=1)
-    #         else:
-    #             xyz = torch.clone(query_xyz)
-    #             xyz.requires_grad = True
-    #             with torch.enable_grad():
-    #                 res = self.udf_decoder(encoder_output, xyz)
-    #                 # res = self.udf_decoder(encoder_output.F, data_dict['voxel_coords'], query_xyz, indices) 
-    #                 outputs['grad_value'] = torch.autograd.grad(res, [xyz],
-    #                                                     grad_outputs=torch.ones_like(res),
-    #                                                     create_graph=self.udf_decoder.training, allow_unused=True)[0]
-                    
-    #     if self.mask:
-    #         outputs['distances'] = self.mask_decoder(encoder_output, mask_query_xyz)
-    #         # outputs['distances'] = outputs['gt_distances']
-    #         # outputs['grad_value'] = outputs['gt_values']
-
-    #     return outputs, encoder_output
     def forward(self, data_dict):
         outputs = {}
         query_xyz, query_gt_sdf = self.batched_sampler.batch_sdf_sample(data_dict)
@@ -321,29 +255,11 @@ class PCS4ESR(GeneralModel):
         return neighbor_indices
 
 
-    # def on_train_start(self):
-        # Assuming you have only one optimizer
-        # self.trainer.optimizers[0].param_groups[0]['capturable'] = True
-    # def on_before_optimizer_step(self, optimizer):
-    #     # Compute the 2-norm for each layer
-    #     # If using mixed precision, the gradients are already unscaled here
-    #     udf_norms = grad_norm(self.udf_decoder, norm_type=2)
-    #     mask_norms = grad_norm(self.mask_decoder, norm_type=2)
-    #     encoder_norms = grad_norm(self.encoder, norm_type=2)
-    #     self.log_dict("train/udf_norms", udf_norms)
-    #     self.log_dict("train/mask_norms", mask_norms)
-    #     self.log_dict('train/encoder_norms', encoder_norms)
-
     def training_step(self, data_dict):
         """ UDF auto-encoder training stage """
-        # self.zero_grad()
-        # opt = self.optimizers()
-        # opt.zero_grad()
+
         batch_size = self.hparams.data.batch_size
         outputs, encoder_output = self.forward(data_dict)
-        # outputs['values'] = outputs['values'].detach()
-        # outputs['surface_values'] = outputs['surface_values'].detach()
-        # outputs['grad_value'] = outputs['grad_value'].detach()
 
         l1_loss, on_surface_loss, mask_loss, eikonal_loss, normal_loss = self.loss(data_dict, outputs, encoder_output)
         self.log("train/l1_loss", l1_loss, on_step=True, on_epoch=True, sync_dist=True, batch_size=batch_size)
@@ -353,23 +269,10 @@ class PCS4ESR(GeneralModel):
         self.log("train/normal_loss", normal_loss, on_step=True, on_epoch=True, sync_dist=True, batch_size=batch_size)
 
         total_loss = l1_loss*self.hparams.data.supervision.sdf.weight + on_surface_loss*self.hparams.data.supervision.on_surface.weight + eikonal_loss*self.hparams.data.supervision.eikonal.weight + mask_loss*self.hparams.data.supervision.udf.weight + normal_loss*self.hparams.data.supervision.on_surface.normal_weight
-        # total_loss = l1_loss*0 + on_surface_loss*0 + eikonal_loss*0 + mask_loss
-        # total_loss = 0
-
-        # total_loss = mask_loss*self.hparams.data.supervision.udf.weight
-        # self.manual_backward(udf_loss)
-        # opt.step()
-                # Visualize computation graph
-        # if self.current_epoch == 0 and self.global_step == 0:
-        #     dot = make_dot(total_loss, params=dict(self.named_parameters()))
-        #     dot.format = 'png'
-        #     dot.render('computation_graph_detach_unused')
 
         return total_loss
 
     def validation_step(self, data_dict, idx):
-        # self.eval()
-        # torch.set_grad_enabled(False)
         batch_size = 1
         outputs, encoder_output = self.forward(data_dict)
         l1_loss, on_surface_loss, mask_loss, eikonal_loss, normal_loss = self.loss(data_dict, outputs, encoder_output)
@@ -379,32 +282,3 @@ class PCS4ESR(GeneralModel):
         self.log("val/mask_loss", mask_loss, on_step=True, on_epoch=True, sync_dist=True, batch_size=batch_size, logger=True)
         self.log("val/eikonal_loss", eikonal_loss, on_step=True, on_epoch=True, sync_dist=True, batch_size=batch_size, logger=True)
         self.log("val/normal_loss", normal_loss, on_step=True, on_epoch=True, sync_dist=True, batch_size=batch_size, logger=True)
-        if  self.current_epoch > self.hparams.model.network.prepare_epochs and self.current_epoch % self.hparams.model.network.eval_CD_frequency == 0:
-            gt_pointcloud = data_dict['all_xyz'].cpu().numpy()
-            input_pointcloud = data_dict['xyz'].cpu().numpy()        
-            if self.hparams.model.network.eval_algorithm == 'DMC':
-                # dense_pointcloud, duration = dense_generator.generate_point_cloud(batch, encoder_outputs, device)
-                dmc_mesh = self.dense_generator.generate_dual_mc_mesh(data_dict, encoder_output, self.device)
-                # Evaluate the reconstructed mesh
-                evaluator = UnitMeshEvaluator(n_points=100000, metric_names=UnitMeshEvaluator.ESSENTIAL_METRICS)
-                eval_dict, translation, scale = evaluator.eval_mesh(dmc_mesh, data_dict['all_xyz'], None, onet_samples=None)
-                # pc_eval_dict = eval_pointcloud(dense_pointcloud, gt_pointcloud, input_pointcloud)
-            elif self.hparams.model.network.eval_algorithm == 'MC':
-                mesh, voxel_centers = self.dense_generator.generate_mesh(data_dict, encoder_output, self.device)
-                dense_pointcloud, duration = self.dense_generator.generate_point_cloud(data_dict, encoder_output, self.device)
-                eval_dict = eval_pointcloud(dense_pointcloud, gt_pointcloud, input_pointcloud)
-
-            else:
-                dense_pointcloud, duration = self.dense_generator.generate_point_cloud(data_dict, encoder_output, self.device)
-                eval_dict = eval_pointcloud(dense_pointcloud, gt_pointcloud, input_pointcloud)
-            
-            # Log the metrics
-            self.log("val/chamfer_L1", eval_dict['chamfer-L1'], on_step=False, on_epoch=True, sync_dist=True)
-            self.log("val/accuracy", eval_dict['accuracy'], on_step=False, on_epoch=True, sync_dist=True)
-            self.log("val/F-Score (1.0%)", eval_dict['f-score-10'], on_step=False, on_epoch=True, sync_dist=True)
-
-            # if self.hparams.model.inference.visualization:
-            #     visualize_tool(dense_pointcloud, gt_pointcloud, input_pointcloud, data_dict['scene_names'])
-            # if self.hparams.model.inference.log_visualization:
-            #     self.log_visualizations(data_dict, encoder_output)
-            # return eval_dict
