@@ -93,9 +93,10 @@ reconstruction:
   gt_sdf: False
 
 visualization:
-  save: True
+  save: False
   Mesh: True
   Input_points: True
   Dense_points: False
 
 
+                                                                      

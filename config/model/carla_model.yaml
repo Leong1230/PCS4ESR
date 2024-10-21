@@ -72,7 +72,7 @@ network:
 
   # Define common settings as an anchor
   default_decoder:
-    decoder_type: LargeDecoder # or Decoder or SimpleDecoder or SimpleInterpolatedDecoder or InterpolatedDecoder or MultiScaleInterpolatedDecoder
+    decoder_type: Decoder # or Decoder or SimpleDecoder or SimpleInterpolatedDecoder or InterpolatedDecoder or MultiScaleInterpolatedDecoder
     scale_visualization: -1 # 0, 1, 2, 3 or -1
     dist_mask: True
     filter_by_mask: True # filter out point features by mask

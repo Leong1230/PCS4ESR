@@ -65,7 +65,7 @@ network:
     multi_scale_encoder: False
     add_n_scale_pn: 2 # add pointnet feature in n-th scale
     only_large_pn: False # only use features from large scale local pointnet
-    larger_unet: False
+    larger_unet: True
     pn_hidden_dim: 32
     pn_n_blocks: 2
     unet_blocks_num: 5
@@ -73,7 +73,7 @@ network:
 
   # Define common settings as an anchor
   default_decoder:
-    decoder_type: LargeDecoder # or Decoder or SimpleDecoder or SimpleInterpolatedDecoder or InterpolatedDecoder or MultiScaleInterpolatedDecoder
+    decoder_type: Decoder # or Decoder or SimpleDecoder or SimpleInterpolatedDecoder or InterpolatedDecoder or MultiScaleInterpolatedDecoder
     scale_visualization: -1 # 0, 1, 2, 3 or -1
     dist_mask: True
     filter_by_mask: True # filter out point features by mask
@@ -90,7 +90,7 @@ network:
     use_bn: True
     multi_scale_aggregation: sum # cat or sum or attention or average or gate or attentive_pooling
 
-    neighboring: KNN # KNN or Mink or Serial or Mixture
+    neighboring: Serial # KNN or Mink or Serial or Mixture
     serial_neighbor_layers: 3 # number of serial neighbor layers
     k_neighbors: 8 # 1 for no interpolation
     kernel_size: 2 # for cm neighbors

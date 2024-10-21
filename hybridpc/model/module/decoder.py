@@ -18,28 +18,6 @@ from hybridpc.data.dataset.voxelizer import Voxelizer
 from torch_scatter import scatter_mean, scatter_max, scatter_add
 from hybridpc.utils.serialization import encode
 
-
-
-class EncMLP(nn.Module):
-    def __init__(self, ENC_DIM, k_neighbors):
-        super(EncMLP, self).__init__()
-        self.ENC_DIM = ENC_DIM
-        self.linear1 = nn.Linear(3, self.ENC_DIM, bias=False)
-        self.bn1 = nn.BatchNorm1d(self.ENC_DIM*k_neighbors)
-        # self.linear2 = nn.Linear(self.ENC_DIM, self.ENC_DIM, bias=False)
-        # self.bn2 = nn.BatchNorm1d(self.ENC_DIM*k_neighbors)
-        # self.tanh = nn.Tanh()
-
-    def forward(self, x):
-        N = x.shape[0]
-        x = self.linear1(x)
-        # Transpose N and K so that batch normalization is applied correctly
-        x = self.bn1(x.view(N, -1)).view(N, -1, self.ENC_DIM)
-        # x = self.tanh(x)
-        # x = self.linear2(x)
-        # x = self.bn2(x.view(N, -1)).view(N, -1, self.ENC_DIM)
-
-        return x
     
 class CoordsEncoder(pl.LightningModule):
     def __init__(
@@ -140,80 +118,6 @@ class ResMLPBlock(nn.Module):
 
         return x
     
-class Att_pooling(nn.Module):
-    def __init__(self, d_in, d_out, activation_fn):
-        super().__init__()
-        self.flatten_layer = True
-        self.feature_mlp = False
-        self.channel_wise_weight = True
-        self.fc = nn.Linear(d_in, d_in)
-        self.mlp = ActivationConv1d(d_in, d_out, kernel_size=1,bn=True, activation=activation_fn)
-        if self.channel_wise_weight:
-            self.fc =  ResMLPBlock(
-                d_in, d_in, d_in, activation_fn, 1, 1
-            ) 
-        else:
-            self.fc =  ResMLPBlock(
-                d_in, d_in, 1, activation_fn, 1, 1
-            ) 
-
-        if self.feature_mlp:
-            self.feat_mlp = ResMLPBlock(
-            d_in, d_in, d_in, activation_fn, 1, 1
-        )
-
-
-        self.mlp = ResMLPBlock(
-            d_in, d_in, d_out, activation_fn, 1, 1
-        )
-
-    def forward(self, feature_set, mask):
-        if self.flatten_layer:
-            # Flatten and filter feature_set according to mask
-            mask = mask==False
-            N, K, C = feature_set.shape
-            flat_features = feature_set.reshape(-1, C)  # Shape (N*K, C)
-            valid_indices = mask.flatten().nonzero().squeeze(-1)
-            filtered_features = flat_features[valid_indices]  # Shape (M, C), M << N*K
-            # Process filtered features with fc layers
-            fc_output = self.fc(filtered_features)  # Shape (M, C)
-            # Map fc layer outputs back to original shape according to mask
-            # Create an output tensor filled with zeros
-            att_activation = torch.zeros_like(flat_features)
-            # Place fc_output back according to valid_indices
-            att_activation[valid_indices] = fc_output
-
-            # Reshape back to (N, K, C) and process with mlp if necessary
-            att_activation = att_activation.reshape(N, K, C)
-        else:
-            att_activation = self.fc(feature_set)
-
-        if self.feature_mlp:
-            feature_set = self.feat_mlp(feature_set)
-        att_scores = F.softmax(att_activation, dim=1) # M, K, hidden_dim+feature_dim
-        # att_scores = alpha * att_scores
-        att_scores = att_scores / (torch.sum(att_scores, dim=1, keepdim=True) + 1e-5)
-        f_agg = feature_set * att_scores #M, K, hidden_dim + feature_dim
-        f_agg = torch.sum(f_agg, dim=1, keepdim=True) # M, 1, hidden_dim + feature_dim
-        f_agg = self.mlp(f_agg) #M, 1, hidden_dim + feature_dim
-        return f_agg.squeeze(1) #M, 1, hidden_dim
-
-class Self_attention(nn.Module):
-    def __init__(self, d_in, num_layers):
-        super().__init__()
-        num_heads = 4
-        encoder_layer = nn.TransformerEncoderLayer(d_model=d_in, nhead=num_heads)
-        self.transformer_encoder = nn.TransformerEncoder(encoder_layer, num_layers=num_layers)
-
-    def forward(self, x):
-        # x has shape (N, K, C)
-        N, K, C = x.shape
-        x = x.permute(1, 0, 2)
-        x = self.transformer_encoder(x)
-        x = x.permute(1, 0, 2)
-                
-        return x
-    
 class BaseDecoder(pl.LightningModule):
     def __init__(
         self,
@@ -263,7 +167,7 @@ class BaseDecoder(pl.LightningModule):
             raise ValueError(f"Activation {activation_str} not supported!")
         return act
     
-class LargeDecoder(BaseDecoder):
+class Decoder(BaseDecoder):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
@@ -297,99 +201,31 @@ class LargeDecoder(BaseDecoder):
         self.point_nerf_before_skip = kwargs['decoder_cfg'].point_nerf_before_skip  
         self.point_nerf_after_skip = kwargs['decoder_cfg'].point_nerf_after_skip
 
-        if kwargs['decoder_cfg'].coords_enc == 'MLP':
-            self.enc_dim = 16
-            self.enc_mlp = nn.ModuleList([EncMLP(self.enc_dim, kwargs['decoder_cfg'].k_neighbors) for _ in range(self.last_n_layers)
-            ])
-
-        # multi_scale_dim = (self.feature_dim + self.enc_dim) * self.last_n_layers if self.multi_scale_aggregation == 'cat' else (self.feature_dim + self.enc_dim)
         if self.backbone == 'PointTransformerV3':
             in_channels = [self.dec_channels[0]] + self.dec_channels[0:-1]
         else:
+            # Minkowski Backbone
             if self.larger_unet:
                 in_channels = [self.latent_dim * (2**scale) for scale in range(self.last_n_layers)]
             else:
-                in_channels = [self.latent_dim * (scale + 1) for scale in range(self.last_n_layers)]
+                in_channels = [self.latent_dim * (scale + 1) for scale in range(self.last_n_layers)]  
+        self.per_scale_in = nn.ModuleList([
+            nn.Sequential(nn.Linear(in_channels[scale], self.feature_dim[scale]), nn.ReLU())
+            for scale in range(self.last_n_layers)
+        ])
 
-        if self.per_scale_in:     
-            self.per_scale_in = nn.ModuleList([
-                nn.Sequential(nn.Linear(in_channels[scale], self.feature_dim[scale]), nn.ReLU())
-                for scale in range(self.last_n_layers)
-            ])
-        else:
-            self.feature_dim = in_channels
-
-        if self.learnable_alpha: #alpha feature map
-            self.alpha_map = nn.ModuleList(nn.Linear(self.enc_dim+self.feature_dim[i], 1) for i in range(self.last_n_layers))
-            self.sigmoid = nn.Sigmoid()
-
-        if self.architecture == 'attentive_pooling':
-            self.att_pooling_blocks = nn.ModuleList([
-                Att_pooling(self.enc_dim+self.feature_dim[i], self.enc_dim+self.feature_dim[i], self.activation_fn)
-                for i in range(self.last_n_layers)
-            ])
-
-        elif self.architecture == 'transformer_encoder':
-            self.transformer_encoder_blocks = nn.ModuleList([
-                Self_attention(self.enc_dim+self.feature_dim[i], self.transformer_layers)
-                for i in range(self.last_n_layers)
-            ])
-
-        elif self.architecture == 'point_nerf':
-            if self.larger_point_nerf:
-                self.point_nerf_blocks = nn.ModuleList([
-                    ResMLPBlock(
-                        self.enc_dim+self.feature_dim[i], self.point_nerf_hidden_dim, 32, nn.ReLU(), 2, 2
-                    ) 
-                    for i in range(self.last_n_layers)
-                ])
-            else:
-                self.point_nerf_blocks = nn.ModuleList([
-                    ResMLPBlock(
-                        self.enc_dim+self.feature_dim[i], self.point_nerf_hidden_dim, 32, nn.ReLU(), self.point_nerf_before_skip, self.point_nerf_after_skip
-                    ) 
-                    for i in range(self.last_n_layers)
-                ])
-            multi_scale_dim = 32 * self.last_n_layers if self.multi_scale_aggregation == 'cat' else 32
-            if self.inter =='feat_mlp':
-                self.feat2weight = nn.ModuleList([
-                    nn.Sequential(nn.Linear(self.enc_dim+self.feature_dim[i], 1), nn.ReLU())
-                    for i in range(self.last_n_layers)
-                ])
-            elif self.inter == 'channel_wise_feat_mlp':
-                self.feat2weight = nn.ModuleList([
-                    nn.Sequential(nn.Linear(self.enc_dim+self.feature_dim[i], 32), nn.ReLU())
-                    for i in range(self.last_n_layers)
-                ])
-        # self.per_scale_out = nn.ModuleList([
-        #     ResMLPBlock(
-        #         self.feature_dim + self.enc_dim, self.hidden_dim, self.activation_fn, self.num_hidden_layers_before, self.num_hidden_layers_after
-        #     ) for _ in range(self.last_n_layers)
-        # ])
-
-        if self.multi_scale_aggregation == 'attention':
-            encoder_layer = nn.TransformerEncoderLayer(d_model=self.feature_dim + self.enc_dim, nhead=4)
-            self.scales_transformer = nn.TransformerEncoder(encoder_layer, num_layers=1)
-            self.all_scale_out = nn.Linear((self.feature_dim + self.enc_dim)*self.last_n_layers, self.hidden_dim)
-
-        else:
-            self.all_scale_out = ResMLPBlock(
-                multi_scale_dim,  self.hidden_dim, self.hidden_dim, self.activation_fn, self.num_hidden_layers_before, self.num_hidden_layers_after
+        self.point_nerf_blocks = nn.ModuleList([
+            ResMLPBlock(
+                self.enc_dim+self.feature_dim[i], self.point_nerf_hidden_dim, 32, nn.ReLU(), self.point_nerf_before_skip, self.point_nerf_after_skip
             ) 
-
-        # Gating Mechanism initialization
-        if self.multi_scale_aggregation == 'gate':
-            self.gates = nn.Parameter(torch.zeros(1, self.last_n_layers, 1))  # Shape: (1, num_scales, 1)
-            self.sigmoid = nn.Sigmoid()
+            for i in range(self.last_n_layers)
+        ])
         
-        # Attention Pooling (small MLP) initialization
-        if self.multi_scale_aggregation == 'attentive_pooling':
-            self.all_scale_attentive_mlp = ResMLPBlock(
-                self.last_n_layers * multi_scale_dim,  self.last_n_layers * multi_scale_dim, self.last_n_layers * multi_scale_dim, self.activation_fn, 0, 1
-            ) 
-
-            self.attention_softmax = nn.Softmax(dim=1)
+        multi_scale_dim = 32
             
+        self.all_scale_out = ResMLPBlock(
+            multi_scale_dim,  self.hidden_dim, self.hidden_dim, self.activation_fn, self.num_hidden_layers_before, self.num_hidden_layers_after
+        ) 
 
         if self.supervision == 'UDF':
             self.out = nn.Sequential(
@@ -442,10 +278,6 @@ class LargeDecoder(BaseDecoder):
                     all_dist = torch.norm(all_relative_coords, dim=-1, keepdim=False) # M, K
                     valid_mask = all_dist <= self.dist_factor[layer] * (self.voxel_size * 2**scale)
 
-                    # # Step 5: Filter index and valid_mask based on closest_indices
-                    # index = torch.gather(index, dim=-1, index=closest_indices)
-                    # valid_mask = torch.gather(valid_mask, dim=-1, index=closest_indices)
-
 
             gathered_centers = voxel_centers[index[valid_mask]] # M, 3
             gathered_query_xyz = query_xyz.repeat_interleave(valid_mask.sum(dim=1), dim=0) # M, 3
@@ -454,154 +286,38 @@ class LargeDecoder(BaseDecoder):
             gathered_latents = latents[index[valid_mask]] # M, C
             attentive_pooling_time = 0
 
-            if self.decoder_cfg.coords_enc == 'MLP':
-                gathered_coords = self.enc_mlp[layer](gathered_relative_coords/ (self.voxel_size * 2**scale))
-            else:
-                if self.no_pos_enc_noramalization:
-                    gathered_coords = self.coords_enc.embed(gathered_relative_coords)
-                elif self.correct_pos_enc_noramalization:
-                    gathered_coords = self.coords_enc.embed(gathered_relative_coords/ (self.pos_enc_dist_factor[layer] * self.voxel_size * (2**scale)))
-                else:
-                    gathered_coords = self.coords_enc.embed(gathered_relative_coords/ (self.voxel_size * 2**scale))
-                # gathered_coords = self.coords_enc.embed(gathered_relative_coords)
+            gathered_coords = self.coords_enc.embed(gathered_relative_coords/ (self.voxel_size * 2**scale))
             gathered_emb_and_coords = torch.cat([gathered_latents, gathered_coords], dim=-1) # M, C + enc_dim
 
-            if self.architecture == 'point_nerf':
-                attentive_pooling_time -= time.time()                     
-                valid_indices = torch.arange(N).unsqueeze(1).expand(N, K).flatten().to(query_xyz.device)  # Shape (N*K,)
-                valid_indices = valid_indices[valid_mask.flatten()]  # Shape (M,)
-                valid_features = self.point_nerf_blocks[layer](gathered_emb_and_coords)
-                if self.inter == 'inverse_dist':
-                    weights = torch.full((N, K), 1e-8).to(query_xyz.device)
-                    weights[valid_mask] = 1.0 / (gathered_dist + 1e-8) # Adding a small constant to avoid division by zero
-                    normalized_weights = weights / torch.sum(weights, dim=1, keepdim=True) # Normalize the weights to 
-                    weighted_features = valid_features * normalized_weights[valid_mask].unsqueeze(-1) # M, C
-
-                elif self.inter == 'channel_wise_feat_mlp':
-                    att_scores = self.feat2weight[layer](gathered_emb_and_coords)
-                    weights = torch.full((N, K, att_scores.shape[-1]), 0.0).to(query_xyz.device)
-                    weights[valid_mask] = att_scores
-                    # normalized_weights = weights / torch.sum(weights + 1e-8, dim=1, keepdim=True) # Normalize the weights to 
-                    normalized_weights = torch.softmax(weights, dim=1)  # Apply softmax along the K dimension
-                    weighted_features = valid_features * normalized_weights[valid_mask] # M, C
+            attentive_pooling_time -= time.time()                     
+            valid_indices = torch.arange(N).unsqueeze(1).expand(N, K).flatten().to(query_xyz.device)  # Shape (N*K,)
+            valid_indices = valid_indices[valid_mask.flatten()]  # Shape (M,)
+            valid_features = self.point_nerf_blocks[layer](gathered_emb_and_coords)
+            weights = torch.full((N, K), 1e-8).to(query_xyz.device)
+            weights[valid_mask] = 1.0 / (gathered_dist + 1e-8) # Adding a small constant to avoid division by zero
+            normalized_weights = weights / torch.sum(weights, dim=1, keepdim=True) # Normalize the weights to 
+            weighted_features = valid_features * normalized_weights[valid_mask].unsqueeze(-1) # M, C
                 
-                elif self.inter == 'feat_mlp':
-                    att_scores = self.feat2weight[layer](gathered_emb_and_coords)
-                    weights = torch.full((N, K, 1), 0.0).to(query_xyz.device)
-                    weights[valid_mask] = att_scores
-                    # normalized_weights = weights / torch.sum(weights + 1e-8, dim=1, keepdim=True) # Normalize the weights to 
-                    normalized_weights = torch.softmax(weights, dim=1)  # Apply softmax along the K dimension
-                    weighted_features = valid_features * normalized_weights[valid_mask] # M, C
-                    
-                interpolated_features = torch.zeros(N, weighted_features.shape[-1], device=weighted_features.device)
-                interpolated_features = interpolated_features.scatter_add(0, valid_indices.unsqueeze(-1).expand_as(weighted_features), weighted_features)
+            interpolated_features = torch.zeros(N, weighted_features.shape[-1], device=weighted_features.device)
+            interpolated_features = interpolated_features.scatter_add(0, valid_indices.unsqueeze(-1).expand_as(weighted_features), weighted_features)
 
-                attentive_pooling_time += time.time()
-
-                if self.multi_scale_aggregation == 'average':
-                    return interpolated_features, attentive_pooling_time, valid_mask.any(dim=-1)
-                return interpolated_features, attentive_pooling_time
-
-        else:
-            gathered_centers = voxel_centers[index] # M, K, 3
-            gathered_query_xyz = query_xyz.unsqueeze(1).repeat(1, index.shape[-1], 1) # M, K, 3
-            gathered_relative_coords = gathered_query_xyz - gathered_centers # M, K, 3
-            gathered_dist = torch.norm(gathered_relative_coords, dim=-1, keepdim=False) # M, K
-            gathered_latents = latents[index] # M, K, C
-            attentive_pooling_time = 0
-
-        if self.decoder_cfg.coords_enc == 'MLP':
-            gathered_coords = self.enc_mlp[layer](gathered_relative_coords/ (self.voxel_size * 2**scale))
-        else:
-                gathered_coords = self.coords_enc.embed(gathered_relative_coords/ (self.voxel_size * 2**scale))
-            # gathered_coords = self.coords_enc.embed(gathered_relative_coords)
-        gathered_emb_and_coords = torch.cat([gathered_latents, gathered_coords], dim=-1) # M, K, C + enc_dim
-
-        """ mask and alpha values """
-        if self.learnable_alpha:
-            alpha = self.sigmoid(self.alpha_map[layer](gathered_emb_and_coords)) # N, K, 1
-        else:
-            alpha = torch.ones_like(gathered_dist).unsqueeze(-1) # N, K, 1
-        if self.dist_mask:
-            if self.neighboring == 'Mink':
-                mask = index < 0
-            else:
-                mask = gathered_dist > self.dist_factor[layer] * (self.voxel_size * 2**scale)
-            alpha = torch.where(mask.unsqueeze(-1), torch.zeros_like(alpha), alpha)
-
-        if self.architecture == 'attentive_pooling':
-            gathered_emb_and_coords = gathered_emb_and_coords * alpha
-            attentive_pooling_time -= time.time()
-            interpolated_features = self.att_pooling_blocks[layer](gathered_emb_and_coords, mask)
             attentive_pooling_time += time.time()
-            
-        elif self.architecture == 'transformer_encoder':
-            gathered_emb_and_coords = gathered_emb_and_coords * alpha
-            interpolated_features = self.transformer_encoder_blocks[layer](gathered_emb_and_coords) #M, 1, hidden_dim
-            weights = 1.0 / (gathered_dist + 1e-8) # Adding a small constant to avoid division by zero
-            normalized_weights = weights / torch.sum(weights, dim=1, keepdim=True) # Normalize the weights to sum up to 1
-            interpolated_features = torch.sum(interpolated_features * normalized_weights.unsqueeze(-1), dim=1) #M, C
 
-        elif self.architecture == 'point_nerf':
-            M, K, C = gathered_latents.shape
-            gathered_emb_and_coords = gathered_emb_and_coords * alpha
-            # gathered_emb_and_xyz = torch.cat([gathered_latents, gathered_relative_coords], dim=-1) # M, K, C + 3
-            # interpolated_features = gathered_emb_and_coords[:, :, :32]
-            if self.filter_by_mask:
-                valid_indices = torch.nonzero(~mask.view(-1), as_tuple=False).squeeze()
-                valid_emb_and_coords = gathered_emb_and_coords.view(-1, gathered_emb_and_coords.size(-1))[valid_indices]
-                valid_features = self.point_nerf_blocks[layer](valid_emb_and_coords)
-                interpolated_features = torch.zeros(gathered_emb_and_coords.size(0), gathered_emb_and_coords.size(1), valid_features.size(-1), device=valid_features.device)
-                interpolated_features.view(-1, valid_features.size(-1))[valid_indices] = valid_features
-                interpolated_features = interpolated_features.view(gathered_emb_and_coords.size(0), gathered_emb_and_coords.size(1), -1)
-            else: 
-                interpolated_features = self.point_nerf_blocks[layer](gathered_emb_and_coords.view(M*K, -1)).view(M, K, -1) #M, K, hidden_dim
-            if self.inter == 'inverse_dist':
-                weights = 1.0 / (gathered_dist + 1e-8) # Adding a small constant to avoid division by zero
-                if self.filter_by_mask:
-                    weights[mask] = 1e-8
-                normalized_weights = weights / torch.sum(weights, dim=1, keepdim=True) # Normalize the weights to sum up to 1
-            elif self.inter == 'trilinear':
-                dists = gathered_relative_coords / self.voxel_size * 2**scale
-                dists = 1 - torch.abs(dists)
-                weights = dists[..., 0] * dists[..., 1] * dists[..., 2]
-                normalized_weights = weights / torch.clamp(torch.sum(weights, dim=-1, keepdim=True), min=1e-8)
-
-            elif self.inter == 'feat_mlp':
-                att_activation = self.fc(gathered_emb_and_coords)
-                att_scores = F.softmax(att_activation, dim=1) # M, K, hidden_dim+feature_dim
-                # att_scores = alpha * att_scores
-                normalized_weights = att_scores / (torch.sum(att_scores, dim=1, keepdim=True) + 1e-5)
-
-            interpolated_features = torch.sum(interpolated_features * normalized_weights.unsqueeze(-1), dim=1) #M, C
-
-        return interpolated_features, attentive_pooling_time
-
+            return interpolated_features, attentive_pooling_time
 
     def compute_average_recall(self, ref_indices, all_neighbor_idx):
         N, K = ref_indices.shape
         all_neighbor_idx = torch.stack(all_neighbor_idx)  # Shape: (num_orders, N, K)
-
-        # Expand ref_indices to match the shape of all_neighbor_idx
         ref_indices_expanded = ref_indices.unsqueeze(0).expand_as(all_neighbor_idx)  # Shape: (num_orders, N, K)
-
-        # Check for matches across all orders
         matches = (ref_indices_expanded.unsqueeze(3) == all_neighbor_idx.unsqueeze(2)).any(dim=3)
-
-        # Compute correct counts
         correct_counts = matches.any(dim=0).sum(dim=1).float()
-
         average_recall = correct_counts.mean().item() / K
+
         return average_recall
 
     def serial_neighbor(self, source_voxel_coords, query_xyz, tensor_stride, knn_indices):
         all_neighbor_idx = []
-        grid_size = 0.01
-        sort_queries = False
         for serial_order in self.serial_orders:
-            # serial_order= 'z' # "z-trans", "hilbert", "hilbert-trans" or "z"
-            # tensor_stride *= 4
-            # k_neighbors = int(self.k_neighbors / len(self.serial_orders))
             k_neighbors = self.k_neighbors
             ref_indices = knn_indices
             query_coords, index, inverse_index = ME.utils.sparse_quantize(coordinates=query_xyz, return_index=True, return_inverse=True, quantization_size=(self.voxel_size*tensor_stride), device=query_xyz.device)
@@ -643,21 +359,16 @@ class LargeDecoder(BaseDecoder):
         # print(f"Average Recall: {average_recall}")
         return torch.cat(all_neighbor_idx, dim=-1)
 
-    def pt_serial_neighbor(self, points, query_xyz, scale, knn_indices):
+    def pt_serial_neighbor(self, points, query_xyz):
         
         all_neighbor_idx = []
         grid_size = 0.01
         sort_queries = False
         for order in self.serial_orders:
-            # k_neighbors = int(self.k_neighbors / len(self.serial_orders))
             k_neighbors = self.k_neighbors
-            ref_indices = knn_indices
             query_coords, index, inverse_index = ME.utils.sparse_quantize(coordinates=query_xyz, return_index=True, return_inverse=True, quantization_size=(grid_size), device=query_xyz.device)
 
-            # source_coords, source_index, source_inverse_index = ME.utils.sparse_quantize(coordinates=points, return_index=True, return_inverse=True, quantization_size=(grid_size), device=points.device)
-
             source_coords = torch.floor(points/grid_size).to(torch.int)
-
 
             depth = int(query_coords.max()).bit_length()
             query_codes = encode(query_coords, torch.zeros(query_coords.shape[0], dtype=torch.int64, device=query_coords.device), depth, order=order)
@@ -682,13 +393,7 @@ class LargeDecoder(BaseDecoder):
             neighbor_indices = torch.where((neighbor_indices >= 0) & (neighbor_indices < len(sorted_source_codes)), neighbor_indices, torch.tensor(-1))
 
             # Map the indices back to the original unsorted source codes
-            neighbor_source_indices = torch.where(neighbor_indices != -1, sorted_source_indices[neighbor_indices], torch.tensor(-1))
-
-            # Reorder the neighbors to match the original order of the query codes
-            if sort_queries:
-                neighbor_idx = neighbor_source_indices[torch.argsort(sorted_query_indices)]
-            else:
-                neighbor_idx = neighbor_source_indices
+            neighbor_idx = torch.where(neighbor_indices != -1, sorted_source_indices[neighbor_indices], torch.tensor(-1))
 
             if len(inverse_index) > 0:
                 neighbor_idx = neighbor_idx[inverse_index]
@@ -848,23 +553,15 @@ class LargeDecoder(BaseDecoder):
                         indices = indices.to(latents.device)
                     
                     elif self.neighboring == 'Serial':
-                        # knn_output = knn_points(batch_query_xyz.unsqueeze(0).to(torch.device("cuda")),
-                        #                         batch_point_centers.unsqueeze(0).to(torch.device("cuda")),
-                        #                         K=self.k_neighbors)
-                        # knn_indices = knn_output.idx.squeeze(0)
-                        # knn_indices = knn_indices.to(latents.device)
-                        indices = self.pt_serial_neighbor(batch_point_centers, batch_query_xyz, scale, None)
+                        indices = self.pt_serial_neighbor(batch_point_centers, batch_query_xyz)
+
                     elif self.neighboring == 'Mink':
-                        # knn_output = knn_points(batch_query_xyz.unsqueeze(0).to(torch.device("cuda")),
-                        #                         batch_point_centers.unsqueeze(0).to(torch.device("cuda")),
-                        #                         K=self.k_neighbors)
-                        # knn_indices = knn_output.idx.squeeze(0)
-                        # knn_indices = knn_indices.to(latents.device)
+
                         indices = self.pt_mink_neighbor(batch_point_centers, batch_query_xyz, 2**layer, None)
 
                     elif self.neighboring == 'Mixture':
                         if layer < self.serial_neighbor_layers:
-                            indices = self.pt_serial_neighbor(batch_point_centers, batch_query_xyz, scale, None)
+                            indices = self.pt_serial_neighbor(batch_point_centers, batch_query_xyz)
                         else:
                             knn_output = knn_points(batch_query_xyz.unsqueeze(0).to(torch.device("cuda")),
                                                     batch_point_centers.unsqueeze(0).to(torch.device("cuda")),

@@ -15,26 +15,16 @@ class Encoder(pl.LightningModule):
     def __init__(self,cfg):
         super().__init__()
 
-        in_channels = cfg.model.network.encoder.pn_hidden_dim 
         self.voxel_size = cfg.data.voxel_size
         self.input_splat = cfg.model.network.encoder.input_splat
         self.sp_norm = functools.partial(ME.MinkowskiBatchNorm)
         self.local_pointnet = LocalPointNet(3 + cfg.model.network.use_xyz * 3 + cfg.model.network.use_color * 3 + cfg.model.network.use_normal * 3, cfg.model.network.latent_dim, cfg.model.network.encoder.pn_hidden_dim, self.sp_norm, ResidualBlock, scatter_type='mean', n_blocks=cfg.model.network.encoder.pn_n_blocks)
 
         self.in_conv = ME.MinkowskiConvolution(in_channels=cfg.model.network.latent_dim, out_channels=cfg.model.network.latent_dim, kernel_size=3, dimension=3)
-        if cfg.model.network.encoder.multi_scale_encoder:
-            self.unet = MultiScaleEncoderUBlock([cfg.model.network.latent_dim * c for c in range(1, cfg.model.network.encoder.unet_blocks_num + 1)], self.sp_norm, cfg.model.network.encoder.unet_block_reps, ResidualBlock, cfg)
-        else:
-            if cfg.model.network.encoder.larger_unet:
-                self.unet = MultiScaleUBlock([cfg.model.network.latent_dim * (2**(c-1)) for c in range(1, cfg.model.network.encoder.unet_blocks_num + 1)], self.sp_norm, cfg.model.network.encoder.unet_block_reps, ResidualBlock, cfg)
-            else: 
-                self.unet = MultiScaleUBlock([cfg.model.network.latent_dim * c for c in range(1, cfg.model.network.encoder.unet_blocks_num + 1)], self.sp_norm, cfg.model.network.encoder.unet_block_reps, ResidualBlock, cfg)
-        # self.unet = nn.Sequential(
-        #     ME.MinkowskiConvolution(in_channels=cfg.model.network.latent_dim, out_channels=cfg.model.network.latent_dim, kernel_size=3, dimension=3),
-        #     MultiScaleUBlock([cfg.model.network.latent_dim * c for c in range(1, cfg.model.network.encoder.unet_blocks_num + 1)], self.sp_norm, cfg.model.network.encoder.unet_block_reps, ResidualBlock, cfg),
-        #     # sp_norm(cfg.model.network.latent_dim),
-        #     # ME.MinkowskiReLU(inplace=True)
-        # )
+        if cfg.model.network.encoder.larger_unet:
+            self.unet = MultiScaleUBlock([cfg.model.network.latent_dim * (2**(c-1)) for c in range(1, cfg.model.network.encoder.unet_blocks_num + 1)], self.sp_norm, cfg.model.network.encoder.unet_block_reps, ResidualBlock, cfg)
+        else: 
+            self.unet = MultiScaleUBlock([cfg.model.network.latent_dim * c for c in range(1, cfg.model.network.encoder.unet_blocks_num + 1)], self.sp_norm, cfg.model.network.encoder.unet_block_reps, ResidualBlock, cfg)
 
     def xyz_splat(self, data_dict):
         """ modify the data_dict to include splatted voxel_coords, relative_coords, and indices"""
@@ -83,14 +73,12 @@ class Encoder(pl.LightningModule):
 
 
     def forward(self, data_dict):
-        output_dict = {}
         if self.input_splat:
             self.xyz_splat(data_dict)
         pn_feat = self.local_pointnet(torch.cat((data_dict['relative_coords'], data_dict['point_features']), dim=1), data_dict['indices'])
         x = ME.SparseTensor(pn_feat, coordinates=data_dict['voxel_coords'])
         x = self.in_conv(x)
         _, x = self.unet(x, data_dict)
-        # _, x = self.unet(x)
 
         normalized_x = []
         for latent in x:
@@ -100,26 +88,3 @@ class Encoder(pl.LightningModule):
 
         return normalized_x
     
-# class Encoder(pl.LightningModule):
-#     def __init__(self,cfg):
-#         super().__init__()
-
-#         in_channels = cfg.model.network.encoder.pn_hidden_dim 
-#         sp_norm = functools.partial(ME.MinkowskiBatchNorm)
-#         self.local_pointnet = LocalPointNet(3 + cfg.model.network.use_xyz * 3 + cfg.model.network.use_color * 3 + cfg.model.network.use_normal * 3, cfg.model.network.latent_dim, cfg.model.network.encoder.pn_hidden_dim, sp_norm, ResidualBlock, scatter_type='mean', n_blocks=cfg.model.network.encoder.pn_n_blocks)
-
-#         # UNet
-#         self.unet = nn.Sequential(
-#             ME.MinkowskiConvolution(in_channels=cfg.model.network.latent_dim, out_channels=cfg.model.network.latent_dim, kernel_size=3, dimension=3),
-#             UBlock([cfg.model.network.latent_dim * c for c in range(1, cfg.model.network.encoder.unet_blocks_num + 1)], sp_norm, cfg.model.network.encoder.unet_block_reps, ResidualBlock),
-#             sp_norm(cfg.model.network.latent_dim),
-#             ME.MinkowskiReLU(inplace=True)
-#         )
-
-
-#     def forward(self, data_dict):
-#         output_dict = {}
-#         pn_feat = self.local_pointnet(torch.cat((data_dict['relative_coords'], data_dict['point_features']), dim=1), data_dict['indices'])
-#         x = ME.SparseTensor(pn_feat, coordinates=data_dict['voxel_coords'])
-#         x = self.unet(x)
-#         return x

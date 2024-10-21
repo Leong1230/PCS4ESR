@@ -15,7 +15,7 @@ metadata: # only for SscanNet
 
 ScanNet:
   dataset_path: ${data.dataset_root_path}/scannetv2
-  classes: 20
+  classes: 2
   # ignore_classes: [ 1, 2 ]
   class_names: [ 'floor', 'wall', 'cabinet', 'bed', 'chair', 'sofa', 'table', 'door', 'window', 'bookshelf', 'picture',
                 'counter', 'desk', 'curtain', 'refrigerator', 'shower curtain', 'toilet', 'sink',

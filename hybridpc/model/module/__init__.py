@@ -1,6 +1,6 @@
 from .backbone import Backbone
 from .backbone import MinkUNetBackbone
-from .larger_decoder import LargeDecoder
+from .decoder import Decoder
 from .visualization import PointCloudVisualizer
 from .visualization import visualize_tool
 from .encoder import Encoder

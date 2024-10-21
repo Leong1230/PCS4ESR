@@ -64,7 +64,7 @@ network:
     multi_scale_encoder: False
     add_n_scale_pn: 2 # add pointnet feature in n-th scale
     only_large_pn: False # only use features from large scale local pointnet
-    larger_unet: False
+    larger_unet: True
     pn_hidden_dim: 32
     pn_n_blocks: 2
     unet_blocks_num: 5
@@ -72,7 +72,7 @@ network:
 
   # Define common settings as an anchor
   default_decoder:
-    decoder_type: LargeDecoder # or Decoder or SimpleDecoder or SimpleInterpolatedDecoder or InterpolatedDecoder or MultiScaleInterpolatedDecoder
+    decoder_type: Decoder # or Decoder or SimpleDecoder or SimpleInterpolatedDecoder or InterpolatedDecoder or MultiScaleInterpolatedDecoder
     scale_visualization: -1 # 0, 1, 2, 3 or -1
     dist_mask: True
     filter_by_mask: True # filter out point features by mask
