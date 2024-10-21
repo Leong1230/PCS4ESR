@@ -7,8 +7,8 @@
 ```
 
 # create and activate the conda environment
-conda create -n python-3.10 python=3.10
-conda activate python-3.10
+conda create -n pcs4esr python=3.10
+conda activate pcs4esr
 conda install -c "nvidia/label/cuda-11.8.0" cuda-toolkit 
 
 # install PyTorch 2.x.x
@@ -38,12 +38,12 @@ pip install "git+https://github.com/facebookresearch/pytorch3d.git@stable"
 
 
 # compile FPT cuda source code
-cd ~/projects/HybridPCLearning_new
-cd hybridpc/cuda_ops
+cd ~/projects/pcs4esrLearning_new
+cd pcs4esr/cuda_ops
 pip3 install .
 
 # compile nearest_neighbor source code
-cd ~/projects/hybridpc/tools/nearest_neighbors
+cd ~/projects/pcs4esr/tools/nearest_neighbors
 python setup.py install
 
 # install PointTransformer requirement

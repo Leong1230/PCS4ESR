@@ -2,9 +2,9 @@ import os
 import hydra
 import wandb
 import pytorch_lightning as pl
-from hybridpc.callback import *
+from pcs4esr.callback import *
 from importlib import import_module
-from hybridpc.data.data_module import DataModule
+from pcs4esr.data.data_module import DataModule
 from pytorch_lightning.callbacks import LearningRateMonitor
 
 
@@ -40,7 +40,7 @@ def main(cfg):
     trainer = pl.Trainer(callbacks=callbacks, logger=logger, **cfg.model.trainer)
 
     print("==> initializing model ...")
-    model = getattr(import_module("hybridpc.model"), cfg.model.network.module)(cfg)
+    model = getattr(import_module("pcs4esr.model"), cfg.model.network.module)(cfg)
 
 
     print("==> start training ...")

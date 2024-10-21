@@ -1,11 +1,11 @@
 # Managed by Hydra
 
-ckpt_path: None
+ckpt_path: 
 
 logger:
   # https://pytorch-lightning.readthedocs.io/en/stable/extensions/generated/pytorch_lightning.loggers.WandbLogger.html
   _target_: pytorch_lightning.loggers.WandbLogger
-  project: Stage-1-Reconstruction
+  project: PCS4ESR
   name: ${experiment_name}
 
 # https://pytorch-lightning.readthedocs.io/en/stable/common/trainer.html

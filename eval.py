@@ -4,19 +4,15 @@ import torch
 from tqdm import tqdm
 import numpy as np
 import open3d as o3d
-import json
-import time
-import trimesh
 from collections import defaultdict
 from torch.utils.data import Dataset
 from pathlib import Path
 from importlib import import_module
 import pytorch_lightning as pl
-from hybridpc.data.data_module import DataModule
-from hybridpc.utils.evaluation import UnitMeshEvaluator, MeshEvaluator
-from hybridpc.model.module import Generator
+from pcs4esr.data.data_module import DataModule
+from pcs4esr.utils.evaluation import UnitMeshEvaluator, MeshEvaluator
+from pcs4esr.model.module import Generator
 from nksr.svh import SparseFeatureHierarchy
-import MinkowskiEngine as ME
 
 @hydra.main(version_base=None, config_path="config", config_name="config")
 def main(cfg):
@@ -34,7 +30,7 @@ def main(cfg):
     val_loader = data_module.val_dataloader()
     
     print("=> initializing model...")
-    model = getattr(import_module("hybridpc.model"), cfg.model.network.module)(cfg)
+    model = getattr(import_module("pcs4esr.model"), cfg.model.network.module)(cfg)
     # Load checkpoint
     if os.path.isfile(cfg.model.ckpt_path):
         print(f"=> loading model checkpoint '{cfg.model.ckpt_path}'")
@@ -48,30 +44,27 @@ def main(cfg):
     model.eval()
 
     dense_generator = Generator(
-        model.udf_decoder,
+        model.sdf_decoder,
         model.mask_decoder,
         cfg.data.voxel_size,
         cfg.model.dense_generator.threshold,
-        cfg.model.network.udf_decoder.k_neighbors,
-        cfg.model.network.udf_decoder.last_n_layers,
+        cfg.model.network.sdf_decoder.k_neighbors,
+        cfg.model.network.sdf_decoder.last_n_layers,
         cfg.data.reconstruction
     )
 
     # Initialize a dictionary to keep track of sums and count
     eval_sums = defaultdict(float)
     batch_count = 0
-
+    import time
     print("=> start inference...")
     start_time = time.time()
     total_reconstruction_duration = 0.0
     total_neighboring_time = 0.0
     total_dmc_time = 0.0
-    total_attentive_time = 0.0 
-    total_interpolation_time = 0.0
+    total_aggregation_time = 0.0
     total_forward_duration = 0.0
-    total_after_layers_time = 0.0
     total_decoder_time = 0.0
-    total_grid_splat_time = 0.0
     results_dict = []
     for batch in tqdm(val_loader, desc="Inference", unit="batch"):
         batch = {k: v.to(device) if hasattr(v, 'to') else v for k, v in batch.items()}
@@ -87,33 +80,28 @@ def main(cfg):
             pt_data['grid_size'] = 0.01
             pt_data['coord'] = batch['xyz']
             encoder_outputs = model.point_transformer(pt_data)
-        else:
-            encoder_outputs = model.encoder(batch)
+
         forward_end = time.time()
         torch.set_grad_enabled(False)
 
-        dmc_mesh, neighboring_time, dmc_time, attentive_time, interpolation_time, after_layers_time, decoder_time, grid_splat_time = dense_generator.generate_dual_mc_mesh(batch, encoder_outputs, device)
-        total_neighboring_time += neighboring_time
-        total_dmc_time += dmc_time
-        total_attentive_time += attentive_time
-        total_interpolation_time += interpolation_time
-        total_after_layers_time += after_layers_time
-        total_decoder_time += decoder_time
-        total_grid_splat_time += grid_splat_time
+        dmc_mesh, time_dict  = dense_generator.generate_dual_mc_mesh(batch, encoder_outputs, device)
+        total_neighboring_time += time_dict['neighboring_time']
+        total_dmc_time += time_dict['dmc_time']
+        total_aggregation_time += time_dict['aggregation_time']
+        total_decoder_time += time_dict['decoder_time']
         # Calculate time taken for these three steps
         process_end = time.time()
         total_forward_duration += forward_end - forward_start
         process_duration = process_end - process_start
         total_reconstruction_duration += process_duration  # Accumulate the duration
-        print(f"Time taken for the forward pass: {total_forward_duration:.2f} seconds")
-        print(f"Time taken for the reconstruction process: {total_reconstruction_duration:.2f} seconds")
-        print(f"Time taken for neighboring search: {total_neighboring_time:.2f} seconds")
-        print(f"Time taken for the DMC: {total_dmc_time:.2f} seconds")
-        print(f"Time taken for the attentive pooling: {total_attentive_time:.2f} seconds")
-        print(f"Time taken for the interpolation: {total_interpolation_time:.2f} seconds")
-        print(f"Time taken for the after layers: {total_after_layers_time:.2f} seconds")
-        print(f"Time taken for the decoder: {total_decoder_time:.2f} seconds")
-        print(f"Time taken for the grid splat: {total_grid_splat_time:.2f} seconds")
+        print("\nTotal Reconstruction Time: {:.2f} seconds".format(total_reconstruction_duration))
+        print("├── Total PointTransformerV3 Time: {:.2f} seconds".format(total_forward_duration))
+        print("├── Total Decoder Time: {:.2f} seconds".format(total_decoder_time))
+        print("│   ├── Total Neighboring Time: {:.2f} seconds".format(total_neighboring_time))
+        print("│   └── Total Aggregation Time: {:.2f} seconds"
+            .format(total_aggregation_time))
+        print("├── Total Dual Marching Cube Time: {:.2f} seconds".format(total_dmc_time))
+
         # Evaluate the reconstructed mesh
         if cfg.data.evaluation.evaluator == "UnitMeshEvaluator":
             evaluator = UnitMeshEvaluator(n_points=100000, metric_names=UnitMeshEvaluator.ESSENTIAL_METRICS)

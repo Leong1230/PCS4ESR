@@ -10,8 +10,7 @@ defaults:
   - data: base
   - model: base
 
-experiment_name: ScanNet_Serial_run_1
-
+experiment_name: run_1
 output_folder: None
 exp_output_root_path: ${output_folder}/${data.dataset}/${experiment_name}
 

@@ -19,7 +19,6 @@ network:
   prepare_epochs: 350
   eval_CD_frequency: 1
   eval_algorithm: DMC # DMC or DensePC or MC
-  eikonal_loss: True
   eikonal_weight: 0.02
   grad_type: Analytical # Analytical or Numerical
   backbone: PointTransformerV3 # PointTransformerV3 or MinkUNet
@@ -59,17 +58,6 @@ network:
     pdnorm_affine: true
     pdnorm_conditions: ["ScanNet", "S3DIS", "Structured3D"]
 
-  encoder:
-    input_splat: False # encodes input splatted voxels
-    multi_scale_encoder: False
-    add_n_scale_pn: 2 # add pointnet feature in n-th scale
-    only_large_pn: False # only use features from large scale local pointnet
-    larger_unet: True
-    pn_hidden_dim: 32
-    pn_n_blocks: 2
-    unet_blocks_num: 5
-    unet_block_reps: 2
-
   # Define common settings as an anchor
   default_decoder:
     decoder_type: Decoder # or Decoder or SimpleDecoder or SimpleInterpolatedDecoder or InterpolatedDecoder or MultiScaleInterpolatedDecoder
@@ -78,7 +66,6 @@ network:
     filter_by_mask: True # filter out point features by mask
     learnable_alpha: False # learnable alpha from latents
     larger_point_nerf: False
-    larger_unet: ${model.network.encoder.larger_unet}
     backbone: ${model.network.backbone}
     decoder_channels: ${model.network.point_transformerv3.dec_channels}
     stride: ${model.network.point_transformerv3.stride}
@@ -115,14 +102,13 @@ network:
     neighbor_type: knn # knn or ball_query or cm
 
   # Specific decoder configurations
-  udf_decoder:
+  sdf_decoder:
     decoder_type: ${model.network.default_decoder.decoder_type}
     scale_visualization: 3
     dist_mask: ${model.network.default_decoder.dist_mask}
     filter_by_mask: ${model.network.default_decoder.filter_by_mask}
     learnable_alpha: ${model.network.default_decoder.learnable_alpha}
     larger_point_nerf: ${model.network.default_decoder.larger_point_nerf}
-    larger_unet: ${model.network.default_decoder.larger_unet}
     backbone: ${model.network.default_decoder.backbone}
     decoder_channels: ${model.network.default_decoder.decoder_channels}
     stride: ${model.network.default_decoder.stride} 
