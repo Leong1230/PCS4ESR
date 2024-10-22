@@ -3,7 +3,7 @@
 ![PCS4ESR](assets/teaser.pdf)
 
 **Point Cloud Serialization for Efficient Surface Reconstruction**<br>
-[Zhen Li](https://colinzhenli.github.io/), [Weiwei Sun](https://m-niemeyer.github.io/](https://wsunid.github.io/)), [Shrisudhan Govindarajan](https://shrisudhan.github.io/), [Shaobo Xia](https://scholar.google.com/citations?user=eOPO9E0AAAAJ&hl=en), [Daniel Rebain](http://drebain.com/), [Kwang Moo Yi](https://www.cs.ubc.ca/~kmyi/), [Andrea Tagliasacchi](https://theialab.ca/)  
+[Zhen Li](https://colinzhenli.github.io/), [Weiwei Sun](https://wsunid.github.io/), [Shrisudhan Govindarajan](https://shrisudhan.github.io/), [Shaobo Xia](https://scholar.google.com/citations?user=eOPO9E0AAAAJ&hl=en), [Daniel Rebain](http://drebain.com/), [Kwang Moo Yi](https://www.cs.ubc.ca/~kmyi/), [Andrea Tagliasacchi](https://theialab.ca/)  
 **[Paper](todo), [Project Page](todo)**
 
 Abstract: *We present a novel approach to large-scale point cloud
@@ -28,7 +28,7 @@ methods have shown limited performance. To foster the
 continuation of research in this topic, we will release our
 complete source code, as well as our pre-trained models.
 
-Contact [zhenli@sfu.ca](zla247@sfu.ca) for questions, comments and reporting bugs.
+Contact [Zhen Li @ SFU](zla247@sfu.ca) for questions, comments and reporting bugs.
 ## News
 
 - [2024/10/22] The code is released.
@@ -47,11 +47,8 @@ cd PCS4ESR
 conda create -n pcs4esr python=3.10
 conda activate pcs4esr
 
-# install cuda toolkit
-conda install -c "nvidia/label/cuda-11.8.0" cuda-toolkit 
-
 # install PyTorch 2.x.x
-conda install pytorch==2.0.0 torchvision==0.15.0 torchaudio==2.0.0 pytorch-cuda=11.8 -c pytorch -c nvidia
+conda install pytorch==2.0.0 pytorch-cuda=11.8 -c pytorch -c nvidia
 
 ```
 Then, install PyTorch3D
@@ -103,7 +100,6 @@ Note: Configuration files are managed by [Hydra](https://hydra.cc/), you can eas
 wandb login
 
 # train a model from scratch
-```bash
 # ScanNet dataset
 python train.py model=scannet_model data=scannet
 # SyntheticRoom dataset
@@ -113,16 +109,16 @@ python train.py model=carla_model data=carla
 ```
 
 In addition, you can manually specify different training settings. Common flags include:
-- `--experiment_name`: Additional experiment name to specify.
-- `--data.dataset_root_path`: Root path of the dataset.
-- `--output_folder`: Output folder to save the results, the checkpoints will be saved in `{output_folder}/{dataset_name}/{experiment_name}/training`.
-- `--model.network.default_decoder.neighboring`: Neighboring type, default is `Serial`. Options: `Serial`, `KNN`, `Mixture`
+- `experiment_name`: Additional experiment name to specify.
+- `data.dataset_root_path`: Root path of the dataset.
+- `output_folder`: Output folder to save the results, the checkpoints will be saved in `{output_folder}/{dataset_name}/{experiment_name}/training`.
+- `model.network.default_decoder.neighboring`: Neighboring type, default is `Serial`. Options: `Serial`, `KNN`, `Mixture`
 
 ### Inference
 
 You can either infer using your own trained models or our pre-trained checkpoints.
 
-The pre-trained checkpoints on different datasets with different neighboring types are available [here](https://drive.google.com/drive/folders/15679CWdUmt9O8l0HxZFABHV7lYfcIcUJ?usp=sharing), you can download and put them under `PCS4ESR/checkpoints/`.
+The pre-trained checkpoints on different datasets with different neighboring types are available [here](https://drive.google.com/file/d/1hMm5cnCOfNmr_PgkpOmwRnzCCG4wPqnu/view?usp=drive_link), you can download and put them under `PCS4ESR/checkpoints/`.
 
 ```bash
 # For example, ScanNet dataset with Serialization neighboring
@@ -140,9 +136,9 @@ You can reconstruct a specific scene from the datasets above by specifying the s
 python eval.py model=scannet_model data=scannet model.ckpt_path={path_to_checkpoint} data.over_fitting=True data.take=1 data.intake_start={scene_index}
 ```
 In addition, you can manually specify visualization settings. Flags include:
-- `--data.visualization.save`: Whether to save the results.
-- `--data.visualization.Mesh`: Whether to save the mesh.
-- `--data.visualization.Input_points`: Whether to save the input points.
+- `data.visualization.save`: Whether to save the results.
+- `data.visualization.Mesh`: Whether to save the reconstructed mesh.
+- `data.visualization.Input_points`: Whether to save the input points.
  
 The results will be saved in `{output_folder}/{dataset_name}/{experiment_name}/reconstruction/visualization`.
 

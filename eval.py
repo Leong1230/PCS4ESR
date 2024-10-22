@@ -47,7 +47,6 @@ def main(cfg):
         model.sdf_decoder,
         model.mask_decoder,
         cfg.data.voxel_size,
-        cfg.model.dense_generator.threshold,
         cfg.model.network.sdf_decoder.k_neighbors,
         cfg.model.network.sdf_decoder.last_n_layers,
         cfg.data.reconstruction

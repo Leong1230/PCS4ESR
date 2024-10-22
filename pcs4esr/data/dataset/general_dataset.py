@@ -2,6 +2,7 @@ import numpy as np
 from torch.utils.data import Dataset
 import open3d as o3d
 from enum import Enum
+from numpy.random import RandomState
 import multiprocessing
 from omegaconf import DictConfig, ListConfig
 

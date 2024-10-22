@@ -6,6 +6,7 @@ from pcs4esr.callback import *
 from importlib import import_module
 from pcs4esr.data.data_module import DataModule
 from pytorch_lightning.callbacks import LearningRateMonitor
+from pytorch_lightning.strategies.ddp import DDPStrategy
 
 
 
@@ -33,11 +34,9 @@ def main(cfg):
     print("==> initializing monitor ...")
     callbacks = init_callbacks(cfg)
 
-    output_path = os.path.join(cfg.exp_output_root_path, "inference", cfg.model.inference.split, "visualizations")
-    os.makedirs(output_path, exist_ok=True)
 
     print("==> initializing trainer ...")
-    trainer = pl.Trainer(callbacks=callbacks, logger=logger, **cfg.model.trainer)
+    trainer = pl.Trainer(callbacks=callbacks, logger=logger, **cfg.model.trainer, strategy=DDPStrategy(find_unused_parameters=False))
 
     print("==> initializing model ...")
     model = getattr(import_module("pcs4esr.model"), cfg.model.network.module)(cfg)

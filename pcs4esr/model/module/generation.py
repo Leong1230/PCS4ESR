@@ -19,16 +19,15 @@ class MeshingResult:
         self.v = v
         self.f = f
         self.c = c
-        
+
 class Generator(pl.LightningModule):
-    def __init__(self, model, mask_model, voxel_size, threshold, k_neighbors, last_n_layers, reconstruction_cfg):
+    def __init__(self, model, mask_model, voxel_size, k_neighbors, last_n_layers, reconstruction_cfg):
         super().__init__()
         self.model = model # the model should be the UDF Decoder
         self.mask_model = mask_model # the distance mask decoder
         self.rec_cfg = reconstruction_cfg
-        # self.decoder_type = decoder_type
         self.voxel_size = voxel_size
-        self.threshold = threshold
+        self.threshold = 0.4
         self.k_neighbors = k_neighbors
         self.last_n_layers = last_n_layers                                      
     

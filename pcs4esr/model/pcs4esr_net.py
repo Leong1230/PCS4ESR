@@ -118,9 +118,9 @@ class PCS4ESR(GeneralModel):
         l1_loss = torch.nn.L1Loss(reduction='mean')(torch.clamp(outputs['values'], min = -self.hparams.data.supervision.sdf.max_dist, max=self.hparams.data.supervision.sdf.max_dist), torch.clamp(outputs['gt_values'], min = -self.hparams.data.supervision.sdf.max_dist, max=self.hparams.data.supervision.sdf.max_dist))
         on_surface_loss = torch.abs(outputs['surface_values']).mean()
 
-        mask_loss = 0
-        eikonal_loss = 0
-        normal_loss = 0
+        mask_loss = 0.0
+        eikonal_loss = 0.0
+        normal_loss = 0.0
         
         # Eikonal Loss computation
         if self.eikonal:
@@ -143,11 +143,10 @@ class PCS4ESR(GeneralModel):
         outputs, encoder_output = self.forward(data_dict)
 
         l1_loss, on_surface_loss, mask_loss, eikonal_loss, normal_loss = self.loss(data_dict, outputs, encoder_output)
-        self.log("train/l1_loss", l1_loss, on_step=True, on_epoch=True, sync_dist=True, batch_size=batch_size)
-        self.log("train/on_surface_loss", on_surface_loss, on_step=True, on_epoch=True, sync_dist=True, batch_size=batch_size)
-        self.log("train/mask_loss", mask_loss, on_step=True, on_epoch=True, sync_dist=True, batch_size=batch_size)
-        self.log("train/eikonal_loss", eikonal_loss, on_step=True, on_epoch=True, sync_dist=True, batch_size=batch_size)
-        self.log("train/normal_loss", normal_loss, on_step=True, on_epoch=True, sync_dist=True, batch_size=batch_size)
+        self.log("train/l1_loss", l1_loss.float(), on_step=True, on_epoch=True, sync_dist=True, batch_size=batch_size)
+        self.log("train/on_surface_loss", on_surface_loss.float(), on_step=True, on_epoch=True, sync_dist=True, batch_size=batch_size)
+        self.log("train/mask_loss", mask_loss.float(), on_step=True, on_epoch=True, sync_dist=True, batch_size=batch_size)
+        self.log("train/eikonal_loss", eikonal_loss.float(), on_step=True, on_epoch=True, sync_dist=True, batch_size=batch_size)
 
         total_loss = l1_loss*self.hparams.data.supervision.sdf.weight + on_surface_loss*self.hparams.data.supervision.on_surface.weight + eikonal_loss*self.hparams.data.supervision.eikonal.weight + mask_loss*self.hparams.data.supervision.udf.weight + normal_loss*self.hparams.data.supervision.on_surface.normal_weight
 
@@ -158,8 +157,7 @@ class PCS4ESR(GeneralModel):
         outputs, encoder_output = self.forward(data_dict)
         l1_loss, on_surface_loss, mask_loss, eikonal_loss, normal_loss = self.loss(data_dict, outputs, encoder_output)
 
-        self.log("val/l1_loss",  l1_loss, on_step=True, on_epoch=True, sync_dist=True, batch_size=batch_size, logger=True)
-        self.log("val/on_surface_loss", on_surface_loss, on_step=True, on_epoch=True, sync_dist=True, batch_size=batch_size, logger=True)
-        self.log("val/mask_loss", mask_loss, on_step=True, on_epoch=True, sync_dist=True, batch_size=batch_size, logger=True)
-        self.log("val/eikonal_loss", eikonal_loss, on_step=True, on_epoch=True, sync_dist=True, batch_size=batch_size, logger=True)
-        self.log("val/normal_loss", normal_loss, on_step=True, on_epoch=True, sync_dist=True, batch_size=batch_size, logger=True)
+        self.log("val/l1_loss",  l1_loss.float(), on_step=True, on_epoch=True, sync_dist=True, batch_size=batch_size, logger=True)
+        self.log("val/on_surface_loss", on_surface_loss.float(), on_step=True, on_epoch=True, sync_dist=True, batch_size=batch_size, logger=True)
+        self.log("val/mask_loss", mask_loss.float(), on_step=True, on_epoch=True, sync_dist=True, batch_size=batch_size, logger=True)
+        self.log("val/eikonal_loss", eikonal_loss.float(), on_step=True, on_epoch=True, sync_dist=True, batch_size=batch_size, logger=True)

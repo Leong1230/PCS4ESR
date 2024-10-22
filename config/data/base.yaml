@@ -68,9 +68,9 @@ num_query_points: 50000
 std_dev: 0.00 # noise to add to the input points
 in_memory: True # whether precompute voxel indices and load voxel into memory
 
-take: 1 # how many data to take for training and validation, -1 means all
+take: -1 # how many data to take for training and validation, -1 means all
 intake_start: 0
-over_fitting: True # whether to use only one voxel for training and validation
+over_fitting: False # whether to use only one voxel for training and validation
 
 reconstruction:
   trim: True

@@ -40,8 +40,6 @@ class Scannet(Dataset):
         self.scenes = []
         if self.cfg.data.over_fitting:
             self.scene_names = self.scene_names[self.intake_start:self.take+self.intake_start]
-            if len(self.scene_names) == 1: # if only one scene is taken, overfit on scene 0221_00
-                self.scene_names = ['scene0221_00']
         for scene_name in tqdm(self.scene_names, desc=f"Loading {self.split} data from disk"):
             scene_path = os.path.join(self.dataset_path, self.split, f"{scene_name}.pth")
             scene = torch.load(scene_path)

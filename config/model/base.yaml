@@ -12,7 +12,6 @@ logger:
 trainer:
   accelerator: gpu #cpu or gpu
   devices: auto
-  strategy: ddp
   num_nodes: 1
   max_epochs: 800
   max_steps: 200000
@@ -39,5 +38,4 @@ lr_decay: # for Adam
 
 
 inference:
-  term: UDF # UDF or Seg
   split: val

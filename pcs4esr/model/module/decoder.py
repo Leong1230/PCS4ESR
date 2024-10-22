@@ -130,8 +130,6 @@ class BaseDecoder(pl.LightningModule):
         self.ENC_DIM = 32
         self.supervision = supervision
         self.decoder_cfg = decoder_cfg
-        self.decoder_type = decoder_cfg.decoder_type
-        self.architecture = decoder_cfg.architecture
         self.latent_dim = latent_dim
         self.feature_dim = feature_dim
         self.hidden_dim = hidden_dim
@@ -140,7 +138,6 @@ class BaseDecoder(pl.LightningModule):
         self.coords_enc = CoordsEncoder(self.in_dim)  
         self.enc_dim = self.coords_enc.out_dim 
         self.activation_fn = self.get_activation(activation, self.decoder_cfg.negative_slope)
-        self.use_bn = decoder_cfg.use_bn
         
         # Assuming other common components can be initialized here
         
@@ -165,31 +162,19 @@ class Decoder(BaseDecoder):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
-        self.interpolation_mode = kwargs['decoder_cfg'].interpolation_mode
-        self.inter = kwargs['decoder_cfg'].inter
-        self.learnable_alpha = kwargs['decoder_cfg'].learnable_alpha
-        self.dist_mask = kwargs['decoder_cfg'].dist_mask
-        self.no_pos_enc_noramalization = kwargs['decoder_cfg'].no_pos_enc_noramalization
-        self.correct_pos_enc_noramalization = kwargs['decoder_cfg'].correct_pos_enc_noramalization
-        self.pos_enc_dist_factor = kwargs['decoder_cfg'].pos_enc_dist_factor
         self.dist_factor = kwargs['decoder_cfg'].dist_factor
         self.neighboring = kwargs['decoder_cfg'].neighboring
         self.serial_neighbor_layers = kwargs['decoder_cfg'].serial_neighbor_layers
-        self.filter_by_mask = kwargs['decoder_cfg'].filter_by_mask
 
         self.last_n_layers = kwargs['decoder_cfg'].last_n_layers
         self.k_neighbors = kwargs['decoder_cfg'].k_neighbors
         self.num_hidden_layers_after = kwargs['decoder_cfg'].num_hidden_layers_after
         self.num_hidden_layers_before = kwargs['decoder_cfg'].num_hidden_layers_before
-        self.multi_scale_aggregation = kwargs['decoder_cfg'].multi_scale_aggregation
-        self.transformer_layers = 2
         self.backbone = kwargs['decoder_cfg'].backbone
         self.serial_orders = kwargs['decoder_cfg'].serial_orders
         self.dec_channels = kwargs['decoder_cfg'].decoder_channels
         self.stride = kwargs['decoder_cfg'].stride
-        self.scale_visualization = kwargs['decoder_cfg'].scale_visualization
-        self.larger_point_nerf = kwargs['decoder_cfg'].larger_point_nerf
-        self.per_scale_in = kwargs['decoder_cfg'].per_scale_in
+
         self.point_nerf_hidden_dim = kwargs['decoder_cfg'].point_nerf_hidden_dim
         self.point_nerf_before_skip = kwargs['decoder_cfg'].point_nerf_before_skip  
         self.point_nerf_after_skip = kwargs['decoder_cfg'].point_nerf_after_skip
@@ -231,66 +216,61 @@ class Decoder(BaseDecoder):
             )
         
     def interpolation(self, latents: Tensor, voxel_centers: Tensor, query_xyz: Tensor, index: Tensor, scale: int, layer: int):
-        if self.filter_by_mask:
-            N = index.shape[0]
-            K = self.k_neighbors
-            if self.neighboring == 'Mink':
-                valid_mask = index >= 0
-            else: 
-                """ mask by radius """
-                if index.shape[-1] > self.k_neighbors: # when using mixture neighbor method
-                    index, _ = torch.sort(index, dim=-1)
-                    _, indices = torch.unique_consecutive(index, return_inverse=True)
-                    indices -= indices.min(dim=1, keepdims=True)[0]
-                    result = -torch.ones_like(index).to(query_xyz.device)
-                    index = result.scatter_(1, indices, index)
-                    all_centers = voxel_centers[index] # M, K, 3
-                    all_query_xyz = query_xyz.unsqueeze(1).repeat(1, index.shape[-1], 1) # M, K, 3
-                    all_relative_coords = all_query_xyz - all_centers # M, K, 3
-                    all_dist = torch.norm(all_relative_coords, dim=-1, keepdim=False) # M, K
+        N = index.shape[0]
+        K = self.k_neighbors
+        """  when using mixture neighbor method """
+        if index.shape[-1] > self.k_neighbors: 
+            index, _ = torch.sort(index, dim=-1)
+            _, indices = torch.unique_consecutive(index, return_inverse=True)
+            indices -= indices.min(dim=1, keepdims=True)[0]
+            result = -torch.ones_like(index).to(query_xyz.device)
+            index = result.scatter_(1, indices, index)
+            all_centers = voxel_centers[index] # M, K, 3
+            all_query_xyz = query_xyz.unsqueeze(1).repeat(1, index.shape[-1], 1) # M, K, 3
+            all_relative_coords = all_query_xyz - all_centers # M, K, 3
+            all_dist = torch.norm(all_relative_coords, dim=-1, keepdim=False) # M, K
 
-                    sorted_idx = torch.argsort(all_dist, dim=-1)
-                    sorted_indices = torch.gather(index, 1, sorted_idx)
-                    sorted_dist = torch.gather(all_dist, 1, sorted_idx)
+            sorted_idx = torch.argsort(all_dist, dim=-1)
+            sorted_indices = torch.gather(index, 1, sorted_idx)
+            sorted_dist = torch.gather(all_dist, 1, sorted_idx)
 
-                    index = sorted_indices[:, :self.k_neighbors]  # Select the first k_neighbors
-                    valid_mask = sorted_dist[:, :self.k_neighbors] <= self.dist_factor[layer] * (self.voxel_size * 2**scale)
+            index = sorted_indices[:, :self.k_neighbors]  # Select the first k_neighbors
+            valid_mask = sorted_dist[:, :self.k_neighbors] <= self.dist_factor[layer] * (self.voxel_size * 2**scale)
 
-                else:
-                    """ mask by radius """
-                    all_centers = voxel_centers[index] # M, K, 3
-                    all_query_xyz = query_xyz.unsqueeze(1).repeat(1, index.shape[-1], 1) # M, K, 3
-                    all_relative_coords = all_query_xyz - all_centers # M, K, 3
-                    all_dist = torch.norm(all_relative_coords, dim=-1, keepdim=False) # M, K
-                    valid_mask = all_dist <= self.dist_factor[layer] * (self.voxel_size * 2**scale)
+        else:
+            """ mask by radius """
+            all_centers = voxel_centers[index] # M, K, 3
+            all_query_xyz = query_xyz.unsqueeze(1).repeat(1, index.shape[-1], 1) # M, K, 3
+            all_relative_coords = all_query_xyz - all_centers # M, K, 3
+            all_dist = torch.norm(all_relative_coords, dim=-1, keepdim=False) # M, K
+            valid_mask = all_dist <= self.dist_factor[layer] * (self.voxel_size * 2**scale)
 
+        gathered_centers = voxel_centers[index[valid_mask]] # M, 3
+        gathered_query_xyz = query_xyz.repeat_interleave(valid_mask.sum(dim=1), dim=0) # M, 3
+        gathered_relative_coords = gathered_query_xyz - gathered_centers # M, 3
+        gathered_dist = torch.norm(gathered_relative_coords, dim=-1, keepdim=False) # M, 
+        gathered_latents = latents[index[valid_mask]] # M, C
+        feature_aggregation_time = 0
 
-            gathered_centers = voxel_centers[index[valid_mask]] # M, 3
-            gathered_query_xyz = query_xyz.repeat_interleave(valid_mask.sum(dim=1), dim=0) # M, 3
-            gathered_relative_coords = gathered_query_xyz - gathered_centers # M, 3
-            gathered_dist = torch.norm(gathered_relative_coords, dim=-1, keepdim=False) # M, 
-            gathered_latents = latents[index[valid_mask]] # M, C
-            feature_aggregation_time = 0
+        gathered_coords = self.coords_enc.embed(gathered_relative_coords/ (self.voxel_size * 2**scale))
+        gathered_emb_and_coords = torch.cat([gathered_latents, gathered_coords], dim=-1) # M, C + enc_dim
 
-            gathered_coords = self.coords_enc.embed(gathered_relative_coords/ (self.voxel_size * 2**scale))
-            gathered_emb_and_coords = torch.cat([gathered_latents, gathered_coords], dim=-1) # M, C + enc_dim
+        """ feature aggregation by Point-NeRF architecture """
+        feature_aggregation_time -= time.time()
+        valid_indices = torch.arange(N).unsqueeze(1).expand(N, K).flatten().to(query_xyz.device)  # Shape (N*K,)
+        valid_indices = valid_indices[valid_mask.flatten()]  # Shape (M,)
+        valid_features = self.point_nerf_blocks[layer](gathered_emb_and_coords)
+        weights = torch.full((N, K), 1e-8).to(query_xyz.device)
+        weights[valid_mask] = 1.0 / (gathered_dist + 1e-8) # Adding a small constant to avoid division by zero
+        normalized_weights = weights / torch.sum(weights, dim=1, keepdim=True) # Normalize the weights to 
+        weighted_features = valid_features * normalized_weights[valid_mask].unsqueeze(-1) # M, C
+            
+        interpolated_features = torch.zeros(N, weighted_features.shape[-1], device=weighted_features.device)
+        interpolated_features = interpolated_features.scatter_add(0, valid_indices.unsqueeze(-1).expand_as(weighted_features), weighted_features)
 
-            """ feature aggregation by Point-NeRF architecture """
-            feature_aggregation_time -= time.time()
-            valid_indices = torch.arange(N).unsqueeze(1).expand(N, K).flatten().to(query_xyz.device)  # Shape (N*K,)
-            valid_indices = valid_indices[valid_mask.flatten()]  # Shape (M,)
-            valid_features = self.point_nerf_blocks[layer](gathered_emb_and_coords)
-            weights = torch.full((N, K), 1e-8).to(query_xyz.device)
-            weights[valid_mask] = 1.0 / (gathered_dist + 1e-8) # Adding a small constant to avoid division by zero
-            normalized_weights = weights / torch.sum(weights, dim=1, keepdim=True) # Normalize the weights to 
-            weighted_features = valid_features * normalized_weights[valid_mask].unsqueeze(-1) # M, C
-                
-            interpolated_features = torch.zeros(N, weighted_features.shape[-1], device=weighted_features.device)
-            interpolated_features = interpolated_features.scatter_add(0, valid_indices.unsqueeze(-1).expand_as(weighted_features), weighted_features)
+        feature_aggregation_time += time.time()
 
-            feature_aggregation_time += time.time()
-
-            return interpolated_features, feature_aggregation_time
+        return interpolated_features, feature_aggregation_time
 
     def compute_average_recall(self, ref_indices, all_neighbor_idx):
         N, K = ref_indices.shape

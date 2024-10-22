@@ -11,7 +11,7 @@ defaults:
   - model: base
 
 experiment_name: run_1
-output_folder: None
+output_folder: output
 exp_output_root_path: ${output_folder}/${data.dataset}/${experiment_name}
 
 global_train_seed: 12345
