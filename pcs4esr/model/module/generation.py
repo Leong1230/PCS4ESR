@@ -19,6 +19,7 @@ class MeshingResult:
         self.v = v
         self.f = f
         self.c = c
+        
 class Generator(pl.LightningModule):
     def __init__(self, model, mask_model, voxel_size, threshold, k_neighbors, last_n_layers, reconstruction_cfg):
         super().__init__()

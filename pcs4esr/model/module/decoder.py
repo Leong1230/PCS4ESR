@@ -11,7 +11,6 @@ from pytorch3d.ops import knn_points
 import pytorch_lightning as pl
 from torch_scatter import scatter_mean, scatter_max, scatter_add
 from pcs4esr.utils.serialization import encode
-import MinkowskiEngine as ME
 
     
 class CoordsEncoder(pl.LightningModule):

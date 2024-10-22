@@ -7,7 +7,7 @@ import pl_bolts
 from collections import OrderedDict
 from typing import Mapping, Any, Optional
 from pcs4esr.utils.optimizer import cosine_lr_decay
-from pcs4esr.model.module import Generator
+# from pcs4esr.model.module import Generator
 from torch.nn import functional as F
 from pycg import exp, image
 

@@ -2,7 +2,6 @@ from importlib import import_module
 import numpy as np
 import torch
 from torch.utils.data import DataLoader
-import MinkowskiEngine as ME
 import torch
 from torch.utils.data import Sampler, DistributedSampler, Dataset
 import pytorch_lightning as pl

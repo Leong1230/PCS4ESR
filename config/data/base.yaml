@@ -1,6 +1,6 @@
 # Managed by Hydra
 
-dataset_root_path: None
+dataset_root_path: data
 
 batch_size: 4
 num_workers: 4
