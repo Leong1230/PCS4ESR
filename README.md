@@ -1,6 +1,6 @@
 # Point Cloud Serialization for Efficient Surface Reconstruction
 
-![PCS4ESR](assets/teaser.pdf)
+![PCS4ESR](assets/Teaser.pdf)
 
 **Point Cloud Serialization for Efficient Surface Reconstruction**<br>
 [Zhen Li](https://colinzhenli.github.io/), [Weiwei Sun](https://wsunid.github.io/), [Shrisudhan Govindarajan](https://shrisudhan.github.io/), [Shaobo Xia](https://scholar.google.com/citations?user=eOPO9E0AAAAJ&hl=en), [Daniel Rebain](http://drebain.com/), [Kwang Moo Yi](https://www.cs.ubc.ca/~kmyi/), [Andrea Tagliasacchi](https://theialab.ca/)  
