@@ -130,7 +130,7 @@ python eval.py model=scannet_model data=scenenn model.ckpt_path=checkpoints/Scan
 ```
 
 ### Reconstruction
-You can reconstruct a specific scene from the datasets above by specifying the scene id.
+You can reconstruct a specific scene from the datasets above by specifying the scene index.
 ```bash
 # For example, ScanNet dataset
 python eval.py model=scannet_model data=scannet model.ckpt_path={path_to_checkpoint} data.over_fitting=True data.take=1 data.intake_start={scene_index}

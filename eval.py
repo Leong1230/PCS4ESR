@@ -38,7 +38,7 @@ def main(cfg):
         model.load_state_dict(checkpoint['state_dict'])
         print("=> loaded checkpoint successfully.")
     else:
-        print(f"=> no checkpoint found at '{cfg.model.ckpt_path}'")
+        raise FileNotFoundError(f"No checkpoint found at '{cfg.model.ckpt_path}'. Please ensure the path is correct.")
 
     model.to(device)
     model.eval()
