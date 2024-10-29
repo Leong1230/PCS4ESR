@@ -338,7 +338,6 @@ class Decoder(BaseDecoder):
 
                 offset = 0
                 all_indices = []
-                # torch.cuda.empty_cache()
                 knn_start = time.time()
 
                 for b in range(batch_size):

@@ -29,7 +29,7 @@ continuation of research in this topic, we will release our
 complete source code, as well as our pre-trained models.
 
 Contact [Zhen Li @ SFU](zla247@sfu.ca) for questions, comments and reporting bugs.
-## News
+## News    
 
 - [2024/10/22] The code is released.
 - [2024/10/22] The MinkUNet backbone version will be released soon.
@@ -40,7 +40,7 @@ The code is tested on Ubuntu 20.04 LTS with PyTorch 2.0.0 CUDA 11.8 installed. P
 
 ```
 # Clone the repository
-git clone (Todo)
+git clone git@github.com:colinzhenli/PCS4ESR.git
 cd PCS4ESR
 
 # create and activate the conda environment
@@ -111,7 +111,7 @@ python train.py model=carla_model data=carla
 In addition, you can manually specify different training settings. Common flags include:
 - `experiment_name`: Additional experiment name to specify.
 - `data.dataset_root_path`: Root path of the dataset.
-- `output_folder`: Output folder to save the results, the checkpoints will be saved in `{output_folder}/{dataset_name}/{experiment_name}/training`.
+- `output_folder`: Output folder to save the results, the checkpoints will be saved in `output/{dataset_name}/{experiment_name}/training`.
 - `model.network.default_decoder.neighboring`: Neighboring type, default is `Serial`. Options: `Serial`, `KNN`, `Mixture`
 
 ### Inference
@@ -121,10 +121,10 @@ You can either infer using your own trained models or our pre-trained checkpoint
 The pre-trained checkpoints on different datasets with different neighboring types are available [here](https://drive.google.com/file/d/1hMm5cnCOfNmr_PgkpOmwRnzCCG4wPqnu/view?usp=drive_link), you can download and put them under `PCS4ESR/checkpoints/`.
 
 ```bash
-# For example, ScanNet dataset with Serialization neighboring
-python eval.py model=scannet_model data=scannet model.ckpt_path=checkpoints/ScanNet_Serial_best.ckpt 
 # For example, Carla dataset with Serialization neighboring, you need more than 24GB GPU memory to inferece the CARLA dataset, we recommend using a server.
 python eval.py model=carla_model data=carla model.ckpt_path=checkpoints/CARLA_Serial_best.ckpt
+# For example, ScanNet dataset with Serialization neighboring
+python eval.py model=scannet_model data=scannet model.ckpt_path=checkpoints/ScanNet_Serial_best.ckpt 
 # For example, Test on SceneNN dataset with model trained on ScanNet.
 python eval.py model=scannet_model data=scenenn model.ckpt_path=checkpoints/ScanNet_Serial_best.ckpt
 ```
@@ -132,15 +132,18 @@ python eval.py model=scannet_model data=scenenn model.ckpt_path=checkpoints/Scan
 ### Reconstruction
 You can reconstruct a specific scene from the datasets above by specifying the scene index.
 ```bash
-# For example, ScanNet dataset
-python eval.py model=scannet_model data=scannet model.ckpt_path={path_to_checkpoint} data.over_fitting=True data.take=1 data.intake_start={scene_index}
+# For example, Carla dataset, 0 can be replaced by any other scene index of validation set
+python eval.py model=carla_model data=carla model.ckpt_path={path_to_checkpoint} data.over_fitting=True data.take=1 data.intake_start=0
+# For example, ScanNet dataset, 308 can be replaced by any other scene index of validation set
+python eval.py model=scannet_model data=scannet model.ckpt_path={path_to_checkpoint} data.over_fitting=True data.take=1 data.intake_start=308
+
 ```
 In addition, you can manually specify visualization settings. Flags include:
-- `data.visualization.save`: Whether to save the results.
-- `data.visualization.Mesh`: Whether to save the reconstructed mesh.
-- `data.visualization.Input_points`: Whether to save the input points.
+- `data.visualization.save=True`: When to save the results.
+- `data.visualization.Mesh=True`: When to save the reconstructed mesh.
+- `data.visualization.Input_points=True`: When to save the input points.
  
-The results will be saved in `{output_folder}/{dataset_name}/{experiment_name}/reconstruction/visualization`.
+The results will be saved in `output/{dataset_name}/{experiment_name}/reconstruction/visualization`.
 
 ## License
 
